@@ -1,0 +1,18 @@
+{
+  "request": {
+    "contractVersion": 1,
+    "trackPreset": "easy-oval",
+    "settings": {
+      "algorithm": "fixed-ga",
+      "populationSize": 48,
+      "generations": 30,
+      "episodeSeconds": 90,
+      "seed": 42
+    }
+  },
+  "response": {
+    "contractVersion": 1,
+    "valid": true,
+    "errors": []
+  }
+}
