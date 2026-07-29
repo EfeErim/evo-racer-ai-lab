@@ -20,11 +20,13 @@ import {
   deleteTrack,
   generateTrack,
   loadPresetTracks,
+  loadSimulationPreview,
   loadTrackLibrary,
   saveTrack,
   serviceUnavailableResponse,
   validateSetup,
 } from "./ipc";
+import type { SelectedCarTelemetryV1, SimulationEpisodeV1 } from "./simulation";
 import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
 import {
   SEGMENT_CATALOGUE,
@@ -65,9 +67,16 @@ interface TrackWorkspaceState {
   message: string;
 }
 
+type SimulationState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ready"; episode: SimulationEpisodeV1 }
+  | { status: "unavailable"; message: string };
+
 export function mountApp(root: HTMLElement): AppController {
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
+  let simulation: SimulationState = { status: "idle" };
   let trackWorkspace: TrackWorkspaceState = {
     editor: createEditorState(),
     library: null,
@@ -77,6 +86,9 @@ export function mountApp(root: HTMLElement): AppController {
   const dispatch = (action: AppAction): void => {
     const previousRoute = state.route;
     state = transition(state, action);
+    if (action.type === "new-setup") {
+      simulation = { status: "idle" };
+    }
     render(state.route !== previousRoute);
   };
 
@@ -97,6 +109,32 @@ export function mountApp(root: HTMLElement): AppController {
         response: serviceUnavailableResponse(),
       });
     }
+  };
+
+  const startSession = async (): Promise<void> => {
+    if (!canStartSession(state)) {
+      return;
+    }
+    const frozenDraft = state.draft;
+    simulation = { status: "loading" };
+    dispatch({ type: "start-session" });
+    try {
+      const response = await loadSimulationPreview(frozenDraft);
+      simulation = response.valid
+        ? { status: "ready", episode: response.episode }
+        : {
+            status: "unavailable",
+            message:
+              response.errors[0]?.message ??
+              "The selected-car preview was rejected.",
+          };
+    } catch {
+      simulation = {
+        status: "unavailable",
+        message: "Selected-car telemetry is unavailable from the local core.",
+      };
+    }
+    render();
   };
 
   const refreshLibrary = async (): Promise<void> => {
@@ -325,12 +363,18 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const render = (focusHeading = false): void => {
-    root.innerHTML = renderShell(state, presetGeometry, trackWorkspace);
+    root.innerHTML = renderShell(
+      state,
+      presetGeometry,
+      trackWorkspace,
+      simulation,
+    );
     bindActions(
       root,
       state,
       dispatch,
       review,
+      startSession,
       handleTrackAction,
       importTrack,
       (name, roadWidth) => {
@@ -372,6 +416,7 @@ function renderShell(
   state: AppState,
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
+  simulation: SimulationState,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -430,7 +475,7 @@ function renderShell(
       </aside>
 
       <main id="workspace" class="workspace">
-        ${renderRoute(state, presetGeometry, trackWorkspace)}
+        ${renderRoute(state, presetGeometry, trackWorkspace, simulation)}
       </main>
     </div>
   `;
@@ -440,6 +485,7 @@ function renderRoute(
   state: AppState,
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
+  simulation: SimulationState,
 ): string {
   switch (state.route) {
     case "welcome":
@@ -451,7 +497,7 @@ function renderRoute(
     case "review":
       return renderReview(state);
     case "training":
-      return renderTraining(state);
+      return renderTraining(state, simulation);
     case "results":
       return renderResults(state);
   }
@@ -989,28 +1035,105 @@ function renderValidationStatus(state: AppState): string {
   `;
 }
 
-function renderTraining(state: AppState): string {
+function renderTraining(state: AppState, simulation: SimulationState): string {
+  let observerContent: string;
+  if (simulation.status === "loading") {
+    observerContent = `
+      <div class="training-stage" role="status" aria-live="polite">
+        <span class="data-chip">Python simulation</span>
+        <h2>Preparing selected-car telemetry</h2>
+        <p>The local core is advancing fixed 1/60 s steps. Browser render cadence does not drive physics.</p>
+      </div>
+    `;
+  } else if (simulation.status === "ready") {
+    observerContent = renderSelectedCarTelemetry(
+      simulation.episode.selectedCar,
+      simulation.episode,
+    );
+  } else if (simulation.status === "unavailable") {
+    observerContent = `
+      <div class="training-stage" role="alert">
+        <span class="data-chip">Local core unavailable</span>
+        <h2>Telemetry could not be loaded</h2>
+        <p>${escapeHtml(simulation.message)}</p>
+      </div>
+    `;
+  } else {
+    observerContent = `
+      <div class="training-stage">
+        <span class="data-chip">Configuration locked</span>
+        <h2>Waiting for selected-car telemetry</h2>
+        <p>The selected ${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"} setup is read-only.</p>
+      </div>
+    `;
+  }
+
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
         "Experiment / Training",
         "Training workspace",
-        "The reviewed configuration is locked. Live simulation and observer controls will appear in this workspace.",
+        "The reviewed configuration is locked. Python owns physics, sensing, and episode evaluation.",
       )}
-      <div class="training-stage">
-        <span class="data-chip">Configuration locked</span>
-        <h2>Simulation view is not connected yet</h2>
-        <p>
-          The selected ${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"}
-          setup is read-only. This application provides observer controls only; there are no vehicle-driving inputs.
-        </p>
-      </div>
+      ${observerContent}
       <div class="page-actions">
         <button class="button secondary" type="button" data-action="view-results">
           View results shell
           <span aria-hidden="true">→</span>
         </button>
       </div>
+    </section>
+  `;
+}
+
+function renderSelectedCarTelemetry(
+  telemetry: SelectedCarTelemetryV1,
+  episode: SimulationEpisodeV1,
+): string {
+  const metricValues: [string, string][] = [
+    ["Speed", `${telemetry.speed.toFixed(2)} m/s`],
+    ["Lateral speed", `${telemetry.lateralSpeed.toFixed(2)} m/s`],
+    ["Steering", telemetry.steering.toFixed(3)],
+    ["Throttle", telemetry.throttle.toFixed(3)],
+    ["Brake", telemetry.brake.toFixed(3)],
+    ["Progress", `${(telemetry.progress * 100).toFixed(1)}%`],
+  ];
+  const metrics = metricValues
+    .map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`)
+    .join("");
+  const sensors = telemetry.sensorDistances
+    .map(
+      (distance, index) => `
+        <li>
+          <span>Ray ${String(index + 1)}</span>
+          <meter min="0" max="36" value="${String(distance)}">${distance.toFixed(1)} m</meter>
+          <strong>${distance.toFixed(1)} m</strong>
+        </li>
+      `,
+    )
+    .join("");
+
+  return `
+    <section class="telemetry-panel" aria-labelledby="telemetry-title">
+      <div class="telemetry-heading">
+        <div>
+          <p class="section-kicker">Selected car · ${escapeHtml(telemetry.selectedCarId)}</p>
+          <h2 id="telemetry-title">Pure Pursuit baseline telemetry</h2>
+        </div>
+        <span class="data-chip">${escapeHtml(episode.termination.replaceAll("_", " "))}</span>
+      </div>
+      <dl class="telemetry-metrics">${metrics}</dl>
+      <div class="sensor-panel">
+        <div>
+          <h3>Road-edge sensors</h3>
+          <p>Seven Python-derived rays · ${telemetry.simulatedSeconds.toFixed(2)} simulated seconds</p>
+        </div>
+        <ul>${sensors}</ul>
+      </div>
+      <p class="telemetry-note">
+        Vehicle setup and controller parameters stayed fixed during this episode preview.
+        Controls are observer telemetry only; there are no driving inputs.
+      </p>
     </section>
   `;
 }
@@ -1072,6 +1195,7 @@ function bindActions(
   state: AppState,
   dispatch: (action: AppAction) => void,
   review: () => Promise<void>,
+  startSession: () => Promise<void>,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
   importTrack: (file: File) => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
@@ -1096,7 +1220,7 @@ function bindActions(
           void review();
           break;
         case "start-session":
-          dispatch({ type: "start-session" });
+          void startSession();
           break;
         case "view-results":
           dispatch({ type: "view-results" });

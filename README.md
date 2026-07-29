@@ -88,8 +88,9 @@ Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
   `127.0.0.1`. Start remains locked until the response is valid.
 - Start is the only action that enters Training. It freezes the reviewed
   configuration, and the shell exposes no vehicle-driving controls.
-- Training and Results are honest shell states; simulation, evolution, and
-  result analysis connect in their later phases.
+- Training requests a bounded Python Pure Pursuit preview only after Start and
+  displays selected-car controls, motion, progress, and seven road-edge sensors.
+  Evolution and completed-run analysis connect in their later phases.
 
 ## Track core and bundled presets
 
@@ -123,6 +124,26 @@ browser:
   are isolated from the valid library.
 
 The shared Phase 3 TrackV1 document under `contracts/` is checked from both
+runtimes.
+
+## Physics, sensors, and baselines
+
+Phase 4 adds the deterministic Python evaluator shared by future algorithms:
+
+- Arcade physics advances only at `1/60 s` and models continuous control,
+  speed-dependent steering, lateral slip and grip recovery, drag, and documented
+  front/rear drive and brake bias effects.
+- Swept collision checks and seven road-edge rays consume geometry derived by
+  the existing Python track compiler. Progress is measured along the same closed
+  centerline.
+- Episode setup and controller parameters are fixed; only steering, throttle,
+  and brake outputs change during an episode.
+- Seeded random-network and Pure Pursuit baselines use the same physics,
+  sensors, progress, termination, and telemetry path.
+- The browser consumes version 1 selected-car telemetry from
+  `POST /v1/simulation/preview`; it does not reproduce simulation rules.
+
+The shared Phase 4 telemetry fixture under `contracts/` is checked from both
 runtimes.
 
 ## Repository layout

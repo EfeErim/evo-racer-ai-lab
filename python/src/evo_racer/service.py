@@ -11,6 +11,7 @@ from typing import Final
 from urllib.parse import unquote, urlsplit
 
 from evo_racer.onboarding import validate_setup
+from evo_racer.simulation import simulate_preview_payload
 from evo_racer.track_generation import assist_track_closure_payload, generate_track_payload
 from evo_racer.track_library import delete_track, library_payload, save_track_payload
 from evo_racer.tracks import compiled_presets_payload, validate_track_payload
@@ -27,6 +28,7 @@ ALLOWED_DEVELOPMENT_ORIGINS: Final = frozenset(
 POST_PATHS: Final = frozenset(
     {
         "/v1/setup/validate",
+        "/v1/simulation/preview",
         "/v1/tracks/compile",
         "/v1/tracks/generate",
         "/v1/tracks/assist-closure",
@@ -90,7 +92,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self) -> None:
-        """Handle local-only setup and track commands."""
+        """Handle local-only setup, simulation, and track commands."""
         path = urlsplit(self.path).path
         if path not in POST_PATHS:
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -105,6 +107,8 @@ class HealthHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/setup/validate":
             response = validate_setup(payload)
+        elif path == "/v1/simulation/preview":
+            response = simulate_preview_payload(payload)
         elif path == "/v1/tracks/compile":
             response = self._compile_request(payload)
         elif path == "/v1/tracks/generate":
