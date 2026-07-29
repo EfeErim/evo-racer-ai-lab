@@ -9,9 +9,14 @@ The user never drives a vehicle.
 
 ## Windows release
 
-The verified build creates `EvoRacer-Windows-x64.zip` and its matching SHA-256
-file. Extract the full archive and open `EvoRacer\EvoRacer.exe`; Node.js and
-Python are not required on the target computer.
+Download the current stable
+[Windows x64 release](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip)
+and its
+[SHA-256 checksum](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip.sha256).
+Extract the full archive and open `EvoRacer\EvoRacer.exe`; Node.js and Python
+are not required on the target computer. The
+[release page](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest)
+contains the versioned notes and both assets.
 
 Repository contributors can create those artifacts with
 `npm run build:release`. Publish both generated files together when attaching a
@@ -306,6 +311,21 @@ saved in:
 - [Architecture](docs/architecture.md)
 - [Phase 10 verification](docs/verification/phase10-hardening.md)
 - [Project state](PROJECT_STATE.md)
+
+## Public binary publication
+
+Phase 11 publishes the Phase 10-verified package as a tagged GitHub Release.
+The source tag, Windows ZIP, separate checksum file, and checked-in release
+notes identify one stable version. Contributors can verify the public assets
+after publication with:
+
+```powershell
+npm run test:phase11
+```
+
+The verifier downloads both release assets into a temporary directory, checks
+their names and sizes against the release metadata, and recomputes the ZIP
+SHA-256 without altering the application or its local-only runtime boundary.
 
 ## Repository layout
 
