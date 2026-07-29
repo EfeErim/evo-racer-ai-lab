@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "evo-racer-ai-lab"
-version = "0.1.0"
+version = "1.0.0"
 description = "Local Python application, simulation, and evolution core for EvoRacer AI Lab"
 readme = "README.md"
 requires-python = "==3.13.*"

@@ -173,3 +173,24 @@ M10 gate:
 - Three seeds across three presets complete Fixed GA and NEAT smoke runs.
 - Release ZIP passes clean-machine acceptance.
 - Public claims match saved evidence.
+
+## Phase 11 - Public binary publication
+
+Deliver:
+
+- One coherent stable version across the JavaScript and Python package metadata
+- Checked-in release notes and durable README download links
+- Annotated source tag on the pushed release commit
+- Published GitHub Release with the Windows ZIP and separate SHA-256 file
+- Automated public-release verification
+
+M11 gate:
+
+- The complete Phase 10 gate passes immediately before publication.
+- The annotated tag resolves to the pushed release commit.
+- The GitHub Release is published as a full, latest release rather than a draft
+  or prerelease.
+- The ZIP and checksum assets are publicly downloadable.
+- A fresh download of both assets reproduces the published SHA-256 value.
+- Release notes and download copy preserve the saved product and evidence
+  boundaries.
