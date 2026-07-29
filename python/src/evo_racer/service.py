@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import mimetypes
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from threading import Thread
 from typing import Final
 from urllib.parse import unquote, urlsplit
 
@@ -45,8 +47,11 @@ POST_PATHS: Final = frozenset(
 class EvoRacerServer(ThreadingHTTPServer):
     """Loopback server carrying the resolved local data root."""
 
+    daemon_threads = True
+
     data_root: Path | None
     run_manager: RunManager
+    static_root: Path | None
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -98,6 +103,8 @@ class HealthHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(HTTPStatus.OK, self._run_manager().export(run_id))
             return
+        if self._serve_static(path):
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_OPTIONS(self) -> None:
@@ -119,6 +126,9 @@ class HealthHandler(BaseHTTPRequestHandler):
         """Handle local-only setup, simulation, and track commands."""
         path = urlsplit(self.path).path
         if path not in POST_PATHS:
+            if path == "/v1/app/shutdown":
+                self._request_shutdown()
+                return
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if not self._origin_allowed():
@@ -231,13 +241,67 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
-        return origin is None or origin in ALLOWED_DEVELOPMENT_ORIGINS
+        return origin is None or origin in ALLOWED_DEVELOPMENT_ORIGINS or origin == self._origin()
 
     def _send_cors_headers(self) -> None:
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_DEVELOPMENT_ORIGINS:
+        if origin in ALLOWED_DEVELOPMENT_ORIGINS or origin == self._origin():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
+
+    def _origin(self) -> str:
+        server = self.server
+        assert isinstance(server, EvoRacerServer)
+        return f"http://{LOOPBACK_HOST}:{server.server_port}"
+
+    def _serve_static(self, request_path: str) -> bool:
+        server = self.server
+        assert isinstance(server, EvoRacerServer)
+        if server.static_root is None or request_path.startswith(("/v1/", "/health")):
+            return False
+
+        relative_path = unquote(request_path).lstrip("/") or "index.html"
+        candidate = (server.static_root / relative_path).resolve()
+        if not candidate.is_relative_to(server.static_root):
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return True
+        if not candidate.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return True
+
+        body = candidate.read_bytes()
+        content_type = mimetypes.guess_type(candidate.name)[0] or "application/octet-stream"
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header(
+            "Content-Security-Policy",
+            "default-src 'self'; img-src 'self' data:; "
+            "style-src 'self'; script-src 'self'; connect-src 'self'",
+        )
+        self.send_header(
+            "Cache-Control",
+            "no-cache" if candidate.name == "index.html" else "public, max-age=31536000, immutable",
+        )
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
+    def _request_shutdown(self) -> None:
+        if not self._origin_allowed():
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return
+        self._send_json(
+            HTTPStatus.OK,
+            {
+                "contractVersion": 1,
+                "status": "shutting-down",
+            },
+        )
+        server = self.server
+        assert isinstance(server, EvoRacerServer)
+        Thread(target=server.shutdown, name="evo-racer-shutdown", daemon=True).start()
 
     def _send_json(self, status: HTTPStatus, payload: object) -> None:
         body = json.dumps(
@@ -256,11 +320,16 @@ class HealthHandler(BaseHTTPRequestHandler):
         """Keep the local service quiet until structured logging is introduced."""
 
 
-def create_server(port: int = DEFAULT_PORT, data_root: Path | None = None) -> EvoRacerServer:
+def create_server(
+    port: int = DEFAULT_PORT,
+    data_root: Path | None = None,
+    static_root: Path | None = None,
+) -> EvoRacerServer:
     """Create a service that cannot bind beyond the IPv4 loopback interface."""
     server = EvoRacerServer((LOOPBACK_HOST, port), HealthHandler)
     server.data_root = data_root
     server.run_manager = RunManager(data_root)
+    server.static_root = static_root.resolve() if static_root is not None else None
     return server
 
 

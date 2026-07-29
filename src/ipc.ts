@@ -135,6 +135,14 @@ export async function deleteRun(runId: string): Promise<void> {
   );
 }
 
+export async function shutdownApplication(): Promise<void> {
+  await requestJson(
+    "/v1/app/shutdown",
+    { method: "POST" },
+    "Application shutdown",
+  );
+}
+
 export async function compileTrack(
   track: TrackV1,
 ): Promise<TrackCommandResponse> {

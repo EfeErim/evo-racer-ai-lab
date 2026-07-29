@@ -4,7 +4,14 @@ import tseslint from "typescript-eslint";
 
 export default defineConfig(
   {
-    ignores: ["coverage/", "dist/", "node_modules/", "python/"],
+    ignores: [
+      ".runtime_tmp/",
+      "coverage/",
+      "dist/",
+      "node_modules/",
+      "python/",
+      "release/",
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

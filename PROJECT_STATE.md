@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 9 - Windows offline package`
+- Current phase: `Phase 10 - Hardening and portfolio release`
 - Status: `in_progress`
-- Active milestone: `M9 - Windows offline package`
+- Active milestone: `M10 - Hardening and portfolio release`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -71,6 +71,14 @@
   checkpoint drift.
 - The local run library lists valid records while isolating corrupt records and
   supports exact-record resume, export, and delete over loopback contracts.
+- The production launcher serves built frontend assets and versioned Python
+  contracts from one `127.0.0.1:8765` origin and supports explicit graceful
+  shutdown.
+- PyInstaller `onedir` bundles the Python core, neat-python configuration, and
+  Vite assets without requiring installed Node.js or Python at runtime.
+- The release workflow creates `EvoRacer-Windows-x64.zip`, a separate SHA-256
+  checksum, README, third-party notices, and complete Python/PyInstaller
+  licenses.
 
 ## Completed milestones
 
@@ -417,14 +425,57 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase8-persistence-recovery.md`.
 - `git diff --check` passed.
 
+### M9 - Windows Offline Package
+
+Status: `complete`
+
+Delivered:
+
+- [x] Production static frontend and Python loopback core under one launcher.
+- [x] Browser-open behavior and explicit graceful shutdown.
+- [x] PyInstaller `onedir` bundle with all runtime dependencies and local assets.
+- [x] `EvoRacer-Windows-x64.zip` and matching SHA-256 checksum.
+- [x] README, third-party notices, Python license, and PyInstaller license.
+- [x] Clean-runtime, offline-boundary, persistence, restore, replay, and browser
+      acceptance.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 25 Vitest
+  tests, Ruff format/lint, strict mypy, 67 pytest tests, and the Vite production
+  build.
+- `npm run smoke:m0` passed with the development frontend and Python service on
+  loopback.
+- `npm run build:release` completed with PyInstaller `6.21.0` on Windows 11 x64
+  and created the release ZIP, checksum, and notices.
+- Final `release\EvoRacer-Windows-x64.zip` SHA-256:
+  `ab1a3126385c2c536169bb50124df436b4043ad4ab3afc74b6d4b518179b6149`.
+- `npm run test:release` launched the extracted app with a system-only `PATH`,
+  no Python environment, and unreachable outbound proxies. It saved generation
+  `1 / 2`, shut down, restored run
+  `run-22089c3857804993b70dd2d0fccbeb9c`, completed `2 / 2`, and returned replay
+  frames.
+- The packaged process opened only loopback sockets and spawned no Node.js or
+  Python child process.
+- Production browser interaction covered Welcome, selection, validation,
+  explicit Start, a Fixed GA generation, telemetry, Stop, Results, a 139-frame
+  replay, saved-run listing, and the Exit action.
+- Browser console warnings/errors and non-local resource references were both
+  zero. At `390 x 844`, document `scrollWidth` equaled `clientWidth` (`375`).
+- The Exit action returned its shutdown view and terminated `EvoRacer.exe`.
+- Detailed evidence is saved in
+  `docs/verification/phase9-windows-offline-package.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 9 only: production static frontend, Python local core/launcher,
-graceful shutdown, PyInstaller `onedir`, release ZIP, checksum, and notices.
+Implement Phase 10 only: full regression hardening, performance evidence,
+architecture/user documentation, demo media, and evidence-backed algorithm
+comparison.
 
 ## State update rule
 

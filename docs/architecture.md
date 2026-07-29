@@ -304,9 +304,37 @@ implementations.
 - TypeScript remains within the typescript-eslint supported range; it must not be
   upgraded independently.
 
-## Local data and release direction
+## Phase 9 Windows offline package
 
-User-owned data will live under `%LOCALAPPDATA%\EvoRacerAILab` and use versioned,
-atomic files. The release phase will package the built frontend and Python
-runtime with PyInstaller `onedir`, then produce a self-contained Windows x64 ZIP.
-No release claim is made until the clean-machine and network-disabled gates pass.
+The production entrypoint is `evo_racer.launcher`. It creates the same
+`ThreadingHTTPServer` used by development, always binds the socket to
+`127.0.0.1`, serves both versioned JSON contracts and immutable Vite assets on
+port `8765`, then opens that loopback URL in the user's default browser. Static
+paths are resolved under one fixed bundle root, path traversal is rejected, and
+responses include a restrictive same-origin content security policy.
+
+The browser's Exit action calls a same-origin shutdown endpoint. The handler
+sends its final JSON response before a separate thread calls
+`server.shutdown()`, allowing `serve_forever()` to return and
+`server.server_close()` to release the loopback socket. Process signals use the
+same asynchronous shutdown path.
+
+PyInstaller `6.21.0` creates a Windows `onedir` bundle from
+`packaging/EvoRacer.spec`. This follows the official
+[onedir usage contract](https://pyinstaller.org/en/stable/usage.html) and keeps
+the built frontend and NEAT configuration as bundled data located relative to
+the frozen entrypoint, following PyInstaller's
+[runtime data-file guidance](https://pyinstaller.org/en/stable/runtime-information.html).
+The release script adds user-facing notices and complete Python/PyInstaller
+license texts, archives the full `EvoRacer` directory as
+`EvoRacer-Windows-x64.zip`, and writes its SHA-256 checksum separately.
+
+Release acceptance extracts the ZIP into a fresh directory, gives the packaged
+process only the Windows system directory on `PATH`, removes Python environment
+variables, and supplies unreachable outbound proxy endpoints while exempting
+loopback. It starts, saves, shuts down, restarts, restores, completes, and
+replays one run. A process connection audit rejects non-loopback sockets and
+rejects any child Node.js or Python process.
+
+User-owned data remains under `%LOCALAPPDATA%\EvoRacerAILab` and uses the
+versioned, atomic files defined in Phase 8.

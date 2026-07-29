@@ -29,6 +29,7 @@ import {
   resumeRun,
   saveTrack,
   serviceUnavailableResponse,
+  shutdownApplication,
   startRun,
   validateSetup,
 } from "./ipc";
@@ -547,6 +548,23 @@ export function mountApp(root: HTMLElement): AppController {
       handleRunAction,
       handleTrackAction,
       importTrack,
+      async () => {
+        if (!window.confirm("Exit EvoRacer and stop the local core?")) {
+          return;
+        }
+        try {
+          await shutdownApplication();
+          root.innerHTML = `
+            <main class="shutdown-screen">
+              <p class="eyebrow">Local session ended</p>
+              <h1>EvoRacer has shut down.</h1>
+              <p>You can close this browser tab. Run EvoRacer.exe to start a new session.</p>
+            </main>
+          `;
+        } catch {
+          window.alert("EvoRacer could not stop the local core.");
+        }
+      },
       (name, roadWidth) => {
         trackWorkspace = {
           ...trackWorkspace,
@@ -629,10 +647,15 @@ function renderShell(
             <small>Simulation workspace</small>
           </span>
         </a>
-        <p class="local-status">
-          <span aria-hidden="true"></span>
-          Offline
-        </p>
+        <div class="topbar-actions">
+          <p class="local-status">
+            <span aria-hidden="true"></span>
+            Offline
+          </p>
+          <button class="exit-button" type="button" data-action="exit-application">
+            Exit application
+          </button>
+        </div>
       </header>
 
       <aside class="sidebar" aria-label="Experiment setup progress">
@@ -1688,6 +1711,7 @@ function bindActions(
   ) => Promise<void>,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
   importTrack: (file: File) => Promise<void>,
+  exitApplication: () => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
 ): void {
   root.querySelectorAll<HTMLElement>("[data-route]").forEach((element) => {
@@ -1735,6 +1759,9 @@ function bindActions(
           break;
         case "replay-next":
           moveReplay("next");
+          break;
+        case "exit-application":
+          void exitApplication();
           break;
       }
     });

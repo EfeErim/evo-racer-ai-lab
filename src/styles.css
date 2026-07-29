@@ -110,6 +110,35 @@ button {
   background: #13171b;
 }
 
+.topbar-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.exit-button {
+  padding: 0.45rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  color: var(--text-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.exit-button:hover,
+.exit-button:focus-visible {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.shutdown-screen {
+  display: grid;
+  min-height: 100vh;
+  place-content: center;
+  padding: 2rem;
+  text-align: center;
+}
+
 .brand {
   display: inline-flex;
   gap: 0.65rem;
