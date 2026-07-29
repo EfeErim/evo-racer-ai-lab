@@ -54,6 +54,9 @@ try {
     $licenseRoot = Join-Path $bundleRoot "licenses"
     New-Item -ItemType Directory -Path $licenseRoot -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot "README.md") -Destination $bundleRoot
+    Copy-Item `
+        -LiteralPath (Join-Path $repoRoot "docs\user-guide.md") `
+        -Destination (Join-Path $bundleRoot "USER-GUIDE.md")
     Copy-Item -LiteralPath (Join-Path $repoRoot "packaging\THIRD-PARTY-NOTICES.txt") -Destination $bundleRoot
 
     $pythonLicense = & $pythonPath -c "import sys; from pathlib import Path; print(Path(sys.base_prefix) / 'LICENSE.txt')"

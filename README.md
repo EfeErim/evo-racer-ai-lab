@@ -5,6 +5,21 @@ learn to race on user-built tracks. The user designs or selects a track,
 configures an experiment, reviews the settings, and explicitly starts training.
 The user never drives a vehicle.
 
+![EvoRacer results workspace](docs/media/evoracer-results-demo.svg)
+
+## Windows release
+
+The verified build creates `EvoRacer-Windows-x64.zip` and its matching SHA-256
+file. Extract the full archive and open `EvoRacer\EvoRacer.exe`; Node.js and
+Python are not required on the target computer.
+
+Repository contributors can create those artifacts with
+`npm run build:release`. Publish both generated files together when attaching a
+binary release.
+
+The [user guide](docs/user-guide.md) covers setup, tracks, training, results,
+saved runs, offline behavior, and troubleshooting.
+
 ## Product boundary
 
 - Runs entirely on the user's Windows x64 computer.
@@ -13,12 +28,11 @@ The user never drives a vehicle.
 - Uses only `127.0.0.1` for local frontend-to-Python communication.
 - Stores settings, tracks, runs, checkpoints, and replays under
   `%LOCALAPPDATA%\EvoRacerAILab`.
-- Ships as a self-contained ZIP in the release phase; users will not need Node.js
-  or Python.
+- Ships as a self-contained ZIP; users do not need Node.js or Python.
 - Never starts training automatically. Start remains a deliberate user action
   after track and settings validation.
 
-## Planned experience
+## Product experience
 
 The locked user flow is:
 
@@ -26,7 +40,7 @@ The locked user flow is:
 Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
 ```
 
-The application will support:
+The application includes:
 
 - Three bundled preset tracks, a modular track editor, and a deterministic seeded
   track generator.
@@ -70,6 +84,16 @@ npm run smoke:m0
 
 The smoke command starts both local processes, verifies their loopback endpoints,
 and shuts them down.
+
+Run the complete portfolio-release gate:
+
+```powershell
+npm run test:phase10
+```
+
+This reruns the full automated suite, development loopback smoke, deterministic
+18-case algorithm matrix, Windows package build, and clean-runtime release
+acceptance.
 
 ## Offline onboarding shell
 
@@ -268,6 +292,21 @@ release\EvoRacer-Windows-x64.zip.sha256
 Users extract the ZIP and run `EvoRacer\EvoRacer.exe`. All application data
 continues to live under `%LOCALAPPDATA%\EvoRacerAILab`.
 
+## Hardening and evidence
+
+Phase 10 keeps deterministic signatures for three seeds across all three
+presets and both algorithms. The matrix is an execution/regression smoke test,
+not a claim that one algorithm learns better. The
+[algorithm comparison](docs/algorithm-comparison.md) separates those smoke
+results from the controlled learning evidence and states the remaining limits.
+
+Architecture decisions, milestone evidence, and public claim boundaries are
+saved in:
+
+- [Architecture](docs/architecture.md)
+- [Phase 10 verification](docs/verification/phase10-hardening.md)
+- [Project state](PROJECT_STATE.md)
+
 ## Repository layout
 
 ```text
@@ -279,6 +318,9 @@ python/src/evo_racer/        Authoritative Python application/simulation core
 python/tests/                Python tests
 scripts/                     Windows setup, development, and gate scripts
 docs/architecture.md         Locked architecture decisions
+docs/user-guide.md           Packaged end-user guide
+docs/algorithm-comparison.md Evidence and comparison limits
+docs/media/                  Local demo media
 docs/verification/           Saved milestone verification evidence
 ```
 

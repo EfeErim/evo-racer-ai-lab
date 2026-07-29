@@ -3,8 +3,8 @@
 ## Current position
 
 - Current phase: `Phase 10 - Hardening and portfolio release`
-- Status: `in_progress`
-- Active milestone: `M10 - Hardening and portfolio release`
+- Status: `complete`
+- Active milestone: `None - all planned milestones complete`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -79,6 +79,13 @@
 - The release workflow creates `EvoRacer-Windows-x64.zip`, a separate SHA-256
   checksum, README, third-party notices, and complete Python/PyInstaller
   licenses.
+- Python owns the Phase 10 deterministic regression matrix through the same
+  preset compiler, run session, Fixed GA, NEAT, evaluator, result, and replay
+  paths used by the application.
+- The reviewed Phase 10 fixture covers three seeds, all three presets, and both
+  algorithms at valid minimum product settings.
+- The repository and packaged release contain architecture, user, algorithm
+  comparison, demo, and evidence documents with explicit public-claim limits.
 
 ## Completed milestones
 
@@ -467,15 +474,62 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase9-windows-offline-package.md`.
 - `git diff --check` passed.
 
+### M10 - Hardening and Portfolio Release
+
+Status: `complete`
+
+Delivered:
+
+- [x] One complete automated Phase 10 gate covering all earlier automated and
+      release gates.
+- [x] Deterministic regression fixture for three seeds, three presets, Fixed GA,
+      and NEAT.
+- [x] Measured smoke performance report with machine/environment metadata.
+- [x] Current architecture, packaged user guide, evidence-backed algorithm
+      comparison, and local SVG demo media.
+- [x] Public README and claims aligned to saved deterministic, learning, and
+      release evidence.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run test:phase10` passed the complete composed gate.
+- `npm run check` inside that gate passed Prettier, ESLint, TypeScript
+  type-check, `26` Vitest tests, Ruff format/lint, strict mypy, `68` pytest
+  tests, and the Vite production build.
+- `npm run smoke:m0` passed with the frontend and Python service on
+  `127.0.0.1`.
+- `evo_racer.hardening` exactly regenerated `18 / 18` reviewed cases using
+  population `10`, one generation, a `15 s` episode, seeds `19`, `73`, and
+  `211`, all three presets, and both algorithms.
+- The measured matrix completed in `77.613886 s` with a median case time of
+  `3.863451 s`. Its regression SHA-256 was
+  `88a77019558f77947536d50b3f61c6badb9234713555f7ea4ef20d38086e8d64`.
+- The final `release\EvoRacer-Windows-x64.zip` was `9,540,521` bytes with
+  SHA-256
+  `536a54f74d4c03b97e665be5456356ebf8ffc6fa5b7b365084e1b909330c307f`.
+- Clean-runtime acceptance extracted the package, found the packaged
+  `USER-GUIDE.md`, saved and restarted run
+  `run-ede5749304bb45c38bc5acb276273591`, restored it deterministically,
+  completed training, and returned replay frames.
+- The packaged process used loopback only and spawned no Node.js or Python
+  child process.
+- Browser interaction covered Welcome, Easy Oval, valid review, explicit Start,
+  three complete Fixed GA generations, Stop, Results, baseline comparison, and
+  a `451`-frame replay. Browser warning/error logs were empty and document
+  `scrollWidth` equaled `clientWidth` (`1265`).
+- Detailed methods, timings, comparison limits, and public claim boundaries are
+  saved in `docs/verification/phase10-hardening.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 10 only: full regression hardening, performance evidence,
-architecture/user documentation, demo media, and evidence-backed algorithm
-comparison.
+All ten planned phases are complete. A later publication task may attach the
+verified Windows ZIP and checksum to a tagged GitHub Release without changing
+the saved evidence or product claim boundary.
 
 ## State update rule
 
