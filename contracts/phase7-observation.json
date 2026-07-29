@@ -1,0 +1,183 @@
+{
+  "contractVersion": 1,
+  "runId": "run-phase7-fixture",
+  "status": "completed",
+  "generation": 2,
+  "totalGenerations": 2,
+  "generationReport": {
+    "contractVersion": 1,
+    "algorithm": "fixed-ga",
+    "generation": 1,
+    "championId": "g0001-c0002",
+    "bestFitness": 82.5,
+    "medianFitness": 41.25,
+    "meanFitness": 43.75,
+    "worstFitness": 0,
+    "finishedCount": 0,
+    "results": [
+      {
+        "candidateId": "g0001-c0002",
+        "fitness": 82.5,
+        "progress": 0.06875,
+        "finished": false,
+        "collisionCount": 0,
+        "steps": 900
+      }
+    ]
+  },
+  "fitnessHistory": [
+    {
+      "generation": 0,
+      "bestFitness": 50,
+      "medianFitness": 20
+    },
+    {
+      "generation": 1,
+      "bestFitness": 82.5,
+      "medianFitness": 41.25
+    }
+  ],
+  "selectedCar": {
+    "selectedCarId": "g0001-c0002",
+    "simulatedSeconds": 15,
+    "speed": 8.5,
+    "lateralSpeed": -0.15,
+    "steering": 0.25,
+    "throttle": 0.8,
+    "brake": 0.05,
+    "progress": 0.06875,
+    "sensorDistances": [5, 8, 12, 20, 11, 7, 4]
+  },
+  "result": {
+    "metadata": {
+      "contractVersion": 1,
+      "runId": "run-phase7-fixture",
+      "status": "completed",
+      "algorithm": "fixed-ga",
+      "seed": 42,
+      "trackId": "easy-oval",
+      "trackName": "Easy Oval",
+      "trackSha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "populationSize": 10,
+      "generationsRequested": 2,
+      "generationsCompleted": 2,
+      "episodeSeconds": 15,
+      "fixedTimeStep": 0.016666666666666666,
+      "simulationContractVersion": 1,
+      "evolutionContractVersion": 1,
+      "observationContractVersion": 1
+    },
+    "fitnessHistory": [
+      {
+        "generation": 0,
+        "bestFitness": 50,
+        "medianFitness": 20
+      },
+      {
+        "generation": 1,
+        "bestFitness": 82.5,
+        "medianFitness": 41.25
+      }
+    ],
+    "champion": {
+      "candidateId": "g0001-c0002",
+      "fitness": 82.5,
+      "progress": 0.06875,
+      "genome": {
+        "contractVersion": 1,
+        "algorithm": "fixed-ga"
+      },
+      "vehicleSetup": {
+        "maxSpeed": 31,
+        "acceleration": 6.5,
+        "brakeStrength": 9,
+        "steeringAgility": 1.1,
+        "gripRecovery": 4,
+        "frontBrakeBias": 0.55,
+        "frontDriveBias": 0.45
+      }
+    },
+    "baselineComparisons": [
+      {
+        "label": "Champion",
+        "controller": "fixed-ga:g0001-c0002",
+        "fitness": 82.5,
+        "progress": 0.06875,
+        "finished": false,
+        "collisionCount": 0,
+        "steps": 900
+      },
+      {
+        "label": "Seeded random network",
+        "controller": "random-network",
+        "fitness": 0,
+        "progress": 0,
+        "finished": false,
+        "collisionCount": 0,
+        "steps": 900
+      },
+      {
+        "label": "Pure Pursuit",
+        "controller": "pure-pursuit",
+        "fitness": 1200,
+        "progress": 1,
+        "finished": true,
+        "collisionCount": 0,
+        "steps": 700
+      }
+    ],
+    "replay": {
+      "contractVersion": 1,
+      "candidateId": "g0001-c0002",
+      "sampleEverySteps": 6,
+      "vehicleSetup": {
+        "maxSpeed": 31,
+        "acceleration": 6.5,
+        "brakeStrength": 9,
+        "steeringAgility": 1.1,
+        "gripRecovery": 4,
+        "frontBrakeBias": 0.55,
+        "frontDriveBias": 0.45
+      },
+      "controllerParameters": [0.1, -0.2, 0.3],
+      "termination": "timeout",
+      "frames": [
+        {
+          "simulatedSeconds": 0.01666667,
+          "x": 1,
+          "y": 2,
+          "heading": 0,
+          "speed": 0.1,
+          "lateralSpeed": 0,
+          "steering": 0.2,
+          "throttle": 0.8,
+          "brake": 0,
+          "progress": 0
+        },
+        {
+          "simulatedSeconds": 0.11666667,
+          "x": 1.04,
+          "y": 2.01,
+          "heading": 0.03,
+          "speed": 0.7,
+          "lateralSpeed": -0.01,
+          "steering": 0.2,
+          "throttle": 0.8,
+          "brake": 0,
+          "progress": 0.001
+        }
+      ]
+    }
+  },
+  "previousRuns": [
+    {
+      "runId": "run-previous",
+      "algorithm": "neat",
+      "trackId": "easy-oval",
+      "seed": 7,
+      "generationsCompleted": 2,
+      "championFitness": 70,
+      "championProgress": 0.05833333
+    }
+  ]
+}

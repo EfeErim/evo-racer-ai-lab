@@ -590,6 +590,19 @@ h3 {
   vector-effect: non-scaling-stroke;
 }
 
+.track-replay-marker rect {
+  fill: var(--accent);
+  stroke: #dcecff;
+  stroke-width: 0.35;
+  vector-effect: non-scaling-stroke;
+}
+
+.track-replay-marker line {
+  stroke: #ffffff;
+  stroke-width: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
 .track-preview-status {
   color: var(--text-dim);
   font-size: 0.68rem;
@@ -1024,6 +1037,181 @@ h3 {
   background: #151a1f;
 }
 
+.run-overview,
+.result-summary,
+.fitness-chart,
+.comparison-panel,
+.replay-panel {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: #151a1f;
+}
+
+.run-overview,
+.result-summary {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.3fr) minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+}
+
+.run-overview p,
+.result-summary p,
+.fitness-chart > p,
+.comparison-panel > p,
+.replay-panel > p {
+  margin: 0.4rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.run-overview dl,
+.result-summary dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.run-overview dl div,
+.result-summary dl div {
+  min-width: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: #181d23;
+}
+
+.run-overview dt,
+.result-summary dt {
+  color: var(--text-dim);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
+.run-overview dd,
+.result-summary dd {
+  margin: 0.25rem 0 0;
+  overflow: hidden;
+  color: #e0e5ea;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fitness-chart {
+  margin-top: 1rem;
+}
+
+.chart-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.chart-heading p {
+  color: var(--text-muted);
+  font-size: 0.6rem;
+}
+
+.fitness-chart svg {
+  width: 100%;
+  height: 10rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  background:
+    linear-gradient(var(--border) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(90deg, var(--border) 1px, transparent 1px) 0 0 / 10% 100%,
+    #11161a;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.best-line {
+  stroke: var(--accent);
+}
+
+.median-line {
+  stroke: #8b98a6;
+}
+
+.legend {
+  display: inline-block;
+  width: 0.8rem;
+  height: 0.12rem;
+  margin: 0 0.2rem 0 0.5rem;
+  vertical-align: middle;
+  background: #8b98a6;
+}
+
+.legend.best {
+  background: var(--accent);
+}
+
+.comparison-panel table {
+  width: 100%;
+  margin-top: 0.75rem;
+  border-collapse: collapse;
+  font-size: 0.65rem;
+}
+
+.comparison-panel th,
+.comparison-panel td {
+  padding: 0.6rem;
+  border-bottom: 1px solid var(--border);
+  color: #cbd2da;
+  text-align: left;
+}
+
+.comparison-panel thead th {
+  color: var(--text-dim);
+  font-size: 0.56rem;
+  text-transform: uppercase;
+}
+
+.replay-stage {
+  display: grid;
+  min-height: 9rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  place-items: center;
+  background:
+    radial-gradient(circle at center, #202a31 0 3rem, transparent 3.1rem),
+    #11161a;
+}
+
+.replay-stage .track-geometry {
+  width: 100%;
+  height: 13rem;
+}
+
+.replay-stage p {
+  margin: 0 0 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+}
+
+.replay-controls,
+.run-controls > div {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.replay-controls {
+  justify-content: flex-end;
+}
+
 .telemetry-heading {
   display: flex;
   gap: 1rem;
@@ -1368,7 +1556,11 @@ h3 {
   .field-grid,
   .track-tool-grid,
   .telemetry-metrics,
-  .sensor-panel {
+  .sensor-panel,
+  .run-overview,
+  .result-summary,
+  .run-overview dl,
+  .result-summary dl {
     grid-template-columns: 1fr;
   }
 
@@ -1397,6 +1589,11 @@ h3 {
   .page-actions {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .replay-controls,
+  .run-controls > div {
+    flex-wrap: wrap;
   }
 
   .section-heading > p {

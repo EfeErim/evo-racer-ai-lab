@@ -1,7 +1,9 @@
 import { LOCAL_SERVICE_ORIGIN, isLoopbackOrigin } from "./foundation";
 import type { SetupDraft, SetupValidationResponse } from "./onboarding";
 import {
+  parseRunResponse,
   parseSimulationPreviewResponse,
+  type RunResponseV1,
   type SimulationPreviewResponse,
 } from "./simulation";
 import type {
@@ -62,6 +64,37 @@ export async function loadSimulationPreview(
     durationSeconds: 8,
   });
   return parseSimulationPreviewResponse(response);
+}
+
+export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
+  return parseRunResponse(
+    await postJson<unknown>("/v1/runs/start", {
+      ...draft,
+      contractVersion: 1,
+    }),
+  );
+}
+
+export async function observeRun(runId: string): Promise<RunResponseV1> {
+  return parseRunResponse(
+    await postJson<unknown>("/v1/runs/observe", {
+      contractVersion: 1,
+      runId,
+    }),
+  );
+}
+
+export async function commandRun(
+  runId: string,
+  command: "pause" | "resume" | "stop",
+): Promise<RunResponseV1> {
+  return parseRunResponse(
+    await postJson<unknown>("/v1/runs/command", {
+      contractVersion: 1,
+      runId,
+      command,
+    }),
+  );
 }
 
 export async function compileTrack(

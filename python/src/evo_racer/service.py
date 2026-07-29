@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import unquote, urlsplit
 
+from evo_racer.observer import RunManager
 from evo_racer.onboarding import validate_setup
 from evo_racer.simulation import simulate_preview_payload
 from evo_racer.track_generation import assist_track_closure_payload, generate_track_payload
@@ -28,6 +29,9 @@ ALLOWED_DEVELOPMENT_ORIGINS: Final = frozenset(
 POST_PATHS: Final = frozenset(
     {
         "/v1/setup/validate",
+        "/v1/runs/command",
+        "/v1/runs/observe",
+        "/v1/runs/start",
         "/v1/simulation/preview",
         "/v1/tracks/compile",
         "/v1/tracks/generate",
@@ -41,6 +45,7 @@ class EvoRacerServer(ThreadingHTTPServer):
     """Loopback server carrying the resolved local data root."""
 
     data_root: Path | None
+    run_manager: RunManager
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -107,6 +112,12 @@ class HealthHandler(BaseHTTPRequestHandler):
 
         if path == "/v1/setup/validate":
             response = validate_setup(payload)
+        elif path == "/v1/runs/start":
+            response = self._run_manager().start(payload)
+        elif path == "/v1/runs/observe":
+            response = self._run_manager().observe(payload)
+        elif path == "/v1/runs/command":
+            response = self._run_manager().command(payload)
         elif path == "/v1/simulation/preview":
             response = simulate_preview_payload(payload)
         elif path == "/v1/tracks/compile":
@@ -181,6 +192,11 @@ class HealthHandler(BaseHTTPRequestHandler):
         assert isinstance(server, EvoRacerServer)
         return server.data_root
 
+    def _run_manager(self) -> RunManager:
+        server = self.server
+        assert isinstance(server, EvoRacerServer)
+        return server.run_manager
+
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
         return origin is None or origin in ALLOWED_DEVELOPMENT_ORIGINS
@@ -212,6 +228,7 @@ def create_server(port: int = DEFAULT_PORT, data_root: Path | None = None) -> Ev
     """Create a service that cannot bind beyond the IPv4 loopback interface."""
     server = EvoRacerServer((LOOPBACK_HOST, port), HealthHandler)
     server.data_root = data_root
+    server.run_manager = RunManager()
     return server
 
 

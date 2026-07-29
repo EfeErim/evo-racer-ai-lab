@@ -42,6 +42,17 @@ describe("Phase 2 Python geometry renderer", () => {
     expect(svg).toContain('class="track-start-line"');
   });
 
+  it("places a replay marker from recorded Python position and heading", () => {
+    const svg = renderTrackSvg(fixture.compiled, {
+      x: 12.5,
+      y: 4.25,
+      heading: Math.PI / 2,
+    });
+
+    expect(svg).toContain('class="track-replay-marker"');
+    expect(svg).toContain("translate(12.5 4.25) rotate(90)");
+  });
+
   it("rejects malformed geometry contracts", () => {
     expect(() =>
       parsePresetTracksResponse({ contractVersion: 2, presets: [] }),

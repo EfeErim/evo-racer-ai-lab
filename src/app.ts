@@ -16,17 +16,23 @@ import {
 } from "./onboarding";
 import {
   assistTrackClosure,
+  commandRun,
   compileTrack,
   deleteTrack,
   generateTrack,
   loadPresetTracks,
-  loadSimulationPreview,
   loadTrackLibrary,
+  observeRun,
   saveTrack,
   serviceUnavailableResponse,
+  startRun,
   validateSetup,
 } from "./ipc";
-import type { SelectedCarTelemetryV1, SimulationEpisodeV1 } from "./simulation";
+import type {
+  ObservationSnapshotV1,
+  ReplayFrameV1,
+  SelectedCarTelemetryV1,
+} from "./simulation";
 import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
 import {
   SEGMENT_CATALOGUE,
@@ -70,13 +76,15 @@ interface TrackWorkspaceState {
 type SimulationState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ready"; episode: SimulationEpisodeV1 }
+  | { status: "ready"; snapshot: ObservationSnapshotV1 }
   | { status: "unavailable"; message: string };
 
 export function mountApp(root: HTMLElement): AppController {
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
   let simulation: SimulationState = { status: "idle" };
+  let observationTimer: number | undefined;
+  let replayFrameIndex = 0;
   let trackWorkspace: TrackWorkspaceState = {
     editor: createEditorState(),
     library: null,
@@ -87,7 +95,12 @@ export function mountApp(root: HTMLElement): AppController {
     const previousRoute = state.route;
     state = transition(state, action);
     if (action.type === "new-setup") {
+      if (observationTimer !== undefined) {
+        window.clearTimeout(observationTimer);
+        observationTimer = undefined;
+      }
       simulation = { status: "idle" };
+      replayFrameIndex = 0;
     }
     render(state.route !== previousRoute);
   };
@@ -111,30 +124,105 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
+  const scheduleObservation = (): void => {
+    if (
+      simulation.status !== "ready" ||
+      simulation.snapshot.status !== "running"
+    ) {
+      return;
+    }
+    observationTimer = window.setTimeout(() => {
+      void observeSession();
+    }, 600);
+  };
+
+  const applyRunResponse = (
+    response: Awaited<ReturnType<typeof startRun>>,
+  ): void => {
+    if (!response.valid) {
+      simulation = {
+        status: "unavailable",
+        message: response.errors[0]?.message ?? "The run command was rejected.",
+      };
+    } else {
+      simulation = { status: "ready", snapshot: response.snapshot };
+    }
+    render();
+    scheduleObservation();
+  };
+
+  const observeSession = async (): Promise<void> => {
+    if (
+      simulation.status !== "ready" ||
+      simulation.snapshot.status !== "running"
+    ) {
+      return;
+    }
+    observationTimer = undefined;
+    try {
+      applyRunResponse(await observeRun(simulation.snapshot.runId));
+    } catch {
+      simulation = {
+        status: "unavailable",
+        message: "The local core could not advance the training run.",
+      };
+      render();
+    }
+  };
+
+  const controlSession = async (
+    command: "pause" | "resume" | "stop",
+  ): Promise<void> => {
+    if (simulation.status !== "ready") {
+      return;
+    }
+    if (observationTimer !== undefined) {
+      window.clearTimeout(observationTimer);
+      observationTimer = undefined;
+    }
+    try {
+      applyRunResponse(await commandRun(simulation.snapshot.runId, command));
+    } catch {
+      simulation = {
+        status: "unavailable",
+        message: "The local core could not apply the run command.",
+      };
+      render();
+    }
+  };
+
+  const moveReplay = (action: "previous" | "next" | "restart"): void => {
+    if (simulation.status !== "ready" || simulation.snapshot.result === null) {
+      return;
+    }
+    const lastIndex = simulation.snapshot.result.replay.frames.length - 1;
+    if (action === "restart") {
+      replayFrameIndex = 0;
+    } else if (action === "previous") {
+      replayFrameIndex = Math.max(0, replayFrameIndex - 1);
+    } else {
+      replayFrameIndex = Math.min(lastIndex, replayFrameIndex + 1);
+    }
+    render();
+  };
+
   const startSession = async (): Promise<void> => {
     if (!canStartSession(state)) {
       return;
     }
     const frozenDraft = state.draft;
     simulation = { status: "loading" };
+    replayFrameIndex = 0;
     dispatch({ type: "start-session" });
     try {
-      const response = await loadSimulationPreview(frozenDraft);
-      simulation = response.valid
-        ? { status: "ready", episode: response.episode }
-        : {
-            status: "unavailable",
-            message:
-              response.errors[0]?.message ??
-              "The selected-car preview was rejected.",
-          };
+      applyRunResponse(await startRun(frozenDraft));
     } catch {
       simulation = {
         status: "unavailable",
-        message: "Selected-car telemetry is unavailable from the local core.",
+        message: "The local core could not start the reviewed run.",
       };
+      render();
     }
-    render();
   };
 
   const refreshLibrary = async (): Promise<void> => {
@@ -368,6 +456,7 @@ export function mountApp(root: HTMLElement): AppController {
       presetGeometry,
       trackWorkspace,
       simulation,
+      replayFrameIndex,
     );
     bindActions(
       root,
@@ -375,6 +464,8 @@ export function mountApp(root: HTMLElement): AppController {
       dispatch,
       review,
       startSession,
+      controlSession,
+      moveReplay,
       handleTrackAction,
       importTrack,
       (name, roadWidth) => {
@@ -417,6 +508,7 @@ function renderShell(
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
   simulation: SimulationState,
+  replayFrameIndex: number,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -475,7 +567,13 @@ function renderShell(
       </aside>
 
       <main id="workspace" class="workspace">
-        ${renderRoute(state, presetGeometry, trackWorkspace, simulation)}
+        ${renderRoute(
+          state,
+          presetGeometry,
+          trackWorkspace,
+          simulation,
+          replayFrameIndex,
+        )}
       </main>
     </div>
   `;
@@ -486,6 +584,7 @@ function renderRoute(
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
   simulation: SimulationState,
+  replayFrameIndex: number,
 ): string {
   switch (state.route) {
     case "welcome":
@@ -498,8 +597,17 @@ function renderRoute(
       return renderReview(state);
     case "training":
       return renderTraining(state, simulation);
-    case "results":
-      return renderResults(state);
+    case "results": {
+      const replayTrack =
+        state.draft.track === null
+          ? presetGeometry.status === "ready"
+            ? presetGeometry.presets.find(
+                (candidate) => candidate.track.id === state.draft.trackPreset,
+              )
+            : undefined
+          : trackWorkspace.active;
+      return renderResults(state, simulation, replayFrameIndex, replayTrack);
+    }
   }
 }
 
@@ -1041,15 +1149,31 @@ function renderTraining(state: AppState, simulation: SimulationState): string {
     observerContent = `
       <div class="training-stage" role="status" aria-live="polite">
         <span class="data-chip">Python simulation</span>
-        <h2>Preparing selected-car telemetry</h2>
-        <p>The local core is advancing fixed 1/60 s steps. Browser render cadence does not drive physics.</p>
+        <h2>Creating the local run</h2>
+        <p>Python is freezing the reviewed configuration before the first generation is requested.</p>
       </div>
     `;
   } else if (simulation.status === "ready") {
-    observerContent = renderSelectedCarTelemetry(
-      simulation.episode.selectedCar,
-      simulation.episode,
-    );
+    const snapshot = simulation.snapshot;
+    const telemetry =
+      snapshot.selectedCar === null
+        ? `
+          <div class="training-stage" role="status" aria-live="polite">
+            <span class="data-chip">Run ${escapeHtml(snapshot.status)}</span>
+            <h2>Generation ${String(snapshot.generation + 1)} is ready</h2>
+            <p>The next explicit batch command advances one complete generation in Python.</p>
+          </div>
+        `
+        : renderSelectedCarTelemetry(
+            snapshot.selectedCar,
+            `${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"} generation champion`,
+            snapshot.status,
+          );
+    observerContent = `
+      ${renderRunOverview(snapshot)}
+      ${telemetry}
+      ${renderFitnessChart(snapshot.fitnessHistory)}
+    `;
   } else if (simulation.status === "unavailable") {
     observerContent = `
       <div class="training-stage" role="alert">
@@ -1062,7 +1186,7 @@ function renderTraining(state: AppState, simulation: SimulationState): string {
     observerContent = `
       <div class="training-stage">
         <span class="data-chip">Configuration locked</span>
-        <h2>Waiting for selected-car telemetry</h2>
+        <h2>Waiting for the versioned run snapshot</h2>
         <p>The selected ${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"} setup is read-only.</p>
       </div>
     `;
@@ -1076,19 +1200,15 @@ function renderTraining(state: AppState, simulation: SimulationState): string {
         "The reviewed configuration is locked. Python owns physics, sensing, and episode evaluation.",
       )}
       ${observerContent}
-      <div class="page-actions">
-        <button class="button secondary" type="button" data-action="view-results">
-          View results shell
-          <span aria-hidden="true">→</span>
-        </button>
-      </div>
+      ${renderRunControls(simulation)}
     </section>
   `;
 }
 
 function renderSelectedCarTelemetry(
   telemetry: SelectedCarTelemetryV1,
-  episode: SimulationEpisodeV1,
+  title: string,
+  status: string,
 ): string {
   const metricValues: [string, string][] = [
     ["Speed", `${telemetry.speed.toFixed(2)} m/s`],
@@ -1118,9 +1238,9 @@ function renderSelectedCarTelemetry(
       <div class="telemetry-heading">
         <div>
           <p class="section-kicker">Selected car · ${escapeHtml(telemetry.selectedCarId)}</p>
-          <h2 id="telemetry-title">Pure Pursuit baseline telemetry</h2>
+          <h2 id="telemetry-title">${escapeHtml(title)}</h2>
         </div>
-        <span class="data-chip">${escapeHtml(episode.termination.replaceAll("_", " "))}</span>
+        <span class="data-chip">${escapeHtml(status)}</span>
       </div>
       <dl class="telemetry-metrics">${metrics}</dl>
       <div class="sensor-panel">
@@ -1131,34 +1251,267 @@ function renderSelectedCarTelemetry(
         <ul>${sensors}</ul>
       </div>
       <p class="telemetry-note">
-        Vehicle setup and controller parameters stayed fixed during this episode preview.
+        Vehicle setup and controller parameters stayed fixed during this episode.
         Controls are observer telemetry only; there are no driving inputs.
       </p>
     </section>
   `;
 }
 
-function renderResults(state: AppState): string {
+function renderRunOverview(snapshot: ObservationSnapshotV1): string {
+  const report = snapshot.generationReport;
+  return `
+    <section class="run-overview" aria-label="Live run status">
+      <div>
+        <span class="data-chip">${escapeHtml(snapshot.status)}</span>
+        <p>Run ${escapeHtml(snapshot.runId.slice(0, 16))}</p>
+      </div>
+      <dl>
+        <div><dt>Generation</dt><dd>${String(snapshot.generation)} / ${String(snapshot.totalGenerations)}</dd></div>
+        <div><dt>Best fitness</dt><dd>${report === null ? "—" : report.bestFitness.toFixed(3)}</dd></div>
+        <div><dt>Median fitness</dt><dd>${report === null ? "—" : report.medianFitness.toFixed(3)}</dd></div>
+        <div><dt>Champion</dt><dd>${report === null ? "—" : escapeHtml(report.championId)}</dd></div>
+      </dl>
+    </section>
+  `;
+}
+
+function renderRunControls(simulation: SimulationState): string {
+  if (simulation.status !== "ready") {
+    return "";
+  }
+  const status = simulation.snapshot.status;
+  const terminal = status === "completed" || status === "stopped";
+  return `
+    <div class="page-actions run-controls" aria-label="Run controls">
+      <div>
+        <button class="button secondary" type="button" data-action="${status === "paused" ? "resume-run" : "pause-run"}" ${terminal ? "disabled" : ""}>
+          ${status === "paused" ? "Resume" : "Pause"}
+        </button>
+        <button class="button secondary" type="button" data-action="stop-run" ${terminal ? "disabled" : ""}>
+          Stop
+        </button>
+      </div>
+      <button class="button primary" type="button" data-action="view-results" ${simulation.snapshot.result === null ? "disabled" : ""}>
+        View results
+        <span aria-hidden="true">→</span>
+      </button>
+    </div>
+  `;
+}
+
+function renderFitnessChart(
+  history: ObservationSnapshotV1["fitnessHistory"],
+): string {
+  if (history.length === 0) {
+    return `
+      <section class="fitness-chart" aria-labelledby="fitness-chart-title">
+        <h2 id="fitness-chart-title">Fitness history</h2>
+        <p>No completed generation yet.</p>
+      </section>
+    `;
+  }
+  const values = history.flatMap((point) => [
+    point.bestFitness,
+    point.medianFitness,
+  ]);
+  const minimum = Math.min(...values);
+  const maximum = Math.max(...values);
+  const span = Math.max(maximum - minimum, 1);
+  const x = (index: number): number =>
+    history.length === 1 ? 50 : 4 + (index / (history.length - 1)) * 92;
+  const y = (value: number): number => 92 - ((value - minimum) / span) * 84;
+  const best = history
+    .map(
+      (point, index) =>
+        `${x(index).toFixed(2)},${y(point.bestFitness).toFixed(2)}`,
+    )
+    .join(" ");
+  const median = history
+    .map(
+      (point, index) =>
+        `${x(index).toFixed(2)},${y(point.medianFitness).toFixed(2)}`,
+    )
+    .join(" ");
+  return `
+    <section class="fitness-chart" aria-labelledby="fitness-chart-title">
+      <div class="chart-heading">
+        <div><p class="section-kicker">Python generation reports</p><h2 id="fitness-chart-title">Fitness history</h2></div>
+        <p><span class="legend best"></span> Best <span class="legend median"></span> Median</p>
+      </div>
+      <svg viewBox="0 0 100 100" role="img" aria-label="Best and median fitness by generation" preserveAspectRatio="none">
+        <polyline class="chart-line median-line" points="${median}"></polyline>
+        <polyline class="chart-line best-line" points="${best}"></polyline>
+      </svg>
+      <p>Generation ${String(history[0]?.generation ?? 0)} to ${String(history.at(-1)?.generation ?? 0)} · range ${minimum.toFixed(2)} to ${maximum.toFixed(2)}</p>
+    </section>
+  `;
+}
+
+function renderResults(
+  state: AppState,
+  simulation: SimulationState,
+  replayFrameIndex: number,
+  replayTrack: CompiledTrackV1 | undefined,
+): string {
   const preset = TRACK_PRESETS.find(
     (candidate) => candidate.id === state.draft.trackPreset,
   );
   const trackName = state.draft.track?.name ?? preset?.name ?? "Track";
+  const result =
+    simulation.status === "ready" ? simulation.snapshot.result : null;
+  if (result === null) {
+    return `
+      <section class="page" aria-labelledby="page-title">
+        ${pageHeader(
+          "Experiment / Results",
+          "Results",
+          "A terminal Python result is required before replay and comparison.",
+        )}
+        <div class="empty-results">
+          <span class="data-chip">No terminal result</span>
+          <h2>Return to Training</h2>
+          <p>${escapeHtml(trackName)} · the reviewed configuration remains locked.</p>
+        </div>
+        <div class="page-actions">
+          <button class="button secondary" type="button" data-route="training">Back to Training</button>
+        </div>
+      </section>
+    `;
+  }
+  if (simulation.status !== "ready") {
+    return "";
+  }
+  const snapshot = simulation.snapshot;
+  const frame =
+    result.replay.frames[
+      Math.min(replayFrameIndex, result.replay.frames.length - 1)
+    ];
+  const comparisons = result.baselineComparisons
+    .map(
+      (item) => `
+        <tr>
+          <th scope="row">${escapeHtml(item.label)}</th>
+          <td>${item.fitness.toFixed(3)}</td>
+          <td>${(item.progress * 100).toFixed(1)}%</td>
+          <td>${item.finished ? "Finished" : escapeHtml(item.controller.replaceAll("_", " "))}</td>
+        </tr>
+      `,
+    )
+    .join("");
+  const previous =
+    snapshot.previousRuns.length === 0
+      ? "<p>No earlier in-memory run is available for comparison.</p>"
+      : `
+        <table>
+          <thead><tr><th>Run</th><th>Algorithm</th><th>Seed</th><th>Champion</th></tr></thead>
+          <tbody>
+            ${snapshot.previousRuns
+              .map(
+                (run) => `
+                  <tr>
+                    <th scope="row">${escapeHtml(run.runId.slice(0, 16))}</th>
+                    <td>${escapeHtml(run.algorithm)}</td>
+                    <td>${String(run.seed)}</td>
+                    <td>${run.championFitness.toFixed(3)}</td>
+                  </tr>
+                `,
+              )
+              .join("")}
+          </tbody>
+        </table>
+      `;
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
         "Experiment / Results",
         "Results",
-        "Completed-run metrics, replay, and baseline comparisons will appear here.",
+        "Python-owned metadata, champion replay, and comparable baselines from the same track and vehicle setup.",
       )}
-      <div class="empty-results">
-        <span class="data-chip">No run data</span>
-        <h2>No results yet</h2>
-        <p>${escapeHtml(trackName)} · ${String(state.draft.settings.populationSize)} candidates · seed ${String(state.draft.settings.seed)}</p>
-      </div>
+      <section class="result-summary" aria-labelledby="result-summary-title">
+        <div>
+          <p class="section-kicker">${escapeHtml(result.metadata.status)} run</p>
+          <h2 id="result-summary-title">${escapeHtml(result.metadata.trackName)}</h2>
+          <p>${escapeHtml(result.metadata.runId)} · ${escapeHtml(result.metadata.algorithm)} · seed ${String(result.metadata.seed)}</p>
+        </div>
+        <dl>
+          <div><dt>Champion fitness</dt><dd>${result.champion.fitness.toFixed(3)}</dd></div>
+          <div><dt>Progress</dt><dd>${(result.champion.progress * 100).toFixed(1)}%</dd></div>
+          <div><dt>Generations</dt><dd>${String(result.metadata.generationsCompleted)} / ${String(result.metadata.generationsRequested)}</dd></div>
+          <div><dt>Track SHA-256</dt><dd>${escapeHtml(result.metadata.trackSha256.slice(0, 12))}…</dd></div>
+        </dl>
+      </section>
+      ${renderFitnessChart(result.fitnessHistory)}
+      <section class="comparison-panel" aria-labelledby="baseline-title">
+        <h2 id="baseline-title">Champion and baselines</h2>
+        <table>
+          <thead><tr><th>Controller</th><th>Fitness</th><th>Progress</th><th>Outcome</th></tr></thead>
+          <tbody>${comparisons}</tbody>
+        </table>
+      </section>
+      ${renderReplay(
+        result.replay.frames,
+        frame,
+        replayFrameIndex,
+        result.replay.vehicleSetup.frontDriveBias,
+        result.replay.vehicleSetup.frontBrakeBias,
+        replayTrack,
+      )}
+      <section class="comparison-panel" aria-labelledby="run-comparison-title">
+        <h2 id="run-comparison-title">Previous runs this session</h2>
+        ${previous}
+      </section>
       <div class="page-actions">
         <button class="button primary" type="button" data-action="new-setup">
           Create another setup
         </button>
+      </div>
+    </section>
+  `;
+}
+
+function renderReplay(
+  frames: ReplayFrameV1[],
+  frame: ReplayFrameV1 | undefined,
+  replayFrameIndex: number,
+  frontDriveBias: number,
+  frontBrakeBias: number,
+  replayTrack: CompiledTrackV1 | undefined,
+): string {
+  if (frame === undefined) {
+    return `
+      <section class="replay-panel" aria-labelledby="replay-title">
+        <h2 id="replay-title">Champion replay</h2>
+        <p>No replay frames were produced.</p>
+      </section>
+    `;
+  }
+  return `
+    <section class="replay-panel" aria-labelledby="replay-title">
+      <div class="chart-heading">
+        <div><p class="section-kicker">Recorded Python motion and controls</p><h2 id="replay-title">Champion replay</h2></div>
+        <span class="data-chip">Frame ${String(replayFrameIndex + 1)} / ${String(frames.length)}</span>
+      </div>
+      <div class="replay-stage" role="img" aria-label="Champion position and heading at ${frame.simulatedSeconds.toFixed(2)} simulated seconds">
+        ${
+          replayTrack === undefined
+            ? '<p class="track-preview-status">Validated track geometry is unavailable.</p>'
+            : renderTrackSvg(replayTrack, frame)
+        }
+        <p>x ${frame.x.toFixed(2)} · y ${frame.y.toFixed(2)} · ${(frame.progress * 100).toFixed(1)}%</p>
+      </div>
+      <dl class="telemetry-metrics">
+        <div><dt>Steering</dt><dd>${frame.steering.toFixed(3)}</dd></div>
+        <div><dt>Throttle</dt><dd>${frame.throttle.toFixed(3)}</dd></div>
+        <div><dt>Brake</dt><dd>${frame.brake.toFixed(3)}</dd></div>
+        <div><dt>Front drive bias</dt><dd>${frontDriveBias.toFixed(3)}</dd></div>
+        <div><dt>Front brake bias</dt><dd>${frontBrakeBias.toFixed(3)}</dd></div>
+        <div><dt>Simulated time</dt><dd>${frame.simulatedSeconds.toFixed(2)} s</dd></div>
+      </dl>
+      <div class="replay-controls">
+        <button class="button secondary" type="button" data-action="replay-restart">Restart</button>
+        <button class="button secondary" type="button" data-action="replay-previous" ${replayFrameIndex === 0 ? "disabled" : ""}>Previous</button>
+        <button class="button secondary" type="button" data-action="replay-next" ${replayFrameIndex >= frames.length - 1 ? "disabled" : ""}>Next</button>
       </div>
     </section>
   `;
@@ -1196,6 +1549,8 @@ function bindActions(
   dispatch: (action: AppAction) => void,
   review: () => Promise<void>,
   startSession: () => Promise<void>,
+  controlSession: (command: "pause" | "resume" | "stop") => Promise<void>,
+  moveReplay: (action: "previous" | "next" | "restart") => void,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
   importTrack: (file: File) => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
@@ -1222,11 +1577,29 @@ function bindActions(
         case "start-session":
           void startSession();
           break;
+        case "pause-run":
+          void controlSession("pause");
+          break;
+        case "resume-run":
+          void controlSession("resume");
+          break;
+        case "stop-run":
+          void controlSession("stop");
+          break;
         case "view-results":
           dispatch({ type: "view-results" });
           break;
         case "new-setup":
           dispatch({ type: "new-setup" });
+          break;
+        case "replay-restart":
+          moveReplay("restart");
+          break;
+        case "replay-previous":
+          moveReplay("previous");
+          break;
+        case "replay-next":
+          moveReplay("next");
           break;
       }
     });
