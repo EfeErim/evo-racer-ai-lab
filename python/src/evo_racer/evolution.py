@@ -12,6 +12,7 @@ from typing import Final
 from evo_racer.simulation import (
     SENSOR_ANGLES,
     SENSOR_RANGE,
+    Controller,
     Controls,
     EpisodeResult,
     Observation,
@@ -154,16 +155,7 @@ class FeedForwardController:
 
     def control(self, observation: Observation, geometry: TrackGeometry) -> Controls:
         del geometry
-        features = (
-            _clamp(observation.state.forward_speed / 40.0, 0.0, 1.0),
-            _clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
-            _clamp(observation.heading_error / math.pi, -1.0, 1.0),
-            *(
-                _clamp(distance / SENSOR_RANGE, 0.0, 1.0)
-                for distance in observation.sensor_distances
-            ),
-        )
-        return self._network.activate(features)
+        return self._network.activate(controller_features(observation))
 
 
 @dataclass(frozen=True, slots=True)
@@ -509,19 +501,48 @@ def make_episode_evaluator(
     """Create the production Fixed GA evaluator over Phase 4 physics."""
     if not math.isfinite(max_seconds) or max_seconds <= 0.0:
         raise ValueError("max_seconds must be finite and positive.")
-    max_steps = round(max_seconds * 60.0)
 
     def evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
-        result = evaluate_episode(
+        return evaluate_candidate(
             geometry,
             candidate.controller,
             candidate.setup,
             max_seconds=max_seconds,
             selected_car_id=candidate.candidate_id,
         )
-        return episode_fitness(result, max_steps)
 
     return evaluator
+
+
+def evaluate_candidate(
+    geometry: TrackGeometry,
+    controller: Controller,
+    setup: VehicleSetup,
+    *,
+    max_seconds: float,
+    selected_car_id: str,
+) -> CandidateEvaluation:
+    """Evaluate any algorithm candidate through the canonical physics and fitness path."""
+    if not math.isfinite(max_seconds) or max_seconds <= 0.0:
+        raise ValueError("max_seconds must be finite and positive.")
+    result = evaluate_episode(
+        geometry,
+        controller,
+        setup,
+        max_seconds=max_seconds,
+        selected_car_id=selected_car_id,
+    )
+    return episode_fitness(result, round(max_seconds * 60.0))
+
+
+def controller_features(observation: Observation) -> tuple[float, ...]:
+    """Normalize the shared Phase 4 observation for every learned controller."""
+    return (
+        _clamp(observation.state.forward_speed / 40.0, 0.0, 1.0),
+        _clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
+        _clamp(observation.heading_error / math.pi, -1.0, 1.0),
+        *(_clamp(distance / SENSOR_RANGE, 0.0, 1.0) for distance in observation.sensor_distances),
+    )
 
 
 def evaluate_random_network_with_vehicle(
@@ -532,14 +553,13 @@ def evaluate_random_network_with_vehicle(
     max_seconds: float,
 ) -> CandidateEvaluation:
     """Evaluate the random-network baseline with identical vehicle genes."""
-    result = evaluate_episode(
+    return evaluate_candidate(
         geometry,
         RandomNetworkBaseline(seed),
         vehicle.to_setup(),
         max_seconds=max_seconds,
         selected_car_id=f"random-network-{seed}",
     )
-    return episode_fitness(result, round(max_seconds * 60.0))
 
 
 def _random_genome(generator: random.Random) -> FixedGenome:

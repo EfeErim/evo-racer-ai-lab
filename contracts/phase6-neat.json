@@ -1,0 +1,42 @@
+{
+  "contractVersion": 1,
+  "algorithm": "neat",
+  "network": {
+    "contractVersion": 1,
+    "kind": "feed-forward-dag",
+    "inputKeys": [-1, -2, -3, -4, -5, -6, -7, -8, -9, -10],
+    "outputKeys": [0, 1, 2],
+    "outputTransforms": ["tanh", "sigmoid", "sigmoid"],
+    "nodes": [
+      {
+        "key": 0,
+        "activation": "identity",
+        "aggregation": "sum",
+        "bias": 0.1,
+        "response": 1.0,
+        "links": [{ "source": -1, "weight": 0.5 }]
+      },
+      {
+        "key": 1,
+        "activation": "identity",
+        "aggregation": "sum",
+        "bias": -0.2,
+        "response": 1.0,
+        "links": [{ "source": -2, "weight": -0.25 }]
+      },
+      {
+        "key": 2,
+        "activation": "identity",
+        "aggregation": "sum",
+        "bias": 0.3,
+        "response": 1.0,
+        "links": [{ "source": -3, "weight": 0.75 }]
+      }
+    ]
+  },
+  "vehicleGenes": {
+    "performanceLogits": [0.5, 0.25, 0.0, -0.25, -0.5],
+    "frontBrakeBias": 0.0,
+    "frontDriveBias": 1.0
+  }
+}

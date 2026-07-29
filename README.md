@@ -170,6 +170,28 @@ Python and TypeScript. The browser test checks only the versioned presentation
 shape; Python remains the sole network, vehicle-budget, fitness, and evolution
 authority.
 
+## Feed-forward NEAT
+
+Phase 6 adds feed-forward NEAT through the pinned local `neat-python 2.0.0`
+runtime dependency:
+
+- `EvoRacerGenome` extends the library genome with the same five vehicle
+  performance-budget logits and two full-domain bias genes used by Fixed GA.
+- Controller topology, weights, and vehicle genes cross over or mutate only
+  while NEAT creates the next generation. Evaluation receives frozen compiled
+  networks and immutable vehicle values.
+- Python compiles each evolved topology into a version 1 runtime-neutral
+  feed-forward DAG. The canonical controller executes that representation
+  without exposing neat-python objects to the evaluator or browser.
+- Fixed GA and NEAT share observation normalization, Phase 4 physics, episode
+  termination, and the Phase 5 fitness function.
+- Seeded runs can save and restore neat-python checkpoints. Restoring a saved
+  generation reproduces the same next-generation result sequence.
+
+The shared Phase 6 NEAT fixture under `contracts/` is round-tripped by Python
+and structurally checked by TypeScript. Checkpoint persistence and run-library
+UX remain later-phase work.
+
 ## Repository layout
 
 ```text

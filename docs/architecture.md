@@ -3,9 +3,9 @@
 ## Status
 
 These decisions define the foundation, onboarding shell, track core, Phase 3
-track-authoring boundary, Phase 4 simulation evaluator, and Phase 5 Fixed GA.
-Product-level constraints remain authoritative in the repository product
-contract.
+track-authoring boundary, Phase 4 simulation evaluator, Phase 5 Fixed GA, and
+Phase 6 feed-forward NEAT. Product-level constraints remain authoritative in the
+repository product contract.
 
 ## Runtime boundary
 
@@ -180,21 +180,58 @@ and efficiency bonus is available only after a full lap, and collisions are
 penalized. Versioned generation reports preserve per-candidate audit fields and
 summary statistics without moving scoring logic into TypeScript.
 
+## Phase 6 NEAT boundary
+
+`python/src/evo_racer/neat_evolution.py` is the only neat-python integration
+boundary. The project pins `neat-python 2.0.0`, requires its explicit
+feed-forward configuration, and fails closed if another dependency version is
+loaded. The bundled INI declares 10 inputs, three outputs, no recurrent
+connections, exact mutation/speciation settings, and no fitness-based early
+termination for bounded runs.
+
+`EvoRacerGenome` subclasses the library genome and carries the same immutable
+`VehicleGenome` value used by Fixed GA. New population members initialize all
+seven vehicle genes. Reproduction crosses those values with their parents and
+applies bounded mutation only from the genome hooks that neat-python calls while
+creating offspring. Elites retain their original objects. The evaluator checks
+that the source genome's vehicle value is unchanged across each candidate
+episode.
+
+The NEAT compiler converts enabled feed-forward topology into a version 1 DAG
+of ordered nodes and weighted links. Only `identity` output nodes, `tanh` hidden
+nodes, and `sum` aggregation are accepted. `NEATController` consumes that
+runtime-neutral value and the same normalized observation features as Fixed GA.
+Both algorithms then call `evaluate_candidate`, which owns the single Phase 4
+physics and Phase 5 fitness path.
+
+Checkpointing uses the pinned library's generation-boundary `Checkpointer`.
+Version 2.0 stores the population, species, innovation tracker, generation, and
+Python random state for the next generation to evaluate. Restore supplies the
+current explicit config and continues from that saved state. Atomic run-library
+persistence, checkpoint discovery, and corrupt-record isolation remain Phase 8
+responsibilities.
+
 ## Python foundation
 
 Python targets exactly the 3.13 release line. The package uses a `src` layout
-under `python/src/evo_racer`. It is the future home of the application and
-simulation core as well as evolution. Phase 0 uses only the Python standard
-library at runtime; pytest, Ruff, mypy, and setuptools are pinned
-development/build tools. Future `neat-python` introduction belongs to the NEAT
-phase and requires a fresh compatibility review.
+under `python/src/evo_racer` and owns the application, simulation, and evolution
+core. Phase 6 introduces the exact runtime dependency `neat-python 2.0.0`; its
+[PyPI metadata](https://pypi.org/project/neat-python/2.0.0/) declares Python
+`>=3.8` and no runtime dependencies. Its bundled feed-forward config follows the
+[official v2.0.0 example](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/examples/xor/config-feedforward),
+and the custom genome and resume design follow the tagged
+[genome](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/neat/genome.py),
+[reproduction](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/neat/reproduction.py),
+and
+[checkpoint](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/neat/checkpoint.py)
+implementations.
 
 ## Dependencies and reproducibility
 
 - Direct JavaScript development dependencies are exact versions and the full
   graph is locked by `package-lock.json`.
-- Python development tools and their transitive dependencies are exact versions
-  in `requirements-dev.lock`.
+- Python runtime and development dependencies are exact versions in
+  `requirements-dev.lock`; neat-python adds no transitive runtime package.
 - `scripts/setup.ps1` creates the Python virtual environment, installs the locked
   Python toolchain, installs the local package, and uses `npm ci`.
 - TypeScript remains within the typescript-eslint supported range; it must not be
