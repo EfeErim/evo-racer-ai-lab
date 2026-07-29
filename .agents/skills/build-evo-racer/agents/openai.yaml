@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build EvoRacer"
+  short_description: "Build EvoRacer phase by phase offline"
+  default_prompt: "Use $build-evo-racer to implement and verify the next incomplete project phase."

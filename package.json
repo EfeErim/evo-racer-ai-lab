@@ -1,0 +1,39 @@
+{
+  "name": "evo-racer-ai-lab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.9.0",
+  "engines": {
+    "node": ">=24.0.0 <25",
+    "npm": ">=11.0.0 <12"
+  },
+  "scripts": {
+    "build": "tsc -b --pretty false && vite build",
+    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
+    "dev:frontend": "vite --host 127.0.0.1",
+    "dev:service": ".venv\\Scripts\\python.exe -m evo_racer.service",
+    "format": "prettier --write src tests index.html package.json tsconfig.json vite.config.ts eslint.config.js README.md docs/architecture.md PROJECT_STATE.md",
+    "format:check": "prettier --check src tests index.html package.json tsconfig.json vite.config.ts eslint.config.js README.md docs/architecture.md PROJECT_STATE.md",
+    "format:python": ".venv\\Scripts\\python.exe -m ruff format python",
+    "format:python:check": ".venv\\Scripts\\python.exe -m ruff format --check python",
+    "lint": "eslint . --max-warnings 0",
+    "lint:python": ".venv\\Scripts\\python.exe -m ruff check python",
+    "smoke:m0": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-m0.ps1",
+    "test": "vitest run",
+    "test:python": ".venv\\Scripts\\python.exe -m pytest",
+    "typecheck": "tsc -b --pretty false",
+    "typecheck:python": ".venv\\Scripts\\python.exe -m mypy python/src python/tests"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "24.13.3",
+    "eslint": "10.8.0",
+    "prettier": "3.9.6",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}
