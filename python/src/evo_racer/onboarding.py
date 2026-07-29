@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Final
 
+from evo_racer.tracks import TrackValidationError, compile_track_payload
+
 CONTRACT_VERSION: Final = 1
 TRACK_PRESETS: Final = frozenset({"easy-oval", "technical-circuit", "chicane-challenge"})
 ALGORITHMS: Final = frozenset({"fixed-ga", "neat"})
@@ -31,13 +33,29 @@ def validate_setup(payload: object) -> dict[str, object]:
             )
         )
 
+    track_payload = payload.get("track")
     track_preset = payload.get("trackPreset")
-    if track_preset not in TRACK_PRESETS:
+    if track_payload is not None:
+        try:
+            compiled = compile_track_payload(track_payload)
+            track = compiled["track"]
+            assert isinstance(track, dict)
+            if track_preset != track.get("id"):
+                errors.append(
+                    _issue(
+                        "TRACK_SELECTION_MISMATCH",
+                        "trackPreset",
+                        "The selected track id must match the supplied canonical track.",
+                    )
+                )
+        except TrackValidationError as error:
+            errors.extend(issue.to_payload() for issue in error.issues)
+    elif track_preset not in TRACK_PRESETS:
         errors.append(
             _issue(
                 "UNKNOWN_TRACK_PRESET",
                 "trackPreset",
-                "Choose a supported bundled track preset.",
+                "Choose a bundled or Python-validated local track.",
             )
         )
 

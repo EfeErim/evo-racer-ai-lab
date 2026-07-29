@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from http import HTTPStatus
+from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -111,6 +112,88 @@ def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
         assert [preset["track"]["id"] for preset in presets] == [
             track.track_id for track in PRESET_TRACKS
         ]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
+    tmp_path: Path,
+) -> None:
+    server = create_server(port=0, data_root=tmp_path)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def post(path: str, payload: object) -> dict[str, Any]:
+        request = Request(  # noqa: S310
+            f"http://{host}:{port}{path}",
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "http://127.0.0.1:4173",
+            },
+            data=json.dumps(payload).encode("utf-8"),
+        )
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            assert response.status == HTTPStatus.OK
+            result: dict[str, Any] = json.load(response)
+            return result
+
+    try:
+        generated = post(
+            "/v1/tracks/generate",
+            {
+                "contractVersion": 1,
+                "seed": 44,
+                "length": "short",
+                "difficulty": "easy",
+            },
+        )
+        assert generated["valid"] is True
+        compiled = generated["compiled"]
+        assert isinstance(compiled, dict)
+        saved = post(
+            "/v1/tracks/library",
+            {"contractVersion": 1, "track": compiled["track"]},
+        )
+        assert saved["saved"] is True
+
+        request = Request(  # noqa: S310
+            f"http://{host}:{port}/v1/tracks/library",
+            headers={"Origin": "http://127.0.0.1:4173"},
+        )
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            library: dict[str, Any] = json.load(response)
+        assert library["tracks"] == [compiled]
+        assert library["isolated"] == []
+
+        track = compiled["track"]
+        assert isinstance(track, dict)
+        track_id = track["id"]
+        assert isinstance(track_id, str)
+        preflight = Request(  # noqa: S310
+            f"http://{host}:{port}/v1/tracks/library/{track_id}",
+            method="OPTIONS",
+            headers={"Origin": "http://127.0.0.1:4173"},
+        )
+        with urlopen(preflight, timeout=2) as response:  # noqa: S310
+            assert response.status == HTTPStatus.NO_CONTENT
+            assert "DELETE" in response.headers["Access-Control-Allow-Methods"]
+
+        deletion = Request(  # noqa: S310
+            f"http://{host}:{port}/v1/tracks/library/{track_id}",
+            method="DELETE",
+            headers={"Origin": "http://127.0.0.1:4173"},
+        )
+        with urlopen(deletion, timeout=2) as response:  # noqa: S310
+            deleted: dict[str, Any] = json.load(response)
+        assert deleted["deleted"] is True
     finally:
         server.shutdown()
         server.server_close()

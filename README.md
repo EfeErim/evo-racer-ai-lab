@@ -106,6 +106,25 @@ Phase 2 provides a Python-owned `TrackV1` schema and deterministic compiler:
 The shared Phase 2 fixtures under `contracts/` are verified from both Python and
 TypeScript.
 
+## Editor, generator, and local track library
+
+Phase 3 extends the same `TrackV1` path without moving domain rules into the
+browser:
+
+- The sequential TypeScript editor changes only ordered canonical pieces and
+  provides delete, undo, redo, reset, and Python-assisted closure actions.
+- The Python generator accepts seed, Short/Medium/Long length, and
+  Easy/Technical/Hard difficulty. Its versioned bounded search evaluates at
+  most 200 candidates and returns deterministic canonical JSON.
+- Edited, generated, imported, and saved tracks all pass through the Phase 2
+  Python validator and compiler before the UI can select them.
+- Version 1 track JSON can be imported and exported locally. Saved tracks use
+  atomic files under `%LOCALAPPDATA%\EvoRacerAILab\tracks`; unreadable records
+  are isolated from the valid library.
+
+The shared Phase 3 TrackV1 document under `contracts/` is checked from both
+runtimes.
+
 ## Repository layout
 
 ```text

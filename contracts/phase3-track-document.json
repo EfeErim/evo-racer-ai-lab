@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "phase3-shared-oval",
+  "name": "Phase 3 Shared Oval",
+  "roadWidth": 10,
+  "pieces": [
+    {
+      "kind": "start-finish"
+    },
+    {
+      "kind": "straight-long"
+    },
+    {
+      "kind": "turn-left-90"
+    },
+    {
+      "kind": "turn-left-90"
+    },
+    {
+      "kind": "straight-long"
+    },
+    {
+      "kind": "straight-short"
+    },
+    {
+      "kind": "turn-left-90"
+    },
+    {
+      "kind": "turn-left-90"
+    }
+  ]
+}

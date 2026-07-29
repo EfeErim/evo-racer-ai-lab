@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 3 - Editor, generator, and track library`
+- Current phase: `Phase 4 - Physics, sensors, and baselines`
 - Status: `in_progress`
-- Active milestone: `M3 - Editor, generator, and track library`
+- Active milestone: `M4 - Physics, sensors, and baselines`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -33,6 +33,12 @@
   checkpoints, and spawn pose are derived.
 - The Track screen renders only geometry returned by the versioned
   `GET /v1/tracks/presets` loopback contract.
+- The Phase 3 editor stores only ordered canonical pieces and delegates
+  compilation and assisted closure to Python.
+- Python owns deterministic bounded generation, TrackV1 validation, atomic
+  local track persistence, and corrupt-record isolation.
+- Preset, edited, generated, imported, and reloaded tracks converge on the
+  Phase 2 compiler path.
 
 ## Completed milestones
 
@@ -149,16 +155,52 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase2-track-core.md`.
 - `git diff --check` passed.
 
+### M3 - Editor, Generator, and Track Library
+
+Status: `complete`
+
+Delivered:
+
+- [x] Sequential TypeScript editor with add, delete, undo, redo, reset, and
+      Python-assisted closure.
+- [x] Versioned Python seed/length/difficulty generator with deterministic
+      bounded search and final TrackV1 validation.
+- [x] Python-owned atomic local track library with corrupt-record isolation and
+      delete support.
+- [x] Versioned TrackV1 JSON import/export with Python validation before
+      selection or persistence.
+- [x] Shared Phase 3 contract fixture verified by TypeScript and Python.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 15 Vitest
+  tests, Ruff format/lint, strict mypy, 20 pytest tests, and the Vite production
+  build.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- Same generator inputs produced byte-identical sorted JSON. All nine
+  length/difficulty combinations produced the required 12, 18, or 24 pieces
+  and recompiled through the public Phase 2 compiler.
+- Generator and assisted closure stayed within the 200-candidate bound.
+- Unknown segment JSON failed with `UNKNOWN_SEGMENT_KIND`; malformed saved JSON
+  was isolated as `CORRUPT_TRACK_RECORD`.
+- Browser interaction covered edit/delete/closure, Long-Hard generation, atomic
+  save/list/delete, shared-fixture import, custom-track Review validation, and
+  responsive layout. The console contained zero warnings or errors.
+- The static runtime URL scan found no non-loopback URL.
+- Detailed evidence is saved in
+  `docs/verification/phase3-track-authoring.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 3 only: the sequential TypeScript editor UI, deterministic
-Python seed/length/difficulty generator, local track library, and versioned JSON
-import/export. Keep preset, edited, generated, and imported tracks on the Phase
-2 compiler path. Do not start Phase 4 until every M3 gate passes.
+Implement Phase 4 only: deterministic fixed-step arcade physics, swept boundary
+collision, sensors, progress and episode evaluation, plus random and Pure
+Pursuit baselines in Python. Keep controller outputs continuous and vehicle,
+network, and setup parameters fixed throughout each episode.
 
 ## State update rule
 

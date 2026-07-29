@@ -43,7 +43,8 @@ export interface TrainingSettings {
 
 export interface SetupDraft {
   contractVersion: 1;
-  trackPreset: TrackPresetId | null;
+  trackPreset: string | null;
+  track: TrackV1 | null;
   settings: TrainingSettings;
 }
 
@@ -121,7 +122,8 @@ export type NumericSetting = Exclude<keyof TrainingSettings, "algorithm">;
 export type AppAction =
   | { type: "begin-setup" }
   | { type: "navigate"; route: RouteId }
-  | { type: "select-track"; trackPreset: TrackPresetId }
+  | { type: "select-track"; trackPreset: string }
+  | { type: "select-custom-track"; track: TrackV1 }
   | { type: "apply-training-preset"; preset: TrainingPresetId }
   | { type: "set-algorithm"; algorithm: AlgorithmId }
   | { type: "set-number"; field: NumericSetting; value: number }
@@ -142,6 +144,7 @@ export function createInitialState(): AppState {
     draft: {
       contractVersion: 1,
       trackPreset: null,
+      track: null,
       settings: { ...balanced.settings },
     },
     validation: { status: "not-checked" },
@@ -225,6 +228,7 @@ export function transition(state: AppState, action: AppAction): AppState {
   if (
     state.sessionStarted &&
     (action.type === "select-track" ||
+      action.type === "select-custom-track" ||
       action.type === "apply-training-preset" ||
       action.type === "set-algorithm" ||
       action.type === "set-number" ||
@@ -255,7 +259,17 @@ export function transition(state: AppState, action: AppAction): AppState {
     case "select-track":
       return {
         ...state,
-        draft: { ...state.draft, trackPreset: action.trackPreset },
+        draft: { ...state.draft, trackPreset: action.trackPreset, track: null },
+        ...invalidate(),
+      };
+    case "select-custom-track":
+      return {
+        ...state,
+        draft: {
+          ...state.draft,
+          trackPreset: action.track.id,
+          track: action.track,
+        },
         ...invalidate(),
       };
     case "apply-training-preset": {
@@ -311,3 +325,4 @@ export function transition(state: AppState, action: AppAction): AppState {
       return createInitialState();
   }
 }
+import type { TrackV1 } from "./track-renderer";

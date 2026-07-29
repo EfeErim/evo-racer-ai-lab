@@ -12,15 +12,37 @@ import {
   type AppState,
   type NumericSetting,
   type RouteId,
-  type TrackPresetId,
   type TrainingPresetId,
 } from "./onboarding";
 import {
+  assistTrackClosure,
+  compileTrack,
+  deleteTrack,
+  generateTrack,
   loadPresetTracks,
+  loadTrackLibrary,
+  saveTrack,
   serviceUnavailableResponse,
   validateSetup,
 } from "./ipc";
 import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
+import {
+  SEGMENT_CATALOGUE,
+  addEditorPiece,
+  createEditorState,
+  deleteEditorPiece,
+  editorTrack,
+  parseTrackDocument,
+  redoEditor,
+  replaceEditorTrack,
+  resetEditor,
+  serializeTrackDocument,
+  undoEditor,
+  updateEditorDetails,
+  type EditorState,
+  type SegmentKind,
+  type TrackLibraryResponse,
+} from "./track-workbench";
 
 const ROUTE_ORDER = new Map<RouteId, number>(
   ROUTES.map((route, index) => [route.id, index]),
@@ -36,9 +58,21 @@ type PresetGeometryState =
   | { status: "ready"; presets: CompiledTrackV1[] }
   | { status: "unavailable" };
 
+interface TrackWorkspaceState {
+  editor: EditorState;
+  active?: CompiledTrackV1;
+  library: TrackLibraryResponse | null;
+  message: string;
+}
+
 export function mountApp(root: HTMLElement): AppController {
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
+  let trackWorkspace: TrackWorkspaceState = {
+    editor: createEditorState(),
+    library: null,
+    message: "Editor geometry is checked by Python when you validate it.",
+  };
 
   const dispatch = (action: AppAction): void => {
     const previousRoute = state.route;
@@ -65,9 +99,250 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
+  const refreshLibrary = async (): Promise<void> => {
+    try {
+      trackWorkspace = {
+        ...trackWorkspace,
+        library: await loadTrackLibrary(),
+      };
+    } catch {
+      trackWorkspace = {
+        ...trackWorkspace,
+        message: "The local track library is unavailable.",
+      };
+    }
+    render();
+  };
+
+  const useCompiled = (compiled: CompiledTrackV1, message: string): void => {
+    trackWorkspace = { ...trackWorkspace, active: compiled, message };
+    dispatch({ type: "select-custom-track", track: compiled.track });
+  };
+
+  const handleTrackAction = async (
+    action: string,
+    element: HTMLElement,
+  ): Promise<void> => {
+    try {
+      switch (action) {
+        case "editor-add": {
+          const kind = element.dataset.segmentKind as SegmentKind | undefined;
+          if (kind !== undefined) {
+            trackWorkspace = {
+              ...trackWorkspace,
+              editor: addEditorPiece(trackWorkspace.editor, kind),
+              active: undefined,
+              message: "Sequence changed. Validate it with the local core.",
+            };
+          }
+          render();
+          return;
+        }
+        case "editor-delete": {
+          const index = Number(element.dataset.pieceIndex);
+          trackWorkspace = {
+            ...trackWorkspace,
+            editor: deleteEditorPiece(trackWorkspace.editor, index),
+            active: undefined,
+            message: "Sequence changed. Validate it with the local core.",
+          };
+          render();
+          return;
+        }
+        case "editor-undo":
+          trackWorkspace = {
+            ...trackWorkspace,
+            editor: undoEditor(trackWorkspace.editor),
+            active: undefined,
+          };
+          render();
+          return;
+        case "editor-redo":
+          trackWorkspace = {
+            ...trackWorkspace,
+            editor: redoEditor(trackWorkspace.editor),
+            active: undefined,
+          };
+          render();
+          return;
+        case "editor-reset":
+          trackWorkspace = {
+            ...trackWorkspace,
+            editor: resetEditor(trackWorkspace.editor),
+            active: undefined,
+            message: "Editor reset to the safe starter loop.",
+          };
+          render();
+          return;
+        case "editor-validate": {
+          const response = await compileTrack(
+            editorTrack(trackWorkspace.editor),
+          );
+          if (response.valid && response.compiled !== undefined) {
+            useCompiled(response.compiled, "Edited track validated by Python.");
+          } else {
+            trackWorkspace = {
+              ...trackWorkspace,
+              active: undefined,
+              message:
+                response.errors[0]?.message ?? "The edited track is invalid.",
+            };
+            render();
+          }
+          return;
+        }
+        case "editor-assist": {
+          const response = await assistTrackClosure(
+            editorTrack(trackWorkspace.editor),
+          );
+          if (response.valid && response.compiled !== undefined) {
+            trackWorkspace = {
+              ...trackWorkspace,
+              editor: replaceEditorTrack(
+                trackWorkspace.editor,
+                response.compiled.track,
+              ),
+            };
+            useCompiled(
+              response.compiled,
+              `Python added ${String(response.addedPieces?.length ?? 0)} piece(s) to close the loop.`,
+            );
+          } else {
+            trackWorkspace = {
+              ...trackWorkspace,
+              message:
+                response.errors[0]?.message ??
+                "No safe assisted closure was found.",
+            };
+            render();
+          }
+          return;
+        }
+        case "generate": {
+          const seed =
+            root.querySelector<HTMLInputElement>("[data-generator-seed]")
+              ?.valueAsNumber ?? 0;
+          const length =
+            root.querySelector<HTMLSelectElement>("[data-generator-length]")
+              ?.value ?? "medium";
+          const difficulty =
+            root.querySelector<HTMLSelectElement>("[data-generator-difficulty]")
+              ?.value ?? "technical";
+          const response = await generateTrack({
+            seed,
+            length: length as "short" | "medium" | "long",
+            difficulty: difficulty as "easy" | "technical" | "hard",
+          });
+          if (response.valid && response.compiled !== undefined) {
+            useCompiled(
+              response.compiled,
+              "Generated track selected from deterministic Python output.",
+            );
+          } else {
+            trackWorkspace = {
+              ...trackWorkspace,
+              message:
+                response.errors[0]?.message ?? "Track generation failed.",
+            };
+            render();
+          }
+          return;
+        }
+        case "save-active":
+          if (trackWorkspace.active !== undefined) {
+            const result = await saveTrack(trackWorkspace.active.track);
+            trackWorkspace = {
+              ...trackWorkspace,
+              message: result.saved
+                ? "Track saved atomically to the local library."
+                : (result.errors[0]?.message ?? "Track could not be saved."),
+            };
+            await refreshLibrary();
+          }
+          return;
+        case "use-library": {
+          const trackId = element.dataset.trackId;
+          const compiled = trackWorkspace.library?.tracks.find(
+            (candidate) => candidate.track.id === trackId,
+          );
+          if (compiled !== undefined) {
+            useCompiled(compiled, "Local-library track selected.");
+          }
+          return;
+        }
+        case "delete-library": {
+          const trackId = element.dataset.trackId;
+          if (trackId !== undefined) {
+            await deleteTrack(trackId);
+            trackWorkspace = {
+              ...trackWorkspace,
+              message: "Local track deleted.",
+            };
+            await refreshLibrary();
+          }
+          return;
+        }
+        case "export-active":
+          if (trackWorkspace.active !== undefined) {
+            downloadTrack(trackWorkspace.active);
+          }
+          return;
+      }
+    } catch {
+      trackWorkspace = {
+        ...trackWorkspace,
+        message: "The local Python track command could not be completed.",
+      };
+      render();
+    }
+  };
+
+  const importTrack = async (file: File): Promise<void> => {
+    try {
+      const track = parseTrackDocument(await file.text());
+      const response = await compileTrack(track);
+      if (!response.valid || response.compiled === undefined) {
+        trackWorkspace = {
+          ...trackWorkspace,
+          message:
+            response.errors[0]?.message ?? "The imported track is invalid.",
+        };
+        render();
+        return;
+      }
+      useCompiled(
+        response.compiled,
+        "Imported TrackV1 validated and selected by Python.",
+      );
+    } catch (error) {
+      trackWorkspace = {
+        ...trackWorkspace,
+        message:
+          error instanceof Error ? error.message : "Track import failed.",
+      };
+      render();
+    }
+  };
+
   const render = (focusHeading = false): void => {
-    root.innerHTML = renderShell(state, presetGeometry);
-    bindActions(root, state, dispatch, review);
+    root.innerHTML = renderShell(state, presetGeometry, trackWorkspace);
+    bindActions(
+      root,
+      state,
+      dispatch,
+      review,
+      handleTrackAction,
+      importTrack,
+      (name, roadWidth) => {
+        trackWorkspace = {
+          ...trackWorkspace,
+          editor: updateEditorDetails(trackWorkspace.editor, name, roadWidth),
+          active: undefined,
+          message: "Editor details changed. Validate the track again.",
+        };
+        render();
+      },
+    );
 
     if (focusHeading) {
       const pageTitle = root.querySelector<HTMLElement>("#page-title");
@@ -85,6 +360,7 @@ export function mountApp(root: HTMLElement): AppController {
       presetGeometry = { status: "unavailable" };
       render();
     });
+  void refreshLibrary();
 
   return {
     getState: () => state,
@@ -95,6 +371,7 @@ export function mountApp(root: HTMLElement): AppController {
 function renderShell(
   state: AppState,
   presetGeometry: PresetGeometryState,
+  trackWorkspace: TrackWorkspaceState,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -153,7 +430,7 @@ function renderShell(
       </aside>
 
       <main id="workspace" class="workspace">
-        ${renderRoute(state, presetGeometry)}
+        ${renderRoute(state, presetGeometry, trackWorkspace)}
       </main>
     </div>
   `;
@@ -162,12 +439,13 @@ function renderShell(
 function renderRoute(
   state: AppState,
   presetGeometry: PresetGeometryState,
+  trackWorkspace: TrackWorkspaceState,
 ): string {
   switch (state.route) {
     case "welcome":
       return renderWelcome();
     case "track":
-      return renderTrack(state, presetGeometry);
+      return renderTrack(state, presetGeometry, trackWorkspace);
     case "settings":
       return renderSettings(state);
     case "review":
@@ -234,6 +512,7 @@ function renderWelcome(): string {
 function renderTrack(
   state: AppState,
   presetGeometry: PresetGeometryState,
+  trackWorkspace: TrackWorkspaceState,
 ): string {
   const cards = TRACK_PRESETS.map((track) => {
     const selected = state.draft.trackPreset === track.id;
@@ -283,12 +562,135 @@ function renderTrack(
         <legend class="sr-only">Track preset</legend>
         ${cards}
       </fieldset>
+      ${renderTrackWorkbench(trackWorkspace)}
       ${renderActions(
         "welcome",
         "settings",
         "Continue to settings",
         state.draft.trackPreset === null,
       )}
+    </section>
+  `;
+}
+
+function renderTrackWorkbench(workspace: TrackWorkspaceState): string {
+  const editor = workspace.editor.present;
+  const sequence = editor.pieces
+    .map(
+      (piece, index) => `
+        <li>
+          <span>${String(index + 1).padStart(2, "0")} · ${escapeHtml(piece.kind)}</span>
+          <button
+            type="button"
+            data-track-action="editor-delete"
+            data-piece-index="${String(index)}"
+            ${piece.kind === "start-finish" ? "disabled" : ""}
+            aria-label="Delete ${escapeHtml(piece.kind)} at position ${String(index + 1)}"
+          >Delete</button>
+        </li>
+      `,
+    )
+    .join("");
+  const catalogue = SEGMENT_CATALOGUE.filter((kind) => kind !== "start-finish")
+    .map(
+      (kind) => `
+        <button
+          type="button"
+          data-track-action="editor-add"
+          data-segment-kind="${kind}"
+        >${kind}</button>
+      `,
+    )
+    .join("");
+  const activePreview =
+    workspace.active === undefined
+      ? '<p class="track-preview-status">No validated custom track selected.</p>'
+      : renderTrackSvg(workspace.active);
+  const library =
+    workspace.library === null
+      ? '<p class="track-tool-empty">Loading local library…</p>'
+      : workspace.library.tracks.length === 0
+        ? '<p class="track-tool-empty">No saved tracks yet.</p>'
+        : `<ul class="library-list">${workspace.library.tracks
+            .map(
+              (compiled) => `
+                <li>
+                  <span><strong>${escapeHtml(compiled.track.name)}</strong><small>${String(compiled.track.pieces.length)} pieces</small></span>
+                  <span class="compact-actions">
+                    <button type="button" data-track-action="use-library" data-track-id="${escapeHtml(compiled.track.id)}">Use</button>
+                    <button type="button" data-track-action="delete-library" data-track-id="${escapeHtml(compiled.track.id)}">Delete</button>
+                  </span>
+                </li>
+              `,
+            )
+            .join("")}</ul>`;
+  const isolatedCount = workspace.library?.isolated.length ?? 0;
+
+  return `
+    <section class="track-workbench" aria-labelledby="track-tools-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-kicker">Phase 3 track tools</p>
+          <h2 id="track-tools-title">Build, generate, import, and reuse</h2>
+        </div>
+        <p>Canonical pieces go to the same Python compiler used by presets.</p>
+      </div>
+
+      <div class="track-tool-grid">
+        <section class="track-tool-panel editor-panel" aria-labelledby="editor-title">
+          <h3 id="editor-title">Sequential editor</h3>
+          <div class="editor-fields">
+            <label>Name <input data-editor-name value="${escapeHtml(editor.name)}" /></label>
+            <label>Road width <input data-editor-width type="number" min="8" max="20" step="0.5" value="${String(editor.roadWidth)}" /></label>
+          </div>
+          <div class="catalogue-buttons" aria-label="Add a track piece">${catalogue}</div>
+          <ol class="piece-sequence">${sequence}</ol>
+          <div class="compact-actions">
+            <button type="button" data-track-action="editor-undo" ${workspace.editor.past.length === 0 ? "disabled" : ""}>Undo</button>
+            <button type="button" data-track-action="editor-redo" ${workspace.editor.future.length === 0 ? "disabled" : ""}>Redo</button>
+            <button type="button" data-track-action="editor-reset">Reset</button>
+            <button type="button" data-track-action="editor-assist">Assist closure</button>
+            <button class="accent" type="button" data-track-action="editor-validate">Validate & use</button>
+          </div>
+        </section>
+
+        <section class="track-tool-panel" aria-labelledby="generator-title">
+          <h3 id="generator-title">Deterministic generator</h3>
+          <div class="editor-fields">
+            <label>Seed <input data-generator-seed type="number" min="0" max="2147483647" step="1" value="42" /></label>
+            <label>Length
+              <select data-generator-length>
+                <option value="short">Short · 12</option>
+                <option value="medium" selected>Medium · 18</option>
+                <option value="long">Long · 24</option>
+              </select>
+            </label>
+            <label>Difficulty
+              <select data-generator-difficulty>
+                <option value="easy">Easy</option>
+                <option value="technical" selected>Technical</option>
+                <option value="hard">Hard</option>
+              </select>
+            </label>
+          </div>
+          <button class="accent" type="button" data-track-action="generate">Generate & use</button>
+
+          <h3>Import / export</h3>
+          <label class="file-input">Import TrackV1 JSON <input type="file" accept="application/json,.json" data-track-import /></label>
+          <div class="compact-actions">
+            <button type="button" data-track-action="export-active" ${workspace.active === undefined ? "disabled" : ""}>Export selected</button>
+            <button type="button" data-track-action="save-active" ${workspace.active === undefined ? "disabled" : ""}>Save locally</button>
+          </div>
+          <div class="active-track-preview">${activePreview}</div>
+        </section>
+
+        <section class="track-tool-panel" aria-labelledby="library-title">
+          <h3 id="library-title">Local track library</h3>
+          ${library}
+          ${isolatedCount > 0 ? `<p class="track-warning">${String(isolatedCount)} corrupt record(s) were isolated.</p>` : ""}
+        </section>
+      </div>
+      <p class="track-workbench-status" role="status" aria-live="polite">${escapeHtml(workspace.message)}</p>
     </section>
   `;
 }
@@ -466,9 +868,14 @@ function renderNumberField(
 }
 
 function renderReview(state: AppState): string {
-  const track = TRACK_PRESETS.find(
+  const preset = TRACK_PRESETS.find(
     (candidate) => candidate.id === state.draft.trackPreset,
   );
+  const trackName = state.draft.track?.name ?? preset?.name ?? "Not selected";
+  const trackDescription =
+    state.draft.track === null
+      ? (preset?.description ?? "Choose a track to continue.")
+      : `${String(state.draft.track.pieces.length)} canonical pieces · local TrackV1`;
   const status = renderValidationStatus(state);
   const startDisabled = !canStartSession(state);
 
@@ -485,11 +892,11 @@ function renderReview(state: AppState): string {
           <div class="review-heading">
             <div>
               <p class="section-kicker">Track</p>
-              <h2 id="track-review-title">${track?.name ?? "Not selected"}</h2>
+              <h2 id="track-review-title">${escapeHtml(trackName)}</h2>
             </div>
             <button type="button" data-route="track">Edit</button>
           </div>
-          <p>${track?.description ?? "Choose a track to continue."}</p>
+          <p>${escapeHtml(trackDescription)}</p>
         </section>
 
         <section class="review-card" aria-labelledby="training-review-title">
@@ -612,9 +1019,10 @@ function renderTraining(state: AppState): string {
 }
 
 function renderResults(state: AppState): string {
-  const track = TRACK_PRESETS.find(
+  const preset = TRACK_PRESETS.find(
     (candidate) => candidate.id === state.draft.trackPreset,
   );
+  const trackName = state.draft.track?.name ?? preset?.name ?? "Track";
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
@@ -625,7 +1033,7 @@ function renderResults(state: AppState): string {
       <div class="empty-results">
         <span aria-hidden="true">◇</span>
         <h2>Results shell ready</h2>
-        <p>${track?.name ?? "Track"} · ${String(state.draft.settings.populationSize)} candidates · seed ${String(state.draft.settings.seed)}</p>
+        <p>${escapeHtml(trackName)} · ${String(state.draft.settings.populationSize)} candidates · seed ${String(state.draft.settings.seed)}</p>
       </div>
       <div class="page-actions">
         <button class="button primary" type="button" data-action="new-setup">
@@ -667,6 +1075,9 @@ function bindActions(
   state: AppState,
   dispatch: (action: AppAction) => void,
   review: () => Promise<void>,
+  handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
+  importTrack: (file: File) => Promise<void>,
+  updateEditor: (name: string, roadWidth: number) => void,
 ): void {
   root.querySelectorAll<HTMLElement>("[data-route]").forEach((element) => {
     element.addEventListener("click", (event) => {
@@ -706,10 +1117,43 @@ function bindActions(
       input.addEventListener("change", () => {
         dispatch({
           type: "select-track",
-          trackPreset: input.value as TrackPresetId,
+          trackPreset: input.value,
         });
       });
     });
+
+  root
+    .querySelectorAll<HTMLElement>("[data-track-action]")
+    .forEach((element) => {
+      element.addEventListener("click", () => {
+        const action = element.dataset.trackAction;
+        if (action !== undefined) {
+          void handleTrackAction(action, element);
+        }
+      });
+    });
+
+  root
+    .querySelector<HTMLInputElement>("[data-track-import]")
+    ?.addEventListener("change", (event) => {
+      const input = event.currentTarget as HTMLInputElement;
+      const file = input.files?.[0];
+      if (file !== undefined) {
+        void importTrack(file);
+      }
+    });
+
+  const editorName = root.querySelector<HTMLInputElement>("[data-editor-name]");
+  const editorWidth = root.querySelector<HTMLInputElement>(
+    "[data-editor-width]",
+  );
+  const commitEditorDetails = (): void => {
+    if (editorName !== null && editorWidth !== null) {
+      updateEditor(editorName.value, editorWidth.valueAsNumber);
+    }
+  };
+  editorName?.addEventListener("change", commitEditorDetails);
+  editorWidth?.addEventListener("change", commitEditorDetails);
 
   root
     .querySelectorAll<HTMLButtonElement>("[data-training-preset]")
@@ -747,4 +1191,34 @@ function bindActions(
   if (state.route === "review" && state.validation.status === "not-checked") {
     void review();
   }
+}
+
+function downloadTrack(compiled: CompiledTrackV1): void {
+  const blob = new Blob([serializeTrackDocument(compiled.track)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${safeFileName(compiled.track.name)}.track.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function safeFileName(value: string): string {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "");
+  return normalized || "track";
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }

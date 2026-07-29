@@ -566,6 +566,182 @@ h2 {
   display: grid;
 }
 
+.track-workbench {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid #263029;
+  border-radius: 1rem;
+  background: #0b120e;
+}
+
+.track-tool-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) repeat(2, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.track-tool-panel {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #243029;
+  border-radius: 0.8rem;
+  background: #101813;
+}
+
+.track-tool-panel h3 {
+  margin: 0 0 0.9rem;
+  color: #e9f0eb;
+  font-size: 0.95rem;
+}
+
+.track-tool-panel h3:not(:first-child) {
+  margin-top: 1.4rem;
+}
+
+.editor-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  gap: 0.7rem;
+}
+
+.editor-fields label,
+.file-input {
+  display: grid;
+  gap: 0.35rem;
+  color: #9dada2;
+  font-size: 0.72rem;
+}
+
+.editor-fields input,
+.editor-fields select,
+.file-input input {
+  width: 100%;
+  border: 1px solid #344239;
+  border-radius: 0.45rem;
+  color: #e9f0eb;
+  background: #0a100c;
+}
+
+.catalogue-buttons,
+.compact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.85rem;
+}
+
+.catalogue-buttons button,
+.compact-actions button,
+.piece-sequence button,
+.track-tool-panel > button {
+  border: 1px solid #344239;
+  border-radius: 999px;
+  padding: 0.45rem 0.7rem;
+  color: #bdc9c0;
+  background: #111b15;
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.catalogue-buttons button:hover,
+.compact-actions button:hover,
+.piece-sequence button:hover,
+.track-tool-panel > button:hover {
+  border-color: #62e595;
+  color: #e9f0eb;
+}
+
+.compact-actions .accent,
+.track-tool-panel > .accent {
+  border-color: #62e595;
+  color: #07100b;
+  background: #78eda4;
+  font-weight: 800;
+}
+
+.piece-sequence,
+.library-list {
+  display: grid;
+  max-height: 15rem;
+  padding: 0;
+  margin: 0.9rem 0 0;
+  gap: 0.35rem;
+  overflow: auto;
+  list-style: none;
+}
+
+.piece-sequence li,
+.library-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.45rem;
+  color: #bdc9c0;
+  background: #0a100c;
+  font-size: 0.7rem;
+}
+
+.library-list li > span:first-child {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.library-list small {
+  color: #78877d;
+}
+
+.active-track-preview {
+  display: grid;
+  min-height: 8rem;
+  margin-top: 0.9rem;
+  place-items: center;
+  border-radius: 0.6rem;
+  background: #0a100c;
+}
+
+.active-track-preview .track-geometry {
+  height: 8rem;
+}
+
+.track-workbench-status,
+.track-tool-empty,
+.track-warning {
+  color: #91a097;
+  font-size: 0.72rem;
+  line-height: 1.5;
+}
+
+.track-workbench-status {
+  margin: 1rem 0 0;
+}
+
+.track-warning {
+  color: #f1bf78;
+}
+
+@media (width <= 1120px) {
+  .track-tool-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .editor-panel {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (width <= 720px) {
+  .track-tool-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-panel {
+    grid-column: auto;
+  }
+}
+
 .page-actions {
   display: flex;
   gap: 0.7rem;
