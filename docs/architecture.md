@@ -2,7 +2,8 @@
 
 ## Status
 
-These decisions define the foundation and Phase 1 onboarding shell.
+These decisions define the foundation, Phase 1 onboarding shell, and Phase 2
+track core.
 Product-level constraints remain authoritative in the repository product
 contract.
 
@@ -70,6 +71,29 @@ algorithm, and numeric-range rules. The browser submits the setup to
 `POST /v1/setup/validate` on `127.0.0.1`; this endpoint validates only and never
 creates or starts a run. The shared valid fixture under `contracts/` is consumed
 by both TypeScript and Python tests.
+
+## Phase 2 track boundary
+
+`TrackV1` is the only canonical track representation. It stores schema version,
+identity, road width, and ordered catalogue pieces; it does not persist
+centerlines, boundaries, checkpoints, or spawn data. The Python track compiler
+derives all of that geometry deterministically from the piece sequence.
+
+The version 1 catalogue contains start/finish, short and long straights,
+left/right 45-degree and 90-degree turns, left/right hairpins, and left/right
+chicanes. Sequential compilation makes piece joins exact. The Python validator
+then enforces one start/finish, supported pieces, corridor-width bounds, loop
+position and heading closure, and a non-self-intersecting centerline. A fixed
+start/finish length guarantees the derived spawn pose remains inside its
+corridor, while checkpoints preserve canonical piece order.
+
+Easy Oval, Technical Circuit, and Chicane Challenge are bundled as canonical
+`TrackV1` values and pass through the same compiler used for future edited,
+generated, and imported tracks. The loopback-only
+`GET /v1/tracks/presets` contract returns their versioned compiled geometry.
+TypeScript validates the response shape and draws the supplied centerline,
+boundaries, and start line as SVG; it contains no track construction or
+validation rules.
 
 ## Python foundation
 

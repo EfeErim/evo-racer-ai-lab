@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 2 - Track core and presets`
+- Current phase: `Phase 3 - Editor, generator, and track library`
 - Status: `in_progress`
-- Active milestone: `M2 - Track core and presets`
+- Active milestone: `M3 - Editor, generator, and track library`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -27,6 +27,12 @@
 - JavaScript dependencies are exact in `package.json` and transitively locked in
   `package-lock.json`. Python development dependencies are exact in
   `requirements-dev.lock`.
+- Python owns the versioned `TrackV1` schema, complete segment catalogue,
+  deterministic geometry compiler, and stable-code validator.
+- Canonical tracks persist only ordered piece data; centerline, boundaries,
+  checkpoints, and spawn pose are derived.
+- The Track screen renders only geometry returned by the versioned
+  `GET /v1/tracks/presets` loopback contract.
 
 ## Completed milestones
 
@@ -107,15 +113,52 @@ Verification evidence recorded on `2026-07-29`:
 - `git diff --check` passed. The static URL scan found only loopback runtime/test
   URLs and the intentional `https://example.com` negative test input.
 
+### M2 - Track Core and Presets
+
+Status: `complete`
+
+Delivered:
+
+- [x] Versioned Python `TrackV1` schema and complete segment catalogue.
+- [x] Sequential Python compiler deriving centerline, boundaries, checkpoints,
+      and spawn pose from canonical pieces.
+- [x] Python validator for schema, start/finish count, supported pieces,
+      corridor width, closure, and self-intersection with stable error codes.
+- [x] Easy Oval, Technical Circuit, and Chicane Challenge bundled as canonical
+      presets using one compiler path.
+- [x] Versioned loopback preset-geometry endpoint and a TypeScript SVG renderer
+      that consumes Python-derived geometry.
+- [x] Shared valid geometry and invalid-track fixtures verified across both
+      runtimes.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 11 Vitest
+  tests, Ruff format/lint, strict mypy, 12 pytest tests, and the Vite production
+  build.
+- All three presets compiled as closed, connected, non-self-intersecting tracks.
+  Repeated compilation produced byte-identical sorted JSON.
+- Invalid version, segment, start/finish, corridor, open-loop, and
+  self-intersection fixtures returned their saved stable error codes.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- Browser inspection found three preset cards, three Python-derived SVGs, three
+  road paths, three start lines, no unavailable placeholders, and no console
+  warnings or errors. Selecting Chicane Challenge enabled Continue.
+- The static runtime URL scan found only intended loopback URLs.
+- Detailed evidence is saved in
+  `docs/verification/phase2-track-core.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 2 only: the Python-owned versioned track schema, segment
-catalogue, compiler, validator, TypeScript geometry renderer, and three bundled
-preset tracks. Do not start Phase 3 until every M2 gate passes.
+Implement Phase 3 only: the sequential TypeScript editor UI, deterministic
+Python seed/length/difficulty generator, local track library, and versioned JSON
+import/export. Keep preset, edited, generated, and imported tracks on the Phase
+2 compiler path. Do not start Phase 4 until every M3 gate passes.
 
 ## State update rule
 

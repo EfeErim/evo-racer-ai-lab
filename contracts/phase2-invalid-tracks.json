@@ -1,0 +1,100 @@
+[
+  {
+    "name": "unknown segment",
+    "track": {
+      "schemaVersion": 1,
+      "id": "unknown-segment",
+      "name": "Unknown segment",
+      "roadWidth": 10,
+      "pieces": [
+        { "kind": "start-finish" },
+        { "kind": "teleport" }
+      ]
+    },
+    "expectedCodes": ["UNKNOWN_SEGMENT_KIND"]
+  },
+  {
+    "name": "missing start finish",
+    "track": {
+      "schemaVersion": 1,
+      "id": "missing-start",
+      "name": "Missing start",
+      "roadWidth": 10,
+      "pieces": [
+        { "kind": "straight-short" },
+        { "kind": "hairpin-left" },
+        { "kind": "straight-short" },
+        { "kind": "hairpin-left" }
+      ]
+    },
+    "expectedCodes": ["START_FINISH_COUNT"]
+  },
+  {
+    "name": "corridor too narrow",
+    "track": {
+      "schemaVersion": 1,
+      "id": "narrow",
+      "name": "Narrow",
+      "roadWidth": 4,
+      "pieces": [
+        { "kind": "start-finish" },
+        { "kind": "hairpin-left" },
+        { "kind": "straight-short" },
+        { "kind": "hairpin-left" }
+      ]
+    },
+    "expectedCodes": ["CORRIDOR_TOO_NARROW"]
+  },
+  {
+    "name": "unsupported version",
+    "track": {
+      "schemaVersion": 99,
+      "id": "future",
+      "name": "Future",
+      "roadWidth": 10,
+      "pieces": [
+        { "kind": "start-finish" },
+        { "kind": "hairpin-left" },
+        { "kind": "straight-short" },
+        { "kind": "hairpin-left" }
+      ]
+    },
+    "expectedCodes": ["UNSUPPORTED_TRACK_VERSION"]
+  },
+  {
+    "name": "open loop",
+    "track": {
+      "schemaVersion": 1,
+      "id": "open-loop",
+      "name": "Open loop",
+      "roadWidth": 10,
+      "pieces": [
+        { "kind": "start-finish" },
+        { "kind": "straight-short" },
+        { "kind": "turn-left-90" }
+      ]
+    },
+    "expectedCodes": ["LOOP_NOT_CLOSED"]
+  },
+  {
+    "name": "self intersection",
+    "track": {
+      "schemaVersion": 1,
+      "id": "crossing",
+      "name": "Crossing",
+      "roadWidth": 8,
+      "pieces": [
+        { "kind": "start-finish" },
+        { "kind": "chicane-right" },
+        { "kind": "hairpin-left" },
+        { "kind": "straight-short" },
+        { "kind": "turn-left-45" },
+        { "kind": "turn-left-90" },
+        { "kind": "turn-right-90" },
+        { "kind": "turn-right-45" },
+        { "kind": "hairpin-right" }
+      ]
+    },
+    "expectedCodes": ["TRACK_SELF_INTERSECTION"]
+  }
+]

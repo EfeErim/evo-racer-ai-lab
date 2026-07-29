@@ -15,7 +15,12 @@ import {
   type TrackPresetId,
   type TrainingPresetId,
 } from "./onboarding";
-import { serviceUnavailableResponse, validateSetup } from "./ipc";
+import {
+  loadPresetTracks,
+  serviceUnavailableResponse,
+  validateSetup,
+} from "./ipc";
+import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
 
 const ROUTE_ORDER = new Map<RouteId, number>(
   ROUTES.map((route, index) => [route.id, index]),
@@ -26,8 +31,14 @@ export interface AppController {
   dispatch(action: AppAction): void;
 }
 
+type PresetGeometryState =
+  | { status: "loading" }
+  | { status: "ready"; presets: CompiledTrackV1[] }
+  | { status: "unavailable" };
+
 export function mountApp(root: HTMLElement): AppController {
   let state = createInitialState();
+  let presetGeometry: PresetGeometryState = { status: "loading" };
 
   const dispatch = (action: AppAction): void => {
     const previousRoute = state.route;
@@ -55,7 +66,7 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const render = (focusHeading = false): void => {
-    root.innerHTML = renderShell(state);
+    root.innerHTML = renderShell(state, presetGeometry);
     bindActions(root, state, dispatch, review);
 
     if (focusHeading) {
@@ -65,6 +76,15 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   render(true);
+  void loadPresetTracks()
+    .then((response) => {
+      presetGeometry = { status: "ready", presets: response.presets };
+      render();
+    })
+    .catch(() => {
+      presetGeometry = { status: "unavailable" };
+      render();
+    });
 
   return {
     getState: () => state,
@@ -72,7 +92,10 @@ export function mountApp(root: HTMLElement): AppController {
   };
 }
 
-function renderShell(state: AppState): string {
+function renderShell(
+  state: AppState,
+  presetGeometry: PresetGeometryState,
+): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
     const locked =
@@ -130,18 +153,21 @@ function renderShell(state: AppState): string {
       </aside>
 
       <main id="workspace" class="workspace">
-        ${renderRoute(state)}
+        ${renderRoute(state, presetGeometry)}
       </main>
     </div>
   `;
 }
 
-function renderRoute(state: AppState): string {
+function renderRoute(
+  state: AppState,
+  presetGeometry: PresetGeometryState,
+): string {
   switch (state.route) {
     case "welcome":
       return renderWelcome();
     case "track":
-      return renderTrack(state);
+      return renderTrack(state, presetGeometry);
     case "settings":
       return renderSettings(state);
     case "review":
@@ -205,9 +231,26 @@ function renderWelcome(): string {
   `;
 }
 
-function renderTrack(state: AppState): string {
+function renderTrack(
+  state: AppState,
+  presetGeometry: PresetGeometryState,
+): string {
   const cards = TRACK_PRESETS.map((track) => {
     const selected = state.draft.trackPreset === track.id;
+    const compiled =
+      presetGeometry.status === "ready"
+        ? presetGeometry.presets.find(
+            (candidate) => candidate.track.id === track.id,
+          )
+        : undefined;
+    const preview =
+      compiled === undefined
+        ? `<span class="track-preview-status">${
+            presetGeometry.status === "unavailable"
+              ? "Local preview unavailable"
+              : "Compiling local geometry..."
+          }</span>`
+        : renderTrackSvg(compiled);
     return `
       <label class="choice-card ${selected ? "is-selected" : ""}">
         <input
@@ -216,8 +259,8 @@ function renderTrack(state: AppState): string {
           value="${track.id}"
           ${selected ? "checked" : ""}
         />
-        <span class="track-preview track-${track.id}" aria-hidden="true">
-          <span></span>
+        <span class="track-preview">
+          ${preview}
         </span>
         <span class="choice-copy">
           <span class="choice-kicker">${track.difficulty}</span>
@@ -234,7 +277,7 @@ function renderTrack(state: AppState): string {
       ${pageHeader(
         "Step 1 of 3",
         "Choose a track",
-        "Start with a bundled preset. Canonical geometry and editing arrive in the dedicated track phases.",
+        "Each bundled preset is validated and compiled by the local Python core before its geometry is drawn here.",
       )}
       <fieldset class="choice-grid">
         <legend class="sr-only">Track preset</legend>

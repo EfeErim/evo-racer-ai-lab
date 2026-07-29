@@ -483,63 +483,48 @@ h2 {
   background-size: 24px 24px;
 }
 
-.track-preview::before,
-.track-preview::after,
-.track-preview span {
-  position: absolute;
-  content: "";
-  border: 0.45rem solid #53615a;
-  box-shadow:
-    0 0 0 0.18rem #141b17,
-    0 0 0 0.28rem #27322b;
+.track-geometry {
+  width: calc(100% - 1.5rem);
+  height: calc(100% - 1.5rem);
 }
 
-.track-easy-oval::before {
-  width: 7.5rem;
-  height: 3.8rem;
-  border-radius: 50%;
-  transform: rotate(-8deg);
+.track-road {
+  fill: none;
+  stroke: #46534b;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 8;
+  vector-effect: non-scaling-stroke;
 }
 
-.track-easy-oval::after {
-  width: 5.4rem;
-  height: 1.8rem;
-  border-color: #101813;
-  border-radius: 50%;
-  box-shadow: none;
-  transform: rotate(-8deg);
+.track-centerline {
+  fill: none;
+  stroke: #9bb2a2;
+  stroke-dasharray: 1.5 2.5;
+  stroke-linecap: round;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
-.track-technical-circuit::before {
-  width: 7rem;
-  height: 5rem;
-  border-radius: 38% 58% 45% 52%;
-  transform: rotate(16deg);
+.track-boundary {
+  fill: none;
+  stroke: #7d9183;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
 }
 
-.track-technical-circuit::after {
-  width: 4.8rem;
-  height: 2.9rem;
-  border-color: #101813;
-  border-radius: 42% 52% 42% 58%;
-  box-shadow: none;
-  transform: rotate(16deg);
+.track-start-line {
+  stroke: #bdfd67;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
 }
 
-.track-chicane-challenge::before {
-  width: 7rem;
-  height: 5rem;
-  border-radius: 56% 32% 54% 38%;
-  transform: skewX(-11deg) rotate(-18deg);
-}
-
-.track-chicane-challenge::after {
-  width: 4.8rem;
-  height: 2.8rem;
-  border-color: #101813;
-  border-radius: 56% 32% 54% 38%;
-  box-shadow: none;
-  transform: skewX(-11deg) rotate(-18deg);
+.track-preview-status {
+  color: #7e8b83;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
 }
 
 .choice-copy {

@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Final
 
 from evo_racer.onboarding import validate_setup
+from evo_racer.tracks import compiled_presets_payload
 
 LOOPBACK_HOST: Final = "127.0.0.1"
 DEFAULT_PORT: Final = 8765
@@ -27,20 +28,25 @@ class HealthHandler(BaseHTTPRequestHandler):
     server_version = "EvoRacerLocal/0.1"
 
     def do_GET(self) -> None:
-        """Return service health without contacting any external resource."""
-        if self.path != "/health":
-            self.send_error(HTTPStatus.NOT_FOUND)
+        """Return local service data without contacting any external resource."""
+        if self.path == "/health":
+            self._send_json(
+                HTTPStatus.OK,
+                {
+                    "contractVersion": 1,
+                    "host": LOOPBACK_HOST,
+                    "service": "evo-racer-core",
+                    "status": "ready",
+                },
+            )
             return
-
-        self._send_json(
-            HTTPStatus.OK,
-            {
-                "contractVersion": 1,
-                "host": LOOPBACK_HOST,
-                "service": "evo-racer-core",
-                "status": "ready",
-            },
-        )
+        if self.path == "/v1/tracks/presets":
+            if not self._origin_allowed():
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self._send_json(HTTPStatus.OK, compiled_presets_payload())
+            return
+        self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_OPTIONS(self) -> None:
         """Permit JSON validation only from the known loopback UI origins."""
