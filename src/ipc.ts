@@ -1,5 +1,23 @@
 import { LOCAL_SERVICE_ORIGIN, isLoopbackOrigin } from "./foundation";
 import type { SetupDraft, SetupValidationResponse } from "./onboarding";
+import {
+  parsePresetTracksResponse,
+  type PresetTracksResponse,
+} from "./track-renderer";
+
+export async function loadPresetTracks(): Promise<PresetTracksResponse> {
+  if (!isLoopbackOrigin(LOCAL_SERVICE_ORIGIN)) {
+    throw new Error("Track geometry is restricted to the local service.");
+  }
+
+  const response = await fetch(`${LOCAL_SERVICE_ORIGIN}/v1/tracks/presets`);
+  if (!response.ok) {
+    throw new Error(
+      `Local track request failed with status ${String(response.status)}.`,
+    );
+  }
+  return parsePresetTracksResponse(await response.json());
+}
 
 export async function validateSetup(
   draft: SetupDraft,

@@ -91,6 +91,21 @@ Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
 - Training and Results are honest shell states; simulation, evolution, and
   result analysis connect in their later phases.
 
+## Track core and bundled presets
+
+Phase 2 provides a Python-owned `TrackV1` schema and deterministic compiler:
+
+- Canonical files contain only ordered catalogue pieces and track metadata.
+- Python derives the centerline, road boundaries, checkpoints, and spawn pose,
+  then validates closure and self-intersection with stable error codes.
+- Easy Oval, Technical Circuit, and Chicane Challenge use the same compiler
+  path that later editor, generator, and import features will use.
+- The Track screen requests versioned compiled geometry from the loopback core.
+  TypeScript only renders that Python output as local SVG.
+
+The shared Phase 2 fixtures under `contracts/` are verified from both Python and
+TypeScript.
+
 ## Repository layout
 
 ```text
