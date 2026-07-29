@@ -405,15 +405,15 @@ function renderShell(
     <div class="app-shell">
       <header class="topbar">
         <a class="brand" href="#" data-route="welcome" aria-label="EvoRacer AI Lab home">
-          <span class="brand-mark" aria-hidden="true">ER</span>
+          <span class="brand-mark" aria-hidden="true"></span>
           <span>
             <strong>EvoRacer</strong>
-            <small>AI Lab</small>
+            <small>Simulation workspace</small>
           </span>
         </a>
         <p class="local-status">
           <span aria-hidden="true"></span>
-          Local-only workspace
+          Offline
         </p>
       </header>
 
@@ -423,8 +423,8 @@ function renderShell(
         <div class="offline-note">
           <span aria-hidden="true">◎</span>
           <div>
-            <strong>Offline by design</strong>
-            <p>All runtime traffic stays on this computer.</p>
+            <strong>Local session</strong>
+            <p>Data and processing stay on this computer.</p>
           </div>
         </div>
       </aside>
@@ -475,35 +475,33 @@ function renderWelcome(): string {
   return `
     <section class="page welcome-page" aria-labelledby="page-title">
       ${pageHeader(
-        "Welcome to your local evolution lab",
-        "Watch intelligence find the racing line.",
-        "Build a controlled experiment, then observe AI drivers improve without ever taking the wheel.",
+        "EvoRacer / New experiment",
+        "Set up a racing experiment.",
+        "Choose a track and training configuration. Nothing runs until you review the setup and press Start.",
       )}
 
-      <div class="feature-grid" aria-label="Product principles">
-        <article class="feature-card">
-          <span class="feature-icon" aria-hidden="true">01</span>
-          <h2>Choose the challenge</h2>
-          <p>Select a track, algorithm, and experiment size with plain-language guidance.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-icon" aria-hidden="true">02</span>
-          <h2>Review before Start</h2>
-          <p>Nothing runs automatically. Start unlocks only after local validation succeeds.</p>
-        </article>
-        <article class="feature-card">
-          <span class="feature-icon" aria-hidden="true">03</span>
-          <h2>Observe, never drive</h2>
-          <p>Controls belong to evolving neural networks; your input configures the lab UI.</p>
-        </article>
-      </div>
-
-      <div class="welcome-action">
-        <button class="button primary" type="button" data-action="begin-setup">
-          Begin experiment setup
-          <span aria-hidden="true">→</span>
-        </button>
-        <p>No account, cloud connection, or automatic training.</p>
+      <div class="welcome-panel">
+        <div class="welcome-summary" aria-label="Experiment setup summary">
+          <div class="summary-row">
+            <span>Track</span>
+            <strong>Preset, editor, generator, or local file</strong>
+          </div>
+          <div class="summary-row">
+            <span>Training</span>
+            <strong>Fixed GA or NEAT</strong>
+          </div>
+          <div class="summary-row">
+            <span>Run policy</span>
+            <strong>Manual start after local validation</strong>
+          </div>
+        </div>
+        <div class="welcome-aside">
+          <span class="data-chip">Local only</span>
+          <p>No account, cloud connection, telemetry, or automatic training.</p>
+          <button class="button primary" type="button" data-action="begin-setup">
+            Begin experiment setup
+          </button>
+        </div>
       </div>
     </section>
   `;
@@ -554,9 +552,9 @@ function renderTrack(
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
-        "Step 1 of 3",
-        "Choose a track",
-        "Each bundled preset is validated and compiled by the local Python core before its geometry is drawn here.",
+        "Setup / Track",
+        "Select a track.",
+        "Use a bundled preset or open the custom-track tools. Every option is validated by the local Python core.",
       )}
       <fieldset class="choice-grid">
         <legend class="sr-only">Track preset</legend>
@@ -630,10 +628,10 @@ function renderTrackWorkbench(workspace: TrackWorkspaceState): string {
     <section class="track-workbench" aria-labelledby="track-tools-title">
       <div class="section-heading">
         <div>
-          <p class="section-kicker">Phase 3 track tools</p>
-          <h2 id="track-tools-title">Build, generate, import, and reuse</h2>
+          <p class="section-kicker">Custom tracks</p>
+          <h2 id="track-tools-title">Edit, generate, or load a track</h2>
         </div>
-        <p>Canonical pieces go to the same Python compiler used by presets.</p>
+        <p>All sources use the same local validation and geometry pipeline.</p>
       </div>
 
       <div class="track-tool-grid">
@@ -721,9 +719,9 @@ function renderSettings(state: AppState): string {
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
-        "Step 2 of 3",
-        "Shape the experiment",
-        "Use a preset or tune the values. Advanced controls stay out of the way until you need them.",
+        "Setup / Training",
+        "Configure training.",
+        "Start with a preset or adjust the core parameters. Advanced settings remain optional.",
       )}
 
       <section aria-labelledby="preset-title">
@@ -882,9 +880,9 @@ function renderReview(state: AppState): string {
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
-        "Step 3 of 3",
-        "Review before Start",
-        "Your setup remains editable until you deliberately begin. Starting freezes this configuration.",
+        "Setup / Review",
+        "Review the setup.",
+        "Confirm the track and training parameters. Starting makes this configuration read-only.",
       )}
 
       <div class="review-grid">
@@ -920,9 +918,9 @@ function renderReview(state: AppState): string {
 
       <div class="start-panel">
         <div>
-          <p class="section-kicker">Explicit action required</p>
-          <h2>Ready when you are</h2>
-          <p>The lab never begins a run on page load, navigation, or validation.</p>
+          <p class="section-kicker">Manual start</p>
+          <h2>Start this experiment</h2>
+          <p>No run begins from navigation or validation alone.</p>
         </div>
         <button
           class="button primary start-button"
@@ -995,17 +993,16 @@ function renderTraining(state: AppState): string {
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
+        "Experiment / Training",
         "Training workspace",
-        "The experiment is prepared.",
-        "Phase 1 proves the safe application flow. Simulation and evolution engines connect in their dedicated phases.",
+        "The reviewed configuration is locked. Live simulation and observer controls will appear in this workspace.",
       )}
       <div class="training-stage">
-        <div class="stage-orbit" aria-hidden="true"><span></span></div>
-        <p class="section-kicker">Configuration frozen</p>
-        <h2>Observer controls only</h2>
+        <span class="data-chip">Configuration locked</span>
+        <h2>Simulation view is not connected yet</h2>
         <p>
           The selected ${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"}
-          setup is now read-only. No steering, throttle, brake, or vehicle-driving input is exposed.
+          setup is read-only. This application provides observer controls only; there are no vehicle-driving inputs.
         </p>
       </div>
       <div class="page-actions">
@@ -1026,13 +1023,13 @@ function renderResults(state: AppState): string {
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
-        "Results workspace",
-        "A clear finish for every run.",
-        "Charts, champion replay, and baseline comparisons arrive after the canonical evaluator is available.",
+        "Experiment / Results",
+        "Results",
+        "Completed-run metrics, replay, and baseline comparisons will appear here.",
       )}
       <div class="empty-results">
-        <span aria-hidden="true">◇</span>
-        <h2>Results shell ready</h2>
+        <span class="data-chip">No run data</span>
+        <h2>No results yet</h2>
         <p>${escapeHtml(trackName)} · ${String(state.draft.settings.populationSize)} candidates · seed ${String(state.draft.settings.seed)}</p>
       </div>
       <div class="page-actions">
