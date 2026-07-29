@@ -2,8 +2,8 @@
 
 ## Status
 
-These decisions define the foundation, onboarding shell, track core, and Phase 3
-track-authoring boundary.
+These decisions define the foundation, onboarding shell, track core, Phase 3
+track-authoring boundary, and Phase 4 simulation evaluator.
 Product-level constraints remain authoritative in the repository product
 contract.
 
@@ -118,6 +118,39 @@ The loopback service exposes versioned compile, closure-assist, generation, and
 library commands. Preset, edited, generated, imported, and reloaded tracks
 therefore converge on `compile_track_payload`; no TypeScript track-domain path
 exists.
+
+## Phase 4 simulation boundary
+
+`python/src/evo_racer/simulation.py` owns the complete fixed-step evaluator.
+`VehicleState` stays limited to position, heading, forward and lateral speed,
+and steering. `Controls` are continuous and clamped only to the documented
+steering, throttle, and brake ranges. The evaluator rejects any time step other
+than `1/60 s`.
+
+The handling model is intentionally arcade-style. It applies throttle, braking,
+quadratic drag, speed-dependent steering, lateral-force accumulation, and
+grip-based recovery. Front-heavy drive/braking applies small understeer
+multipliers; rear-heavy drive/braking increases lateral slip. The two bias
+values retain their full `[0,1]` domain. Vehicle setup is a frozen value object,
+and the evaluator snapshots and checks controller parameters at every step.
+
+Collision sweeps the vehicle disc between the previous and candidate positions
+against the centerline corridor. Progress projects the vehicle onto the closed
+centerline, and seven sensors intersect rays with the left/right boundaries
+already derived by the canonical track compiler. No duplicate track geometry is
+persisted or constructed in TypeScript.
+
+The seeded random-network and Pure Pursuit baselines implement the same
+controller protocol and run through the same evaluator. Pure Pursuit follows
+the lookahead-point approach documented in R. Craig Coulter's
+[CMU technical report](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm);
+its speed-scaled lookahead and corner-speed policy are local arcade tuning, not
+a simulation-grade vehicle model.
+
+`POST /v1/simulation/preview` runs a bounded baseline preview after the explicit
+Start action and returns version 1 selected-car telemetry. TypeScript validates
+and renders that snapshot only. Telemetry sampling frequency is an observer
+concern and cannot alter fixed physics results.
 
 ## Python foundation
 

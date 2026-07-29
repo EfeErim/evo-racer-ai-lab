@@ -1,5 +1,9 @@
 import { LOCAL_SERVICE_ORIGIN, isLoopbackOrigin } from "./foundation";
 import type { SetupDraft, SetupValidationResponse } from "./onboarding";
+import {
+  parseSimulationPreviewResponse,
+  type SimulationPreviewResponse,
+} from "./simulation";
 import type {
   TrackCommandResponse,
   TrackLibraryResponse,
@@ -45,6 +49,19 @@ export async function validateSetup(
   }
 
   return (await response.json()) as SetupValidationResponse;
+}
+
+export async function loadSimulationPreview(
+  draft: SetupDraft,
+): Promise<SimulationPreviewResponse> {
+  const response = await postJson<unknown>("/v1/simulation/preview", {
+    contractVersion: 1,
+    trackPreset: draft.trackPreset,
+    track: draft.track,
+    controller: "pure-pursuit",
+    durationSeconds: 8,
+  });
+  return parseSimulationPreviewResponse(response);
 }
 
 export async function compileTrack(

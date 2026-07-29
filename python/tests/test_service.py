@@ -198,3 +198,51 @@ def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_phase_four_preview_is_served_on_the_versioned_loopback_contract() -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(  # noqa: S310
+        f"http://{host}:{port}/v1/simulation/preview",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Origin": "http://127.0.0.1:4173",
+        },
+        data=json.dumps(
+            {
+                "contractVersion": 1,
+                "trackPreset": "easy-oval",
+                "controller": "pure-pursuit",
+                "durationSeconds": 0.5,
+            }
+        ).encode("utf-8"),
+    )
+
+    try:
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            payload: dict[str, Any] = json.load(response)
+
+        assert response.status == HTTPStatus.OK
+        assert payload["contractVersion"] == 1
+        assert payload["valid"] is True
+        episode = payload["episode"]
+        assert isinstance(episode, dict)
+        assert episode["controller"] == "pure-pursuit"
+        selected_car = episode["selectedCar"]
+        assert isinstance(selected_car, dict)
+        assert selected_car["selectedCarId"] == "selected-baseline"
+        sensors = selected_car["sensorDistances"]
+        assert isinstance(sensors, list)
+        assert len(sensors) == 7
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

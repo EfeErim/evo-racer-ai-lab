@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 4 - Physics, sensors, and baselines`
+- Current phase: `Phase 5 - Fixed GA`
 - Status: `in_progress`
-- Active milestone: `M4 - Physics, sensors, and baselines`
+- Active milestone: `M5 - Fixed GA`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -39,6 +39,10 @@
   local track persistence, and corrupt-record isolation.
 - Preset, edited, generated, imported, and reloaded tracks converge on the
   Phase 2 compiler path.
+- Python owns deterministic fixed-step arcade physics, swept collision, sensors,
+  progress, episode evaluation, and both baseline controllers.
+- The selected-car observer panel consumes version 1 Python telemetry and
+  contains no TypeScript simulation rules.
 
 ## Completed milestones
 
@@ -191,16 +195,52 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase3-track-authoring.md`.
 - `git diff --check` passed.
 
+### M4 - Physics, Sensors, and Baselines
+
+Status: `complete`
+
+Delivered:
+
+- [x] Python-only fixed `1/60 s` arcade physics with continuous controls.
+- [x] Lateral slip, grip recovery, and full-domain front/rear drive and brake
+      bias handling.
+- [x] Swept boundary collision, seven road-edge sensors, progress, and
+      deterministic episode evaluation.
+- [x] Seeded random-network and Pure Pursuit baselines through one evaluator.
+- [x] Versioned selected-car telemetry rendered by the observer UI.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 17 Vitest
+  tests, Ruff format/lint, strict mypy, 34 pytest tests, and the Vite production
+  build.
+- Fractional control, low-grip sliding, front/rear bias, swept collision,
+  episode parameter freeze, and seeded random-baseline tests passed.
+- Dense 1-step and sparse 17-step telemetry sampling produced identical physics
+  termination, step count, progress, and final telemetry.
+- Pure Pursuit completed Easy Oval in 1322 steps, Technical Circuit in 1557,
+  and Chicane Challenge in 2065, with `progress=1.0` and zero collision for all
+  three presets.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- Browser interaction covered explicit Start, locked setup, selected-car
+  telemetry, seven sensors, and the `390 x 844` layout. The console contained
+  zero warnings or errors.
+- The static runtime URL scan found only intended loopback URLs.
+- Shared `contracts/phase4-telemetry.json` was verified from both runtimes.
+- Detailed evidence is saved in
+  `docs/verification/phase4-physics.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 4 only: deterministic fixed-step arcade physics, swept boundary
-collision, sensors, progress and episode evaluation, plus random and Pure
-Pursuit baselines in Python. Keep controller outputs continuous and vehicle,
-network, and setup parameters fixed throughout each episode.
+Implement Phase 5 only: Python feed-forward network execution, deterministic
+Fixed GA population lifecycle, selection, elitism, crossover, mutation, vehicle
+performance-budget genes, exploit-resistant fitness, and generation reports.
+Use the Phase 4 physics, sensors, baselines, and evaluator unchanged.
 
 ## State update rule
 
