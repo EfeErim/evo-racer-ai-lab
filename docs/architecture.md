@@ -207,16 +207,16 @@ physics and Phase 5 fitness path.
 Checkpointing uses the pinned library's generation-boundary `Checkpointer`.
 Version 2.0 stores the population, species, innovation tracker, generation, and
 Python random state for the next generation to evaluate. Restore supplies the
-current explicit config and continues from that saved state. Atomic run-library
-persistence, checkpoint discovery, and corrupt-record isolation remain Phase 8
-responsibilities.
+current explicit config and continues from that saved state. Durable application
+run persistence, checkpoint discovery, and corrupt-record isolation use the
+Phase 8 run-file boundary below.
 
 ## Phase 7 observer and results boundary
 
 `python/src/evo_racer/observer.py` owns run identity, frozen configuration,
 algorithm state, generation advancement, observation snapshots, terminal
-metadata, baseline evaluation, and replay recording. The loopback service keeps
-the session manager in memory; durable run files intentionally remain Phase 8.
+metadata, baseline evaluation, replay recording, and generation-boundary
+persistence.
 
 The browser sends explicit version 1 start, observe, pause, resume, and stop
 commands. One observe command advances exactly one complete generation through
@@ -243,6 +243,40 @@ pause/resume/stop buttons, SVG fitness chart, comparison tables, and replay
 frame navigation. The replay marker is placed on geometry already returned by
 the Python track compiler; no browser physics, scoring, or track construction
 is introduced.
+
+## Phase 8 persistence and recovery boundary
+
+Python owns `RunV1`, stored as
+`%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`. The envelope contains
+`schemaVersion: 1`, an embedded canonical TrackV1 document and explicit track
+schema version, the frozen algorithm settings, and one observation checkpoint.
+The checkpoint records only a complete generation boundary and includes a
+SHA-256 of its canonical JSON snapshot.
+
+Every Start, Observe, Pause, Resume, Stop, and terminal transition writes a
+temporary UTF-8 JSON file in the destination run directory, flushes and
+`fsync`s it, closes it, then uses `os.replace` to atomically replace `run.json`.
+This follows the Python 3.13 standard-library contracts for
+[`NamedTemporaryFile`](https://docs.python.org/3.13/library/tempfile.html#tempfile.NamedTemporaryFile),
+[`os.fsync`](https://docs.python.org/3.13/library/os.html#os.fsync), and
+[`os.replace`](https://docs.python.org/3.13/library/os.html#os.replace).
+Serialization uses one complete JSON value with sorted keys and rejects
+non-finite numbers, consistent with the
+[`json` module](https://docs.python.org/3.13/library/json.html).
+
+Service startup does not resume training. The run library validates each record
+independently and reports corrupt directories separately. An explicit Resume
+request reconstructs Fixed GA or NEAT from the saved TrackV1, settings, seed,
+and completed generation count. Python replays those complete deterministic
+batches, compares the reconstructed checkpoint while ignoring only the
+interruption status, and fails closed on drift before marking the run active.
+This replay-based version 1 format avoids serializing live Python or
+neat-python objects and keeps the file portable and inspectable.
+
+The loopback API exposes list, explicit resume, JSON export, and exact-record
+delete operations. TypeScript renders those Python values and initiates user
+actions; it does not validate tracks, reconstruct evolution state, or decide
+whether a checkpoint is resumable.
 
 ## Python foundation
 

@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 8 - Persistence and recovery`
+- Current phase: `Phase 9 - Windows offline package`
 - Status: `in_progress`
-- Active milestone: `M8 - Persistence and recovery`
+- Active milestone: `M9 - Windows offline package`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -64,6 +64,13 @@
 - The observer and Results UI render Python generation reports, selected-car
   telemetry, fitness history, baseline comparisons, and champion replay on
   Python-compiled track geometry.
+- Python owns version 1 atomic run documents with embedded TrackV1 identity,
+  frozen settings, observation checkpoints, and canonical SHA-256 integrity.
+- Service restart never starts training. Explicit resume reconstructs Fixed GA
+  or NEAT at a complete generation boundary and fails closed on deterministic
+  checkpoint drift.
+- The local run library lists valid records while isolating corrupt records and
+  supports exact-record resume, export, and delete over loopback contracts.
 
 ## Completed milestones
 
@@ -371,14 +378,53 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase7-observer-results.md`.
 - `git diff --check` passed.
 
+### M8 - Persistence and Recovery
+
+Status: `complete`
+
+Delivered:
+
+- [x] Python-owned version 1 run documents under
+      `%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`.
+- [x] Atomic Start, generation-boundary, pause/resume/stop, and terminal writes.
+- [x] Explicit run and embedded track schema versions plus checkpoint SHA-256.
+- [x] Restart-safe run listing and explicit deterministic Fixed GA/NEAT resume.
+- [x] Corrupt-record isolation, exact-record delete, and versioned JSON export.
+- [x] Saved-run Welcome UI and shared Python/TypeScript RunV1 fixture.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 25 Vitest
+  tests, Ruff format/lint, strict mypy, 64 pytest tests, and the Vite production
+  build.
+- `npm run smoke:m0` passed with the frontend at
+  `http://127.0.0.1:4173` and Python health at
+  `http://127.0.0.1:8765/health`.
+- Fixed GA and NEAT interrupted after generation `1 / 2`, restored through a
+  new manager, and matched their uninterrupted final fitness history,
+  generation report, selected-car telemetry, result, baselines, and replay.
+- Restart preserved a valid TrackV1 and RunV1 while an adjacent malformed run
+  was reported as `CORRUPT_RUN_RECORD` without blocking either library.
+- Loopback integration covered list, explicit resume, completion, export, and
+  delete through a new service instance.
+- Browser interaction resumed a saved run from `1 / 2` to `2 / 2`, rendered
+  Results and replay, and produced zero console warnings or errors. At
+  `390 x 844`, document `scrollWidth` equaled `clientWidth` (`375`).
+- The static runtime URL scan found only intended `127.0.0.1` URLs.
+- Shared `contracts/phase8-run-document.json` was validated by Python and parsed
+  by TypeScript.
+- Detailed evidence is saved in
+  `docs/verification/phase8-persistence-recovery.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 8 only: Python-owned atomic run files, track/run schema
-versions, deterministic resume, corrupt-record isolation, delete, and export.
+Implement Phase 9 only: production static frontend, Python local core/launcher,
+graceful shutdown, PyInstaller `onedir`, release ZIP, checksum, and notices.
 
 ## State update rule
 

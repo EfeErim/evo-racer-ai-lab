@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "kind": "evo-racer-run",
+  "runId": "run-phase8-shared",
+  "trackSchemaVersion": 1,
+  "track": {
+    "schemaVersion": 1,
+    "id": "phase8-shared-oval",
+    "name": "Phase 8 Shared Oval",
+    "roadWidth": 10,
+    "pieces": [
+      {
+        "kind": "start-finish"
+      },
+      {
+        "kind": "straight-long"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "straight-long"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "turn-left-90"
+      }
+    ]
+  },
+  "settings": {
+    "algorithm": "fixed-ga",
+    "populationSize": 10,
+    "generations": 2,
+    "episodeSeconds": 15.0,
+    "seed": 819
+  },
+  "checkpoint": {
+    "generation": 0,
+    "status": "paused",
+    "snapshot": {
+      "contractVersion": 1,
+      "runId": "run-phase8-shared",
+      "status": "paused",
+      "generation": 0,
+      "totalGenerations": 2,
+      "generationReport": null,
+      "fitnessHistory": [],
+      "selectedCar": null,
+      "result": null,
+      "previousRuns": []
+    },
+    "sha256": "5a765d6bae4fb0d449eeb0300d9da0c1c06dab6250f5c51cd00c460ef16d58b6"
+  }
+}

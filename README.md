@@ -209,11 +209,30 @@ session:
 - Replay frames contain Python-recorded position, heading, controls, progress,
   controller parameters, and the fixed vehicle setup. TypeScript only places
   those frames on Python-compiled track geometry.
-- Completed runs can be compared within the current process. Atomic durable run
-  storage, restart recovery, and run-library management remain Phase 8 work.
+- Completed runs can be compared from the durable local run library.
 
 The shared Phase 7 observation fixture under `contracts/` is parsed by both
 Python and TypeScript.
+
+## Persistence and recovery
+
+Phase 8 saves every run at a complete generation boundary under
+`%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`:
+
+- Python owns the version 1 run envelope, embedded TrackV1 document, frozen
+  settings, observation checkpoint, and SHA-256 integrity value.
+- Start, observe, pause, resume, stop, and completion replace `run.json`
+  atomically only after a complete deterministic batch.
+- The Welcome screen lists saved runs after a restart. Training never resumes
+  automatically; the user must press Resume.
+- Resume rebuilds the algorithm from the saved track, settings, seed, and
+  completed generation count, then compares the reproduced checkpoint before
+  allowing another generation.
+- Corrupt or changed records are isolated without hiding valid tracks or runs.
+  Valid runs can be exported as versioned JSON or deleted individually.
+
+The shared Phase 8 run document under `contracts/` is validated by Python and
+parsed structurally by TypeScript.
 
 ## Repository layout
 

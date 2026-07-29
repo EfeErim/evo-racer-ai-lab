@@ -122,4 +122,17 @@ describe("Phase 1 onboarding contract", () => {
       initial,
     );
   });
+
+  it("enters Training only after an explicit saved-run restore action", () => {
+    const initial = createInitialState();
+    const restored = transition(initial, {
+      type: "restore-session",
+      draft: fixture.request,
+    });
+
+    expect(initial.sessionStarted).toBe(false);
+    expect(restored.route).toBe("training");
+    expect(restored.sessionStarted).toBe(true);
+    expect(restored.draft).toEqual(fixture.request);
+  });
 });

@@ -31,6 +31,7 @@ POST_PATHS: Final = frozenset(
         "/v1/setup/validate",
         "/v1/runs/command",
         "/v1/runs/observe",
+        "/v1/runs/resume",
         "/v1/runs/start",
         "/v1/simulation/preview",
         "/v1/tracks/compile",
@@ -79,12 +80,30 @@ class HealthHandler(BaseHTTPRequestHandler):
                 return
             self._send_json(HTTPStatus.OK, library_payload(self._data_root()))
             return
+        if path == "/v1/runs/library":
+            if not self._origin_allowed():
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            self._send_json(HTTPStatus.OK, self._run_manager().library())
+            return
+        run_prefix = "/v1/runs/library/"
+        export_suffix = "/export"
+        if path.startswith(run_prefix) and path.endswith(export_suffix):
+            if not self._origin_allowed():
+                self.send_error(HTTPStatus.FORBIDDEN)
+                return
+            run_id = unquote(path.removeprefix(run_prefix).removesuffix(export_suffix))
+            if not run_id:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "RUN_ID_REQUIRED"})
+                return
+            self._send_json(HTTPStatus.OK, self._run_manager().export(run_id))
+            return
         self.send_error(HTTPStatus.NOT_FOUND)
 
     def do_OPTIONS(self) -> None:
         """Permit versioned JSON commands only from known loopback UI origins."""
         path = urlsplit(self.path).path
-        library_record = path.startswith("/v1/tracks/library/")
+        library_record = path.startswith(("/v1/tracks/library/", "/v1/runs/library/"))
         if (path not in POST_PATHS and not library_record) or not self._origin_allowed():
             self.send_error(HTTPStatus.FORBIDDEN)
             return
@@ -116,6 +135,8 @@ class HealthHandler(BaseHTTPRequestHandler):
             response = self._run_manager().start(payload)
         elif path == "/v1/runs/observe":
             response = self._run_manager().observe(payload)
+        elif path == "/v1/runs/resume":
+            response = self._run_manager().resume(payload)
         elif path == "/v1/runs/command":
             response = self._run_manager().command(payload)
         elif path == "/v1/simulation/preview":
@@ -131,20 +152,31 @@ class HealthHandler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.OK, response)
 
     def do_DELETE(self) -> None:
-        """Delete exactly one local-library track by its decoded identifier."""
+        """Delete exactly one local-library track or run by decoded identifier."""
         path = urlsplit(self.path).path
-        prefix = "/v1/tracks/library/"
-        if not path.startswith(prefix):
+        track_prefix = "/v1/tracks/library/"
+        run_prefix = "/v1/runs/library/"
+        if not path.startswith((track_prefix, run_prefix)):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if not self._origin_allowed():
             self.send_error(HTTPStatus.FORBIDDEN)
             return
-        track_id = unquote(path.removeprefix(prefix))
-        if not track_id:
-            self._send_json(HTTPStatus.BAD_REQUEST, {"error": "TRACK_ID_REQUIRED"})
+        if path.startswith(track_prefix):
+            record_id = unquote(path.removeprefix(track_prefix))
+            label = "TRACK_ID_REQUIRED"
+        else:
+            record_id = unquote(path.removeprefix(run_prefix))
+            label = "RUN_ID_REQUIRED"
+        if not record_id:
+            self._send_json(HTTPStatus.BAD_REQUEST, {"error": label})
             return
-        self._send_json(HTTPStatus.OK, delete_track(track_id, self._data_root()))
+        response = (
+            delete_track(record_id, self._data_root())
+            if path.startswith(track_prefix)
+            else self._run_manager().delete(record_id)
+        )
+        self._send_json(HTTPStatus.OK, response)
 
     def _read_json(self) -> object | None:
         content_length = self.headers.get("Content-Length")
@@ -228,7 +260,7 @@ def create_server(port: int = DEFAULT_PORT, data_root: Path | None = None) -> Ev
     """Create a service that cannot bind beyond the IPv4 loopback interface."""
     server = EvoRacerServer((LOOPBACK_HOST, port), HealthHandler)
     server.data_root = data_root
-    server.run_manager = RunManager()
+    server.run_manager = RunManager(data_root)
     return server
 
 

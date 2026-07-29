@@ -1165,6 +1165,18 @@ h3 {
   font-size: 0.65rem;
 }
 
+.library-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.library-actions .button {
+  min-height: 2rem;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.58rem;
+}
+
 .comparison-panel th,
 .comparison-panel td {
   padding: 0.6rem;

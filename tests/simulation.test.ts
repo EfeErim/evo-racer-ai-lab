@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseObservationSnapshot,
+  parseRunDocument,
   parseSelectedCarTelemetry,
 } from "../src/simulation";
 
@@ -17,6 +18,12 @@ const observationFixturePath = fileURLToPath(
 );
 const observationFixture: unknown = JSON.parse(
   readFileSync(observationFixturePath, "utf8"),
+);
+const runDocumentFixturePath = fileURLToPath(
+  new URL("../contracts/phase8-run-document.json", import.meta.url),
+);
+const runDocumentFixture: unknown = JSON.parse(
+  readFileSync(runDocumentFixturePath, "utf8"),
 );
 
 describe("Phase 4 selected-car telemetry contract", () => {
@@ -37,6 +44,21 @@ describe("Phase 4 selected-car telemetry contract", () => {
         sensorDistances: [1, 2],
       }),
     ).toThrow("seven sensor distances");
+  });
+});
+
+describe("Phase 8 run file contract", () => {
+  it("parses the shared versioned checkpoint without domain rules", () => {
+    expect(parseRunDocument(runDocumentFixture)).toEqual(runDocumentFixture);
+  });
+
+  it("fails closed when checkpoint identity differs from the snapshot", () => {
+    expect(() =>
+      parseRunDocument({
+        ...(runDocumentFixture as object),
+        runId: "run-other",
+      }),
+    ).toThrow("identity does not match");
   });
 });
 
