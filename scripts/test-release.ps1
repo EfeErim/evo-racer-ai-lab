@@ -124,6 +124,7 @@ $executable = Join-Path $bundleRoot "EvoRacer.exe"
 foreach ($requiredPath in @(
     $executable,
     (Join-Path $bundleRoot "README.md"),
+    (Join-Path $bundleRoot "USER-GUIDE.md"),
     (Join-Path $bundleRoot "THIRD-PARTY-NOTICES.txt"),
     (Join-Path $bundleRoot "licenses\PYTHON-LICENSE.txt"),
     (Join-Path $bundleRoot "licenses\PYINSTALLER-LICENSE.txt")

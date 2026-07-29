@@ -2,9 +2,9 @@
 
 ## Status
 
-These decisions define the foundation, onboarding shell, track core, Phase 3
-track-authoring boundary, Phase 4 simulation evaluator, Phase 5 Fixed GA,
-Phase 6 feed-forward NEAT, and Phase 7 observer/results flow. Product-level
+These decisions define the complete Phase 10 application: foundation,
+onboarding, track authoring, simulation, Fixed GA, feed-forward NEAT,
+observer/results, persistence, packaging, and hardening. Product-level
 constraints remain authoritative in the repository product contract.
 
 ## Runtime boundary
@@ -338,3 +338,27 @@ rejects any child Node.js or Python process.
 
 User-owned data remains under `%LOCALAPPDATA%\EvoRacerAILab` and uses the
 versioned, atomic files defined in Phase 8.
+
+## Phase 10 verification boundary
+
+Phase 10 adds a verification plane without adding a second simulation path.
+`evo_racer.hardening` creates a bounded matrix through the public
+`RunSession`, bundled preset compiler, Fixed GA, NEAT, canonical evaluator, and
+terminal result builder. It records stable case metadata and SHA-256 signatures
+in `contracts/phase10-regression.json`; timing stays outside that deterministic
+fixture.
+
+Both Python and TypeScript test the version 1 fixture. Python reruns all 18
+cases and requires exact equality. TypeScript checks that the same file covers
+three seeds, all three presets, both algorithms, complete replay values, and
+valid hashes without reimplementing any domain rule.
+
+`scripts/phase10-gate.ps1` composes the full automated checks, development
+loopback smoke, measured matrix, Windows release build, and clean-runtime
+acceptance. The measured JSON report is written under ignored
+`.runtime_tmp/phase10`; reviewed facts are copied into the Phase 10 verification
+document only after the gate passes.
+
+Architecture, user, algorithm-comparison, and demo documents contain no runtime
+assets or calls. The user guide is copied into the release as `USER-GUIDE.md`
+and is required by clean-runtime acceptance.
