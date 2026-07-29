@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 7 - Observer experience and results`
+- Current phase: `Phase 8 - Persistence and recovery`
 - Status: `in_progress`
-- Active milestone: `M7 - Observer experience and results`
+- Active milestone: `M8 - Persistence and recovery`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -56,6 +56,14 @@
   and Phase 5 fitness without algorithm-specific physics or scoring paths.
 - NEAT controller topology, weights, and vehicle genes can change only while
   creating the next generation; evaluation receives frozen compiled values.
+- Python owns version 1 run sessions, generation-batched advancement,
+  pause/resume/stop state, observation snapshots, terminal metadata, baseline
+  comparison, and replay recording.
+- Browser cadence changes only when another complete Python generation is
+  requested; it never supplies physics steps or a simulation delta.
+- The observer and Results UI render Python generation reports, selected-car
+  telemetry, fitness history, baseline comparisons, and champion replay on
+  Python-compiled track geometry.
 
 ## Completed milestones
 
@@ -319,15 +327,58 @@ Verification evidence recorded on `2026-07-29`:
 - Detailed evidence is saved in `docs/verification/phase6-neat.md`.
 - `git diff --check` passed.
 
+### M7 - Observer Experience and Results
+
+Status: `complete`
+
+Delivered:
+
+- [x] Version 1 Python run sessions and generation-batched observation
+      snapshots shared by Fixed GA and NEAT.
+- [x] Live generation, best/median fitness, and selected-car telemetry display.
+- [x] Pause, resume, and stop controls at deterministic generation boundaries.
+- [x] SVG fitness history, champion/baseline comparison, and in-process prior
+      run comparison.
+- [x] Python-recorded champion replay with motion, controls, controller
+      parameters, and fixed vehicle setup rendered on compiled track geometry.
+- [x] Complete terminal metadata identifying run, track hash, configuration,
+      fixed time step, and contract versions.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 22 Vitest
+  tests, Ruff format/lint, strict mypy, 57 pytest tests, and the Vite production
+  build.
+- Both Fixed GA and NEAT completed two-generation batch sessions through the
+  same observer contract.
+- Paused/resumed seeded Fixed GA and NEAT sessions produced byte-identical
+  complete snapshots to their uninterrupted sessions. No generation advanced
+  while paused.
+- Two independent seeded runs reproduced every champion replay frame,
+  controller parameter, and fixed vehicle setup.
+- The loopback HTTP test covered start, pause, paused observation, resume, and
+  terminal result metadata.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- Browser interaction covered configuration lock, pause at `0 / 2`, resume,
+  live generation/fitness/telemetry, three-controller comparison, and replay
+  frame navigation on Easy Oval. The console contained zero warnings or errors.
+- At a `390 x 844` viewport override, document `scrollWidth` equaled
+  `clientWidth` (`375`), with no horizontal document overflow.
+- The browser asset inventory and static URL scan found only intended loopback
+  URLs.
+- Shared `contracts/phase7-observation.json` was verified from both runtimes.
+- Detailed evidence is saved in
+  `docs/verification/phase7-observer-results.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 7 only: versioned observation snapshots, live
-generation/fitness/telemetry display, pause/resume/stop, charts, champion replay,
-and baseline/run comparison without letting UI cadence alter simulation.
+Implement Phase 8 only: Python-owned atomic run files, track/run schema
+versions, deterministic resume, corrupt-record isolation, delete, and export.
 
 ## State update rule
 

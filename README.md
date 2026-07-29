@@ -88,9 +88,9 @@ Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
   `127.0.0.1`. Start remains locked until the response is valid.
 - Start is the only action that enters Training. It freezes the reviewed
   configuration, and the shell exposes no vehicle-driving controls.
-- Training requests a bounded Python Pure Pursuit preview only after Start and
-  displays selected-car controls, motion, progress, and seven road-edge sensors.
-  Evolution and completed-run analysis connect in their later phases.
+- Training starts a Python-owned evolutionary run only after Start and consumes
+  versioned generation and selected-car observation snapshots. Browser cadence
+  changes only when snapshots are requested; it never supplies physics steps.
 
 ## Track core and bundled presets
 
@@ -191,6 +191,29 @@ runtime dependency:
 The shared Phase 6 NEAT fixture under `contracts/` is round-tripped by Python
 and structurally checked by TypeScript. Checkpoint persistence and run-library
 UX remain later-phase work.
+
+## Observer experience and results
+
+Phase 7 connects both algorithms to one Python-owned, generation-batched run
+session:
+
+- Start freezes the validated track and training settings. Each observation
+  command advances one complete generation through the existing fixed-step
+  evaluator, independent of browser render cadence.
+- Pause and resume operate only between deterministic generation batches. Stop
+  produces a terminal result after at least one completed generation.
+- Training displays the live generation, best and median fitness, selected-car
+  controls, progress, speed, and seven road-edge sensors.
+- Results include complete versioned run metadata, fitness history, champion
+  and identical-setup baseline comparisons, and a recorded champion replay.
+- Replay frames contain Python-recorded position, heading, controls, progress,
+  controller parameters, and the fixed vehicle setup. TypeScript only places
+  those frames on Python-compiled track geometry.
+- Completed runs can be compared within the current process. Atomic durable run
+  storage, restart recovery, and run-library management remain Phase 8 work.
+
+The shared Phase 7 observation fixture under `contracts/` is parsed by both
+Python and TypeScript.
 
 ## Repository layout
 

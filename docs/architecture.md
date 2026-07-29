@@ -3,9 +3,9 @@
 ## Status
 
 These decisions define the foundation, onboarding shell, track core, Phase 3
-track-authoring boundary, Phase 4 simulation evaluator, Phase 5 Fixed GA, and
-Phase 6 feed-forward NEAT. Product-level constraints remain authoritative in the
-repository product contract.
+track-authoring boundary, Phase 4 simulation evaluator, Phase 5 Fixed GA,
+Phase 6 feed-forward NEAT, and Phase 7 observer/results flow. Product-level
+constraints remain authoritative in the repository product contract.
 
 ## Runtime boundary
 
@@ -210,6 +210,39 @@ Python random state for the next generation to evaluate. Restore supplies the
 current explicit config and continues from that saved state. Atomic run-library
 persistence, checkpoint discovery, and corrupt-record isolation remain Phase 8
 responsibilities.
+
+## Phase 7 observer and results boundary
+
+`python/src/evo_racer/observer.py` owns run identity, frozen configuration,
+algorithm state, generation advancement, observation snapshots, terminal
+metadata, baseline evaluation, and replay recording. The loopback service keeps
+the session manager in memory; durable run files intentionally remain Phase 8.
+
+The browser sends explicit version 1 start, observe, pause, resume, and stop
+commands. One observe command advances exactly one complete generation through
+the existing Fixed GA or NEAT lifecycle. Pause and resume change only whether a
+later batch may start. They do not alter the seeded generator, fixed `1/60 s`
+physics steps, controller ordering, or result sequence. Rendering never
+supplies a simulation delta or step count.
+
+Every observation snapshot contains run status, generation counters, the latest
+Python generation report, fitness history, and selected-car telemetry. Terminal
+results add metadata that identifies the run id, algorithm, seed, canonical
+track hash, population, requested and completed generations, episode duration,
+fixed time step, and all participating contract versions.
+
+Python re-evaluates the immutable best candidate to record replay frames at a
+fixed six-step sampling interval. Each frame carries position, heading, motion,
+controls, and progress; the replay also carries the unchanged controller
+parameters and vehicle setup. The seeded random network and Pure Pursuit
+baselines run on the same track, episode limit, physics, fitness, and champion
+vehicle setup.
+
+TypeScript parses and renders these values only. It owns the live status view,
+pause/resume/stop buttons, SVG fitness chart, comparison tables, and replay
+frame navigation. The replay marker is placed on geometry already returned by
+the Python track compiler; no browser physics, scoring, or track construction
+is introduced.
 
 ## Python foundation
 

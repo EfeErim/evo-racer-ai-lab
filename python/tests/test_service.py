@@ -246,3 +246,75 @@ def test_phase_four_preview_is_served_on_the_versioned_loopback_contract() -> No
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_phase_seven_run_commands_are_served_on_the_loopback_contract() -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def post(path: str, payload: object) -> dict[str, Any]:
+        request = Request(  # noqa: S310
+            f"http://{host}:{port}{path}",
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "http://127.0.0.1:4173",
+            },
+            data=json.dumps(payload).encode("utf-8"),
+        )
+        with urlopen(request, timeout=10) as response:  # noqa: S310
+            result: dict[str, Any] = json.load(response)
+            return result
+
+    try:
+        started = post(
+            "/v1/runs/start",
+            {
+                "contractVersion": 1,
+                "trackPreset": "easy-oval",
+                "track": None,
+                "settings": {
+                    "algorithm": "fixed-ga",
+                    "populationSize": 10,
+                    "generations": 1,
+                    "episodeSeconds": 15,
+                    "seed": 42,
+                },
+            },
+        )
+        assert started["valid"] is True
+        run_id = started["snapshot"]["runId"]
+        paused = post(
+            "/v1/runs/command",
+            {"contractVersion": 1, "runId": run_id, "command": "pause"},
+        )
+        assert paused["snapshot"]["status"] == "paused"
+        unchanged = post(
+            "/v1/runs/observe",
+            {"contractVersion": 1, "runId": run_id},
+        )
+        assert unchanged["snapshot"]["generation"] == 0
+        post(
+            "/v1/runs/command",
+            {"contractVersion": 1, "runId": run_id, "command": "resume"},
+        )
+        completed = post(
+            "/v1/runs/observe",
+            {"contractVersion": 1, "runId": run_id},
+        )
+
+        snapshot = completed["snapshot"]
+        assert snapshot["status"] == "completed"
+        assert snapshot["generation"] == 1
+        assert snapshot["result"]["metadata"]["runId"] == run_id
+        assert snapshot["result"]["replay"]["frames"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

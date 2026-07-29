@@ -41,6 +41,12 @@ export interface PresetTracksResponse {
   presets: CompiledTrackV1[];
 }
 
+export interface TrackMarker {
+  x: number;
+  y: number;
+  heading: number;
+}
+
 export function parsePresetTracksResponse(
   payload: unknown,
 ): PresetTracksResponse {
@@ -57,7 +63,10 @@ export function parsePresetTracksResponse(
   return payload as unknown as PresetTracksResponse;
 }
 
-export function renderTrackSvg(compiled: CompiledTrackV1): string {
+export function renderTrackSvg(
+  compiled: CompiledTrackV1,
+  marker?: TrackMarker,
+): string {
   const points = [
     ...compiled.geometry.leftBoundary,
     ...compiled.geometry.rightBoundary,
@@ -93,6 +102,19 @@ export function renderTrackSvg(compiled: CompiledTrackV1): string {
         x2="${formatNumber(compiled.geometry.checkpoints[0]?.right[0] ?? 0)}"
         y2="${formatNumber(compiled.geometry.checkpoints[0]?.right[1] ?? 0)}"
       />
+      ${
+        marker === undefined
+          ? ""
+          : `
+            <g
+              class="track-replay-marker"
+              transform="translate(${formatNumber(marker.x)} ${formatNumber(marker.y)}) rotate(${formatNumber((marker.heading * 180) / Math.PI)})"
+            >
+              <rect x="-1.2" y="-0.55" width="2.4" height="1.1" rx="0.25" />
+              <line x1="0" y1="0" x2="1.8" y2="0" />
+            </g>
+          `
+      }
     </svg>
   `;
 }
