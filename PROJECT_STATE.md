@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 6 - NEAT`
+- Current phase: `Phase 7 - Observer experience and results`
 - Status: `in_progress`
-- Active milestone: `M6 - NEAT`
+- Active milestone: `M7 - Observer experience and results`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -50,6 +50,12 @@
   throughout each episode.
 - Fixed GA fitness and generation reports consume the unchanged Phase 4
   evaluator; TypeScript verifies only the shared contract shape.
+- Python owns the feed-forward neat-python integration, custom vehicle genes,
+  runtime-neutral DAG compiler, and deterministic checkpoint resume.
+- Fixed GA and NEAT share observation normalization, Phase 4 episode evaluation,
+  and Phase 5 fitness without algorithm-specific physics or scoring paths.
+- NEAT controller topology, weights, and vehicle genes can change only while
+  creating the next generation; evaluation receives frozen compiled values.
 
 ## Completed milestones
 
@@ -277,16 +283,51 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase5-fixed-ga.md`.
 - `git diff --check` passed.
 
+### M6 - NEAT
+
+Status: `complete`
+
+Delivered:
+
+- [x] Exact `neat-python 2.0.0` dependency and bundled explicit feed-forward
+      configuration.
+- [x] Custom genome carrying the common five performance-budget logits and
+      full-domain front brake/drive bias genes.
+- [x] Versioned runtime-neutral feed-forward DAG compiler and Python controller.
+- [x] NEAT adapter over the shared Fixed GA evaluator path.
+- [x] Seeded multi-generation orchestration and deterministic checkpoint resume.
+- [x] Shared NEAT contract fixture verified from Python and TypeScript.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 19 Vitest
+  tests, Ruff format/lint, strict mypy, 48 pytest tests, and the Vite production
+  build.
+- A three-generation, six-candidate NEAT run completed on Easy Oval through the
+  shared Phase 4 physics and Phase 5 fitness path.
+- Runtime-neutral compiled outputs matched neat-python's feed-forward executor
+  for the same seeded genome and inputs.
+- Vehicle crossover inherited only parent values, bounded offspring mutation
+  changed no parent, and all vehicle genes stayed equal before and after every
+  active evaluation.
+- With population `8` and seed `411`, restoring `neat-checkpoint-1` reproduced
+  the uninterrupted generation `1` and `2` reports exactly.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- The static runtime URL scan found only intended loopback URLs and local fetch
+  calls. The built Python wheel contained the bundled NEAT configuration.
+- Shared `contracts/phase6-neat.json` was verified from both runtimes.
+- Detailed evidence is saved in `docs/verification/phase6-neat.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 6 only: feed-forward neat-python configuration, custom vehicle
-genes, runtime-neutral network compilation, shared evaluation with Fixed GA, and
-deterministic checkpoint resume. Research and lock the dependency before
-implementation.
+Implement Phase 7 only: versioned observation snapshots, live
+generation/fitness/telemetry display, pause/resume/stop, charts, champion replay,
+and baseline/run comparison without letting UI cadence alter simulation.
 
 ## State update rule
 
