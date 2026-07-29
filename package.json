@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc -b --pretty false && vite build",
+    "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
     "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "dev:frontend": "vite --host 127.0.0.1",
@@ -22,6 +23,7 @@
     "lint:python": ".venv\\Scripts\\python.exe -m ruff check python",
     "smoke:m0": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-m0.ps1",
     "test": "vitest run",
+    "test:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-release.ps1",
     "test:python": ".venv\\Scripts\\python.exe -m pytest",
     "typecheck": "tsc -b --pretty false",
     "typecheck:python": ".venv\\Scripts\\python.exe -m mypy python/src python/tests"

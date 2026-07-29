@@ -234,10 +234,45 @@ Phase 8 saves every run at a complete generation boundary under
 The shared Phase 8 run document under `contracts/` is validated by Python and
 parsed structurally by TypeScript.
 
+## Windows offline package
+
+Phase 9 ships the production browser UI and Python core as one self-contained
+Windows x64 application:
+
+- `EvoRacer.exe` binds only to `127.0.0.1:8765`, serves the built Vite assets,
+  and opens the user's default browser. The browser and Python contracts remain
+  on the same loopback origin.
+- The application includes an explicit Exit action. It confirms the request,
+  finishes the current HTTP response, shuts down the local server, and closes
+  the packaged process.
+- PyInstaller `onedir` bundles Python 3.13, neat-python, the NEAT configuration,
+  and every production frontend asset. Node.js and a system Python installation
+  are not required at runtime.
+- The release includes the README, third-party notices, complete Python and
+  PyInstaller license texts, and a separate SHA-256 checksum.
+
+Build and run the Windows release gate:
+
+```powershell
+npm run build:release
+npm run test:release
+```
+
+The generated files are:
+
+```text
+release\EvoRacer-Windows-x64.zip
+release\EvoRacer-Windows-x64.zip.sha256
+```
+
+Users extract the ZIP and run `EvoRacer\EvoRacer.exe`. All application data
+continues to live under `%LOCALAPPDATA%\EvoRacerAILab`.
+
 ## Repository layout
 
 ```text
 contracts/                   Shared versioned TypeScript/Python fixtures
+packaging/                   PyInstaller spec and third-party notices
 src/                         TypeScript browser UI state, views, and IPC client
 tests/                       TypeScript tests
 python/src/evo_racer/        Authoritative Python application/simulation core

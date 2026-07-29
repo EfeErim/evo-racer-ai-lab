@@ -5,12 +5,80 @@ import threading
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+
+import pytest
 
 from evo_racer.observer import RunSession, RunSettings
 from evo_racer.run_library import save_run_document
 from evo_racer.service import LOOPBACK_HOST, create_server
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
+
+
+def test_production_frontend_and_assets_are_served_from_the_loopback_core(
+    tmp_path: Path,
+) -> None:
+    static_root = tmp_path / "web"
+    assets_root = static_root / "assets"
+    assets_root.mkdir(parents=True)
+    (static_root / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
+    (assets_root / "app.js").write_text("export {};", encoding="utf-8")
+    server = create_server(port=0, static_root=static_root)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    try:
+        with urlopen(f"http://{host}:{port}/", timeout=2) as response:  # noqa: S310
+            index_body = response.read().decode("utf-8")
+        with urlopen(f"http://{host}:{port}/assets/app.js", timeout=2) as response:  # noqa: S310
+            asset_body = response.read().decode("utf-8")
+
+        assert index_body == "<main>EvoRacer</main>"
+        assert asset_body == "export {};"
+        assert response.headers["Content-Security-Policy"] == (
+            "default-src 'self'; img-src 'self' data:; "
+            "style-src 'self'; script-src 'self'; connect-src 'self'"
+        )
+        with pytest.raises(HTTPError) as error:
+            urlopen(f"http://{host}:{port}/%2e%2e/secret.txt", timeout=2)  # noqa: S310
+        assert error.value.code == HTTPStatus.FORBIDDEN
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_production_origin_can_request_graceful_shutdown() -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(  # noqa: S310
+        f"http://{host}:{port}/v1/app/shutdown",
+        method="POST",
+        headers={"Origin": f"http://127.0.0.1:{port}"},
+    )
+
+    try:
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            payload: dict[str, Any] = json.load(response)
+        thread.join(timeout=2)
+
+        assert payload == {"contractVersion": 1, "status": "shutting-down"}
+        assert response.headers["Access-Control-Allow-Origin"] == f"http://127.0.0.1:{port}"
+        assert not thread.is_alive()
+    finally:
+        server.server_close()
 
 
 def test_health_contract_is_served_on_loopback() -> None:
