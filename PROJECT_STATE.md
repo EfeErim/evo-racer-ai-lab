@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 5 - Fixed GA`
+- Current phase: `Phase 6 - NEAT`
 - Status: `in_progress`
-- Active milestone: `M5 - Fixed GA`
+- Active milestone: `M6 - NEAT`
 - Last verified: `2026-07-29`
 
 ## Verified repository facts
@@ -43,6 +43,13 @@
   progress, episode evaluation, and both baseline controllers.
 - The selected-car observer panel consumes version 1 Python telemetry and
   contains no TypeScript simulation rules.
+- Python owns the deterministic Fixed GA population lifecycle and versioned
+  feed-forward network execution.
+- Fixed GA genomes keep network parameters, softmax-normalized vehicle
+  performance-budget logits, and full-domain brake/drive bias genes immutable
+  throughout each episode.
+- Fixed GA fitness and generation reports consume the unchanged Phase 4
+  evaluator; TypeScript verifies only the shared contract shape.
 
 ## Completed milestones
 
@@ -231,16 +238,55 @@ Verification evidence recorded on `2026-07-29`:
   `docs/verification/phase4-physics.md`.
 - `git diff --check` passed.
 
+### M5 - Fixed GA
+
+Status: `complete`
+
+Delivered:
+
+- [x] Python version 1 `10 -> 6 -> 3` feed-forward network execution.
+- [x] Deterministic population initialization, tournament selection, exact
+      elitism, uniform crossover, and bounded mutation.
+- [x] Five-gene softmax vehicle performance budget and full-domain front
+      brake/drive bias evolution.
+- [x] Exploit-resistant fitness and versioned per-candidate generation reports.
+- [x] Shared fixed-genome contract fixture verified from Python and TypeScript.
+
+Verification evidence recorded on `2026-07-29`:
+
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 18 Vitest
+  tests, Ruff format/lint, strict mypy, 41 pytest tests, and the Vite production
+  build.
+- Two independent seed `20260729` lifecycles produced equal immutable initial
+  populations and equal complete five-generation result payloads.
+- With mutation probability `1.0`, both ranked elites entered the next
+  generation with byte-for-byte equal network and vehicle genomes.
+- The controlled Easy Oval fixture improved median fitness from `0.000000` to
+  `99.599264` over seven generations.
+- Champion `g0006-c0002` reached fitness `173.985972` and progress `0.144988`.
+  The seeded random network evaluated with the champion's exact vehicle genes
+  reached fitness `0.000336` and progress `0.000000`.
+- Zero-progress fixtures received no speed or survival reward; collision
+  reduced fitness, and completion efficiency remained locked behind a verified
+  lap.
+- `npm run smoke:m0` passed with both processes on `127.0.0.1`.
+- The static runtime URL scan found only intended loopback runtime URLs; the two
+  external links added under `docs/` are development references only.
+- Shared `contracts/phase5-fixed-ga.json` was verified from both runtimes.
+- Detailed evidence is saved in
+  `docs/verification/phase5-fixed-ga.md`.
+- `git diff --check` passed.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-Implement Phase 5 only: Python feed-forward network execution, deterministic
-Fixed GA population lifecycle, selection, elitism, crossover, mutation, vehicle
-performance-budget genes, exploit-resistant fitness, and generation reports.
-Use the Phase 4 physics, sensors, baselines, and evaluator unchanged.
+Implement Phase 6 only: feed-forward neat-python configuration, custom vehicle
+genes, runtime-neutral network compilation, shared evaluation with Fixed GA, and
+deterministic checkpoint resume. Research and lock the dependency before
+implementation.
 
 ## State update rule
 

@@ -3,7 +3,7 @@
 ## Status
 
 These decisions define the foundation, onboarding shell, track core, Phase 3
-track-authoring boundary, and Phase 4 simulation evaluator.
+track-authoring boundary, Phase 4 simulation evaluator, and Phase 5 Fixed GA.
 Product-level constraints remain authoritative in the repository product
 contract.
 
@@ -151,6 +151,34 @@ a simulation-grade vehicle model.
 Start action and returns version 1 selected-car telemetry. TypeScript validates
 and renders that snapshot only. Telemetry sampling frequency is an observer
 concern and cannot alter fixed physics results.
+
+## Phase 5 Fixed GA boundary
+
+`python/src/evo_racer/evolution.py` owns the complete Fixed GA lifecycle. Its
+runtime-neutral version 1 network representation fixes 10 normalized observation
+inputs, one six-node `tanh` hidden layer, and three continuous control outputs.
+The canonical Python controller executes this representation through the
+unchanged Phase 4 `evaluate_episode` path.
+
+Every immutable `FixedGenome` combines the network with five vehicle performance
+logits and two bias genes. A numerically stable softmax makes the five
+allocations sum to `1.0`, and the resulting setup follows the exact ranges in
+the product contract. Both bias genes retain the full `[0,1]` domain.
+
+Each run owns one seeded `random.Random` instance and evaluates candidates in a
+stable order. Tournament selection, uniform crossover, and bounded Gaussian
+mutation create only the next generation. Ranked elites occupy the first next-
+generation slots with their exact immutable genomes; no episode can mutate a
+controller or vehicle setup. The isolated-generator choice follows Python
+3.13's [reproducibility guidance](https://docs.python.org/3.13/library/random.html#notes-on-reproducibility),
+while tournament selection follows the convergence model studied by
+[Miller and Goldberg](https://www.complex-systems.com/abstracts/v09_i03_a02/).
+
+Fitness uses net forward progress already produced by the Phase 4 evaluator.
+Speed, survival time, and repeated local motion receive no reward. A completion
+and efficiency bonus is available only after a full lap, and collisions are
+penalized. Versioned generation reports preserve per-candidate audit fields and
+summary statistics without moving scoring logic into TypeScript.
 
 ## Python foundation
 
