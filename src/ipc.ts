@@ -2,7 +2,11 @@ import { LOCAL_SERVICE_ORIGIN, isLoopbackOrigin } from "./foundation";
 import type { SetupDraft, SetupValidationResponse } from "./onboarding";
 import {
   parseRunResponse,
+  parseRunDocument,
+  parseRunLibraryResponse,
   parseSimulationPreviewResponse,
+  type RunDocumentV1,
+  type RunLibraryResponseV1,
   type RunResponseV1,
   type SimulationPreviewResponse,
 } from "./simulation";
@@ -94,6 +98,40 @@ export async function commandRun(
       runId,
       command,
     }),
+  );
+}
+
+export async function resumeRun(runId: string): Promise<RunResponseV1> {
+  return parseRunResponse(
+    await postJson<unknown>("/v1/runs/resume", {
+      contractVersion: 1,
+      runId,
+    }),
+  );
+}
+
+export async function loadRunLibrary(): Promise<RunLibraryResponseV1> {
+  return parseRunLibraryResponse(await getJson<unknown>("/v1/runs/library"));
+}
+
+export async function exportRun(runId: string): Promise<RunDocumentV1> {
+  const response = (await getJson<unknown>(
+    `/v1/runs/library/${encodeURIComponent(runId)}/export`,
+  )) as {
+    valid?: boolean;
+    run?: unknown;
+  };
+  if (response.valid !== true || response.run === undefined) {
+    throw new Error("The local run could not be exported.");
+  }
+  return parseRunDocument(response.run);
+}
+
+export async function deleteRun(runId: string): Promise<void> {
+  await requestJson(
+    `/v1/runs/library/${encodeURIComponent(runId)}`,
+    { method: "DELETE" },
+    "Run deletion",
   );
 }
 

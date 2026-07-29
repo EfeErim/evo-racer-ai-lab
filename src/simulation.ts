@@ -127,6 +127,56 @@ export interface PreviousRunSummaryV1 {
   championProgress: number;
 }
 
+export interface RunSetupV1 {
+  contractVersion: 1;
+  trackPreset: string;
+  track: TrackV1 | null;
+  settings: {
+    algorithm: "fixed-ga" | "neat";
+    populationSize: number;
+    generations: number;
+    episodeSeconds: number;
+    seed: number;
+  };
+}
+
+export interface RunLibraryEntryV1 {
+  runId: string;
+  status: RunStatusV1;
+  algorithm: "fixed-ga" | "neat";
+  trackId: string;
+  trackName: string;
+  seed: number;
+  generation: number;
+  totalGenerations: number;
+  resumable: boolean;
+  championFitness: number | null;
+  championProgress: number | null;
+}
+
+export interface RunLibraryResponseV1 {
+  contractVersion: 1;
+  runSchemaVersion: 1;
+  trackSchemaVersion: 1;
+  runs: RunLibraryEntryV1[];
+  isolated: { record: string; code: string; message: string }[];
+}
+
+export interface RunDocumentV1 {
+  schemaVersion: 1;
+  kind: "evo-racer-run";
+  runId: string;
+  trackSchemaVersion: 1;
+  track: TrackV1;
+  settings: RunSetupV1["settings"];
+  checkpoint: {
+    generation: number;
+    status: RunStatusV1;
+    snapshot: ObservationSnapshotV1;
+    sha256: string;
+  };
+}
+
 export interface ObservationSnapshotV1 {
   contractVersion: 1;
   runId: string;
@@ -146,6 +196,7 @@ export type RunResponseV1 =
       valid: true;
       errors: [];
       snapshot: ObservationSnapshotV1;
+      setup?: RunSetupV1;
     }
   | {
       contractVersion: 1;
@@ -261,6 +312,104 @@ export function parseRunResponse(value: unknown): RunResponseV1 {
     valid: true,
     errors: [],
     snapshot: parseObservationSnapshot(response.snapshot),
+    ...(response.setup === undefined
+      ? {}
+      : { setup: parseRunSetup(response.setup) }),
+  };
+}
+
+export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
+  const response = asRecord(value, "Run library");
+  if (
+    response.contractVersion !== 1 ||
+    response.runSchemaVersion !== 1 ||
+    response.trackSchemaVersion !== 1 ||
+    !Array.isArray(response.runs) ||
+    !Array.isArray(response.isolated)
+  ) {
+    throw new Error("Run library is not contract version 1.");
+  }
+  return {
+    contractVersion: 1,
+    runSchemaVersion: 1,
+    trackSchemaVersion: 1,
+    runs: response.runs.map((value, index) => {
+      const run = asRecord(value, `runs[${String(index)}]`);
+      const status = parseRunStatus(run.status);
+      return {
+        runId: requiredString(run.runId, "runId"),
+        status,
+        algorithm: parseAlgorithm(run.algorithm),
+        trackId: requiredString(run.trackId, "trackId"),
+        trackName: requiredString(run.trackName, "trackName"),
+        seed: integerNumber(run.seed, "seed"),
+        generation: integerNumber(run.generation, "generation"),
+        totalGenerations: integerNumber(
+          run.totalGenerations,
+          "totalGenerations",
+        ),
+        resumable: requiredBoolean(run.resumable, "resumable"),
+        championFitness: nullableFiniteNumber(
+          run.championFitness,
+          "championFitness",
+        ),
+        championProgress: nullableBoundedNumber(
+          run.championProgress,
+          "championProgress",
+          0,
+          1,
+        ),
+      };
+    }),
+    isolated: response.isolated.map((value, index) => {
+      const item = asRecord(value, `isolated[${String(index)}]`);
+      return {
+        record: requiredString(item.record, "record"),
+        code: requiredString(item.code, "code"),
+        message: requiredString(item.message, "message"),
+      };
+    }),
+  };
+}
+
+export function parseRunDocument(value: unknown): RunDocumentV1 {
+  const document = asRecord(value, "Run document");
+  if (
+    document.schemaVersion !== 1 ||
+    document.kind !== "evo-racer-run" ||
+    document.trackSchemaVersion !== 1
+  ) {
+    throw new Error("Run document is not schema version 1.");
+  }
+  const runId = requiredString(document.runId, "runId");
+  const track = asRecord(document.track, "track");
+  if (track.schemaVersion !== 1) {
+    throw new Error("Embedded track is not schema version 1.");
+  }
+  const checkpoint = asRecord(document.checkpoint, "checkpoint");
+  const snapshot = parseObservationSnapshot(checkpoint.snapshot);
+  const status = parseRunStatus(checkpoint.status);
+  const generation = integerNumber(checkpoint.generation, "generation");
+  if (
+    snapshot.runId !== runId ||
+    snapshot.status !== status ||
+    snapshot.generation !== generation
+  ) {
+    throw new Error("Run checkpoint identity does not match its snapshot.");
+  }
+  return {
+    schemaVersion: 1,
+    kind: "evo-racer-run",
+    runId,
+    trackSchemaVersion: 1,
+    track: document.track as TrackV1,
+    settings: parseRunSettings(document.settings),
+    checkpoint: {
+      generation,
+      status,
+      snapshot,
+      sha256: requiredString(checkpoint.sha256, "sha256"),
+    },
   };
 }
 
@@ -504,6 +653,51 @@ function parseVehicleSetup(value: unknown): VehicleSetupV1 {
   };
 }
 
+function parseRunSetup(value: unknown): RunSetupV1 {
+  const setup = asRecord(value, "Run setup");
+  if (setup.contractVersion !== 1) {
+    throw new Error("Run setup is not contract version 1.");
+  }
+  const trackPreset = requiredString(setup.trackPreset, "trackPreset");
+  let track: TrackV1 | null = null;
+  if (setup.track !== null) {
+    const trackRecord = asRecord(setup.track, "track");
+    if (trackRecord.schemaVersion !== 1) {
+      throw new Error("Run setup track is not schema version 1.");
+    }
+    track = trackRecord as unknown as TrackV1;
+  }
+  return {
+    contractVersion: 1,
+    trackPreset,
+    track,
+    settings: parseRunSettings(setup.settings),
+  };
+}
+
+function parseRunSettings(value: unknown): RunSetupV1["settings"] {
+  const settings = asRecord(value, "Run settings");
+  return {
+    algorithm: parseAlgorithm(settings.algorithm),
+    populationSize: integerNumber(settings.populationSize, "populationSize"),
+    generations: integerNumber(settings.generations, "generations"),
+    episodeSeconds: finiteNumber(settings.episodeSeconds, "episodeSeconds"),
+    seed: integerNumber(settings.seed, "seed"),
+  };
+}
+
+function parseRunStatus(value: unknown): RunStatusV1 {
+  if (
+    value !== "running" &&
+    value !== "paused" &&
+    value !== "stopped" &&
+    value !== "completed"
+  ) {
+    throw new Error("Run status is unknown.");
+  }
+  return value;
+}
+
 function parseAlgorithm(value: unknown): "fixed-ga" | "neat" {
   if (value !== "fixed-ga" && value !== "neat") {
     throw new Error("Unknown evolution algorithm.");
@@ -562,6 +756,10 @@ function finiteNumber(value: unknown, field: string): number {
   return value;
 }
 
+function nullableFiniteNumber(value: unknown, field: string): number | null {
+  return value === null ? null : finiteNumber(value, field);
+}
+
 function integerNumber(value: unknown, field: string): number {
   const number = finiteNumber(value, field);
   if (!Number.isInteger(number)) {
@@ -582,3 +780,13 @@ function boundedNumber(
   }
   return number;
 }
+
+function nullableBoundedNumber(
+  value: unknown,
+  field: string,
+  minimum: number,
+  maximum: number,
+): number | null {
+  return value === null ? null : boundedNumber(value, field, minimum, maximum);
+}
+import type { TrackV1 } from "./track-renderer";

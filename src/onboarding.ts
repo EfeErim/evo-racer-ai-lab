@@ -130,6 +130,7 @@ export type AppAction =
   | { type: "validation-started" }
   | { type: "validation-received"; response: SetupValidationResponse }
   | { type: "start-session" }
+  | { type: "restore-session"; draft: SetupDraft }
   | { type: "view-results" }
   | { type: "new-setup" };
 
@@ -316,6 +317,16 @@ export function transition(state: AppState, action: AppAction): AppState {
         return state;
       }
       return { ...state, route: "training", sessionStarted: true };
+    case "restore-session":
+      return {
+        route: "training",
+        draft: action.draft,
+        validation: {
+          status: "checked",
+          response: { contractVersion: 1, valid: true, errors: [] },
+        },
+        sessionStarted: true,
+      };
     case "view-results":
       if (!state.sessionStarted) {
         return state;

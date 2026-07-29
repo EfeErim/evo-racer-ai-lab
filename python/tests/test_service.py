@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import Any
 from urllib.request import Request, urlopen
 
+from evo_racer.observer import RunSession, RunSettings
+from evo_racer.run_library import save_run_document
 from evo_racer.service import LOOPBACK_HOST, create_server
-from evo_racer.tracks import PRESET_TRACKS
+from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 
 def test_health_contract_is_served_on_loopback() -> None:
@@ -248,8 +250,10 @@ def test_phase_four_preview_is_served_on_the_versioned_loopback_contract() -> No
         thread.join(timeout=2)
 
 
-def test_phase_seven_run_commands_are_served_on_the_loopback_contract() -> None:
-    server = create_server(port=0)
+def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
+    tmp_path: Path,
+) -> None:
+    server = create_server(port=0, data_root=tmp_path)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -314,6 +318,90 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract() -> None:
         assert snapshot["generation"] == 1
         assert snapshot["result"]["metadata"]["runId"] == run_id
         assert snapshot["result"]["replay"]["frames"]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_phase_eight_run_library_resume_export_and_delete_survive_restart(
+    tmp_path: Path,
+) -> None:
+    session = RunSession(
+        run_id="run-service-phase8",
+        compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
+        settings=RunSettings(
+            algorithm="fixed-ga",
+            population_size=4,
+            generations=2,
+            episode_seconds=0.2,
+            seed=83,
+        ),
+    )
+    session.advance()
+    save_run_document(session.to_run_document(), tmp_path)
+
+    server = create_server(port=0, data_root=tmp_path)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+
+    def get(path: str) -> dict[str, Any]:
+        request = Request(  # noqa: S310
+            f"http://{host}:{port}{path}",
+            headers={"Origin": "http://127.0.0.1:4173"},
+        )
+        with urlopen(request, timeout=5) as response:  # noqa: S310
+            result: dict[str, Any] = json.load(response)
+            return result
+
+    def post(path: str, payload: object) -> dict[str, Any]:
+        request = Request(  # noqa: S310
+            f"http://{host}:{port}{path}",
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "http://127.0.0.1:4173",
+            },
+            data=json.dumps(payload).encode("utf-8"),
+        )
+        with urlopen(request, timeout=5) as response:  # noqa: S310
+            result: dict[str, Any] = json.load(response)
+            return result
+
+    try:
+        library = get("/v1/runs/library")
+        assert library["runs"][0]["runId"] == session.run_id
+        assert library["runs"][0]["resumable"] is True
+
+        resumed = post(
+            "/v1/runs/resume",
+            {"contractVersion": 1, "runId": session.run_id},
+        )
+        assert resumed["snapshot"]["status"] == "running"
+        completed = post(
+            "/v1/runs/observe",
+            {"contractVersion": 1, "runId": session.run_id},
+        )
+        assert completed["snapshot"]["status"] == "completed"
+
+        exported = get(f"/v1/runs/library/{session.run_id}/export")
+        assert exported["valid"] is True
+        assert exported["run"]["schemaVersion"] == 1
+
+        deletion = Request(  # noqa: S310
+            f"http://{host}:{port}/v1/runs/library/{session.run_id}",
+            method="DELETE",
+            headers={"Origin": "http://127.0.0.1:4173"},
+        )
+        with urlopen(deletion, timeout=5) as response:  # noqa: S310
+            deleted: dict[str, Any] = json.load(response)
+        assert deleted["deleted"] is True
+        assert get("/v1/runs/library")["runs"] == []
     finally:
         server.shutdown()
         server.server_close()

@@ -1,4 +1,4 @@
-"""Phase 7 deterministic run control, observation snapshots, and replay."""
+"""Deterministic run control, observation, replay, and Phase 8 recovery."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import math
 import statistics
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from threading import RLock
 from typing import Any, Final, Literal, cast
 
@@ -30,6 +31,18 @@ from evo_racer.neat_evolution import (
     create_neat_population,
 )
 from evo_racer.onboarding import validate_setup
+from evo_racer.run_library import (
+    RUN_DOCUMENT_KIND,
+    RUN_SCHEMA_VERSION,
+    RunRecordError,
+    checkpoint_sha256,
+    delete_run,
+    export_run_payload,
+    read_run_document,
+    run_library_payload,
+    save_run_document,
+    validate_run_document,
+)
 from evo_racer.simulation import (
     FIXED_TIME_STEP,
     SIMULATION_CONTRACT_VERSION,
@@ -161,7 +174,59 @@ class RunSession:
                 ],
                 "selectedCar": selected,
                 "result": self.result,
+                "previousRuns": [],
             }
+
+    def to_run_document(self) -> dict[str, object]:
+        """Serialize the current generation boundary into the version 1 run schema."""
+        snapshot = self.snapshot()
+        track = cast(dict[str, object], self.compiled_track["track"])
+        return {
+            "schemaVersion": RUN_SCHEMA_VERSION,
+            "kind": RUN_DOCUMENT_KIND,
+            "runId": self.run_id,
+            "trackSchemaVersion": track["schemaVersion"],
+            "track": track,
+            "settings": _settings_payload(self.settings),
+            "checkpoint": {
+                "generation": len(self.reports),
+                "status": self.status,
+                "snapshot": snapshot,
+                "sha256": checkpoint_sha256(snapshot),
+            },
+        }
+
+    @classmethod
+    def from_run_document(cls, payload: object) -> RunSession:
+        """Rebuild a saved generation boundary and fail on deterministic drift."""
+        document = validate_run_document(payload)
+        settings_value = cast(dict[str, object], document["settings"])
+        checkpoint = cast(dict[str, object], document["checkpoint"])
+        expected_snapshot = cast(dict[str, object], checkpoint["snapshot"])
+        status = cast(RunStatus, checkpoint["status"])
+        session = cls(
+            run_id=cast(str, document["runId"]),
+            compiled_track=compile_track_payload(document["track"]),
+            settings=RunSettings(
+                algorithm=cast(Literal["fixed-ga", "neat"], settings_value["algorithm"]),
+                population_size=cast(int, settings_value["populationSize"]),
+                generations=cast(int, settings_value["generations"]),
+                episode_seconds=float(cast(float, settings_value["episodeSeconds"])),
+                seed=cast(int, settings_value["seed"]),
+            ),
+        )
+        generation = cast(int, checkpoint["generation"])
+        for _ in range(generation):
+            session.advance()
+        if status == "stopped":
+            session.command("stop")
+        elif status in {"running", "paused"}:
+            session.command("pause")
+        if _resume_projection(session.snapshot()) != _resume_projection(expected_snapshot):
+            raise RunRecordError(
+                "Saved checkpoint does not reproduce from its track, settings, and seed."
+            )
+        return session
 
     def _advance_fixed_ga(
         self,
@@ -343,11 +408,11 @@ class RunSession:
 
 
 class RunManager:
-    """Own in-memory Phase 7 sessions; durable run storage remains Phase 8."""
+    """Own active sessions and their atomic Phase 8 generation-boundary files."""
 
-    def __init__(self) -> None:
+    def __init__(self, data_root: Path | None = None) -> None:
         self._sessions: dict[str, RunSession] = {}
-        self._completed: list[str] = []
+        self._data_root = data_root
         self._lock = RLock()
 
     def start(self, payload: object) -> dict[str, object]:
@@ -378,6 +443,7 @@ class RunManager:
         )
         with self._lock:
             self._sessions[run_id] = session
+        self._persist(session)
         return self._response(session)
 
     def observe(self, payload: object) -> dict[str, object]:
@@ -385,7 +451,7 @@ class RunManager:
         if isinstance(session, dict):
             return session
         session.advance()
-        self._record_if_terminal(session)
+        self._persist(session)
         return self._response(session)
 
     def command(self, payload: object) -> dict[str, object]:
@@ -401,8 +467,60 @@ class RunManager:
                 "Run command must be pause, resume, or stop.",
             )
         session.command(cast(str, command))
-        self._record_if_terminal(session)
+        self._persist(session)
         return self._response(session)
+
+    def resume(self, payload: object) -> dict[str, object]:
+        """Explicitly restore one supported interrupted generation boundary."""
+        run_id = _run_id_from_payload(payload)
+        if isinstance(run_id, dict):
+            return run_id
+        with self._lock:
+            session = self._sessions.get(run_id)
+        if session is None:
+            try:
+                session = RunSession.from_run_document(read_run_document(run_id, self._data_root))
+            except FileNotFoundError:
+                return _run_error("RUN_NOT_FOUND", "runId", "The local run does not exist.")
+            except (RunRecordError, ValueError):
+                return _run_error(
+                    "RUN_CHECKPOINT_INVALID",
+                    "runId",
+                    "The local run checkpoint could not be restored deterministically.",
+                )
+            with self._lock:
+                self._sessions[run_id] = session
+        if session.status not in {"running", "paused"}:
+            return _run_error(
+                "RUN_NOT_RESUMABLE",
+                "runId",
+                "Only an interrupted running or paused run can be resumed.",
+            )
+        session.command("resume")
+        self._persist(session)
+        return self._response(session)
+
+    def library(self) -> dict[str, object]:
+        """Return durable local run summaries and isolated corrupt records."""
+        return run_library_payload(self._data_root)
+
+    def export(self, run_id: str) -> dict[str, object]:
+        """Return one validated run document for a local JSON download."""
+        return export_run_payload(run_id, self._data_root)
+
+    def delete(self, run_id: str) -> dict[str, object]:
+        """Delete one durable run and discard any matching in-memory session."""
+        with self._lock:
+            self._sessions.pop(run_id, None)
+        try:
+            return delete_run(run_id, self._data_root)
+        except RunRecordError:
+            return {
+                "contractVersion": OBSERVATION_CONTRACT_VERSION,
+                "deleted": False,
+                "runId": run_id,
+                "error": "RUN_ID_INVALID",
+            }
 
     def _session_from_payload(
         self,
@@ -423,27 +541,35 @@ class RunManager:
             return _run_error("RUN_NOT_FOUND", "runId", "The local run does not exist.")
         return session
 
-    def _record_if_terminal(self, session: RunSession) -> None:
-        if session.status not in {"completed", "stopped"} or session.result is None:
-            return
-        with self._lock:
-            if session.run_id not in self._completed:
-                self._completed.append(session.run_id)
+    def _persist(self, session: RunSession) -> None:
+        save_run_document(session.to_run_document(), self._data_root)
 
     def _response(self, session: RunSession) -> dict[str, object]:
         snapshot = session.snapshot()
-        with self._lock:
-            previous = [
-                _run_summary(self._sessions[run_id])
-                for run_id in self._completed
-                if run_id != session.run_id
-            ]
+        library = self.library()
+        stored_runs = cast(list[dict[str, object]], library["runs"])
+        previous = [
+            {
+                "runId": run["runId"],
+                "algorithm": run["algorithm"],
+                "trackId": run["trackId"],
+                "seed": run["seed"],
+                "generationsCompleted": run["generation"],
+                "championFitness": run["championFitness"],
+                "championProgress": run["championProgress"],
+            }
+            for run in stored_runs
+            if run["runId"] != session.run_id
+            and isinstance(run["championFitness"], float)
+            and isinstance(run["championProgress"], float)
+        ]
         snapshot["previousRuns"] = previous
         return {
             "contractVersion": OBSERVATION_CONTRACT_VERSION,
             "valid": True,
             "errors": [],
             "snapshot": snapshot,
+            "setup": _setup_payload(session),
         }
 
 
@@ -531,20 +657,43 @@ def _replay_frame(snapshot: Any) -> dict[str, object]:
     }
 
 
-def _run_summary(session: RunSession) -> dict[str, object]:
-    result = session.result
-    assert result is not None
-    metadata = cast(dict[str, object], result["metadata"])
-    champion = cast(dict[str, object], result["champion"])
+def _settings_payload(settings: RunSettings) -> dict[str, object]:
     return {
-        "runId": session.run_id,
-        "algorithm": metadata["algorithm"],
-        "trackId": metadata["trackId"],
-        "seed": metadata["seed"],
-        "generationsCompleted": metadata["generationsCompleted"],
-        "championFitness": champion["fitness"],
-        "championProgress": champion["progress"],
+        "algorithm": settings.algorithm,
+        "populationSize": settings.population_size,
+        "generations": settings.generations,
+        "episodeSeconds": settings.episode_seconds,
+        "seed": settings.seed,
     }
+
+
+def _setup_payload(session: RunSession) -> dict[str, object]:
+    track = cast(dict[str, object], session.compiled_track["track"])
+    track_id = cast(str, track["id"])
+    preset_ids = {preset.track_id for preset in PRESET_TRACKS}
+    return {
+        "contractVersion": 1,
+        "trackPreset": track_id,
+        "track": None if track_id in preset_ids else track,
+        "settings": _settings_payload(session.settings),
+    }
+
+
+def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
+    return {key: value for key, value in snapshot.items() if key not in {"status", "previousRuns"}}
+
+
+def _run_id_from_payload(payload: object) -> str | dict[str, object]:
+    if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
+        return _run_error(
+            "UNSUPPORTED_OBSERVATION_VERSION",
+            "contractVersion",
+            "Run command contractVersion must be 1.",
+        )
+    run_id = payload.get("runId")
+    if not isinstance(run_id, str) or not run_id:
+        return _run_error("RUN_ID_REQUIRED", "runId", "A runId is required.")
+    return run_id
 
 
 def _run_error(code: str, field: str, message: str) -> dict[str, object]:

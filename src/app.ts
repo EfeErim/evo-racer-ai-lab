@@ -18,11 +18,15 @@ import {
   assistTrackClosure,
   commandRun,
   compileTrack,
+  deleteRun,
   deleteTrack,
+  exportRun,
   generateTrack,
   loadPresetTracks,
+  loadRunLibrary,
   loadTrackLibrary,
   observeRun,
+  resumeRun,
   saveTrack,
   serviceUnavailableResponse,
   startRun,
@@ -31,6 +35,8 @@ import {
 import type {
   ObservationSnapshotV1,
   ReplayFrameV1,
+  RunDocumentV1,
+  RunLibraryResponseV1,
   SelectedCarTelemetryV1,
 } from "./simulation";
 import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
@@ -79,12 +85,18 @@ type SimulationState =
   | { status: "ready"; snapshot: ObservationSnapshotV1 }
   | { status: "unavailable"; message: string };
 
+type RunLibraryState =
+  | { status: "loading" }
+  | { status: "ready"; value: RunLibraryResponseV1; message: string }
+  | { status: "unavailable"; message: string };
+
 export function mountApp(root: HTMLElement): AppController {
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
   let simulation: SimulationState = { status: "idle" };
   let observationTimer: number | undefined;
   let replayFrameIndex = 0;
+  let runLibrary: RunLibraryState = { status: "loading" };
   let trackWorkspace: TrackWorkspaceState = {
     editor: createEditorState(),
     library: null,
@@ -146,6 +158,12 @@ export function mountApp(root: HTMLElement): AppController {
       };
     } else {
       simulation = { status: "ready", snapshot: response.snapshot };
+      if (
+        response.snapshot.status === "completed" ||
+        response.snapshot.status === "stopped"
+      ) {
+        void refreshRuns();
+      }
     }
     render();
     scheduleObservation();
@@ -238,6 +256,65 @@ export function mountApp(root: HTMLElement): AppController {
       };
     }
     render();
+  };
+
+  const refreshRuns = async (): Promise<void> => {
+    try {
+      runLibrary = {
+        status: "ready",
+        value: await loadRunLibrary(),
+        message: "Run files are stored atomically by the local Python core.",
+      };
+    } catch {
+      runLibrary = {
+        status: "unavailable",
+        message: "The local run library is unavailable.",
+      };
+    }
+    render();
+  };
+
+  const handleRunAction = async (
+    action: "resume" | "delete" | "export",
+    runId: string,
+  ): Promise<void> => {
+    try {
+      if (action === "delete") {
+        await deleteRun(runId);
+        await refreshRuns();
+        return;
+      }
+      if (action === "export") {
+        downloadRunDocument(await exportRun(runId));
+        return;
+      }
+      simulation = { status: "loading" };
+      const response = await resumeRun(runId);
+      if (!response.valid || response.setup === undefined) {
+        runLibrary = {
+          status: "unavailable",
+          message: response.valid
+            ? "The restored run did not include its frozen setup."
+            : (response.errors[0]?.message ?? "The run could not be resumed."),
+        };
+        render();
+        return;
+      }
+      if (response.setup.track !== null) {
+        const compiled = await compileTrack(response.setup.track);
+        if (compiled.valid && compiled.compiled !== undefined) {
+          trackWorkspace = { ...trackWorkspace, active: compiled.compiled };
+        }
+      }
+      dispatch({ type: "restore-session", draft: response.setup });
+      applyRunResponse(response);
+    } catch {
+      runLibrary = {
+        status: "unavailable",
+        message: "The local run command could not be completed.",
+      };
+      render();
+    }
   };
 
   const useCompiled = (compiled: CompiledTrackV1, message: string): void => {
@@ -456,6 +533,7 @@ export function mountApp(root: HTMLElement): AppController {
       presetGeometry,
       trackWorkspace,
       simulation,
+      runLibrary,
       replayFrameIndex,
     );
     bindActions(
@@ -466,6 +544,7 @@ export function mountApp(root: HTMLElement): AppController {
       startSession,
       controlSession,
       moveReplay,
+      handleRunAction,
       handleTrackAction,
       importTrack,
       (name, roadWidth) => {
@@ -496,6 +575,7 @@ export function mountApp(root: HTMLElement): AppController {
       render();
     });
   void refreshLibrary();
+  void refreshRuns();
 
   return {
     getState: () => state,
@@ -508,6 +588,7 @@ function renderShell(
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
   simulation: SimulationState,
+  runLibrary: RunLibraryState,
   replayFrameIndex: number,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
@@ -572,6 +653,7 @@ function renderShell(
           presetGeometry,
           trackWorkspace,
           simulation,
+          runLibrary,
           replayFrameIndex,
         )}
       </main>
@@ -584,11 +666,12 @@ function renderRoute(
   presetGeometry: PresetGeometryState,
   trackWorkspace: TrackWorkspaceState,
   simulation: SimulationState,
+  runLibrary: RunLibraryState,
   replayFrameIndex: number,
 ): string {
   switch (state.route) {
     case "welcome":
-      return renderWelcome();
+      return renderWelcome(runLibrary);
     case "track":
       return renderTrack(state, presetGeometry, trackWorkspace);
     case "settings":
@@ -625,7 +708,45 @@ function pageHeader(
   `;
 }
 
-function renderWelcome(): string {
+function renderWelcome(runLibrary: RunLibraryState): string {
+  const savedRuns =
+    runLibrary.status === "loading"
+      ? "<p>Loading local run files…</p>"
+      : runLibrary.status === "unavailable"
+        ? `<p>${escapeHtml(runLibrary.message)}</p>`
+        : runLibrary.value.runs.length === 0
+          ? "<p>No saved runs yet. Every started run will appear here.</p>"
+          : `
+            <table>
+              <thead><tr><th>Run</th><th>Track</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody>
+                ${runLibrary.value.runs
+                  .map(
+                    (run) => `
+                      <tr>
+                        <th scope="row">${escapeHtml(run.runId.slice(0, 18))}</th>
+                        <td>${escapeHtml(run.trackName)} · ${escapeHtml(run.algorithm)}</td>
+                        <td>${String(run.generation)} / ${String(run.totalGenerations)}</td>
+                        <td>${escapeHtml(run.status)}</td>
+                        <td>
+                          <div class="library-actions">
+                            <button class="button secondary" type="button" data-run-action="resume" data-run-id="${escapeHtml(run.runId)}" ${run.resumable ? "" : "disabled"}>Resume</button>
+                            <button class="button secondary" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}">Export</button>
+                            <button class="button secondary" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}">Delete</button>
+                          </div>
+                        </td>
+                      </tr>
+                    `,
+                  )
+                  .join("")}
+              </tbody>
+            </table>
+            ${
+              runLibrary.value.isolated.length === 0
+                ? ""
+                : `<p role="status">${String(runLibrary.value.isolated.length)} corrupt run record(s) were isolated without blocking this library.</p>`
+            }
+          `;
   return `
     <section class="page welcome-page" aria-labelledby="page-title">
       ${pageHeader(
@@ -657,6 +778,16 @@ function renderWelcome(): string {
           </button>
         </div>
       </div>
+      <section class="comparison-panel" aria-labelledby="saved-runs-title">
+        <div class="chart-heading">
+          <div>
+            <p class="section-kicker">Versioned local recovery</p>
+            <h2 id="saved-runs-title">Saved runs</h2>
+          </div>
+          <span class="data-chip">Run schema v1</span>
+        </div>
+        ${savedRuns}
+      </section>
     </section>
   `;
 }
@@ -1401,7 +1532,7 @@ function renderResults(
     .join("");
   const previous =
     snapshot.previousRuns.length === 0
-      ? "<p>No earlier in-memory run is available for comparison.</p>"
+      ? "<p>No earlier durable run is available for comparison.</p>"
       : `
         <table>
           <thead><tr><th>Run</th><th>Algorithm</th><th>Seed</th><th>Champion</th></tr></thead>
@@ -1458,7 +1589,7 @@ function renderResults(
         replayTrack,
       )}
       <section class="comparison-panel" aria-labelledby="run-comparison-title">
-        <h2 id="run-comparison-title">Previous runs this session</h2>
+        <h2 id="run-comparison-title">Previous saved runs</h2>
         ${previous}
       </section>
       <div class="page-actions">
@@ -1551,6 +1682,10 @@ function bindActions(
   startSession: () => Promise<void>,
   controlSession: (command: "pause" | "resume" | "stop") => Promise<void>,
   moveReplay: (action: "previous" | "next" | "restart") => void,
+  handleRunAction: (
+    action: "resume" | "delete" | "export",
+    runId: string,
+  ) => Promise<void>,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
   importTrack: (file: File) => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
@@ -1615,6 +1750,19 @@ function bindActions(
         });
       });
     });
+
+  root.querySelectorAll<HTMLElement>("[data-run-action]").forEach((element) => {
+    element.addEventListener("click", () => {
+      const action = element.dataset.runAction;
+      const runId = element.dataset.runId;
+      if (
+        (action === "resume" || action === "delete" || action === "export") &&
+        runId !== undefined
+      ) {
+        void handleRunAction(action, runId);
+      }
+    });
+  });
 
   root
     .querySelectorAll<HTMLElement>("[data-track-action]")
@@ -1695,6 +1843,18 @@ function downloadTrack(compiled: CompiledTrackV1): void {
   const anchor = document.createElement("a");
   anchor.href = url;
   anchor.download = `${safeFileName(compiled.track.name)}.track.json`;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadRunDocument(run: RunDocumentV1): void {
+  const blob = new Blob([`${JSON.stringify(run, null, 2)}\n`], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${safeFileName(run.runId)}.run.json`;
   anchor.click();
   URL.revokeObjectURL(url);
 }
