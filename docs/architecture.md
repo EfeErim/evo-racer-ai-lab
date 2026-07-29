@@ -2,8 +2,8 @@
 
 ## Status
 
-These decisions define the foundation, Phase 1 onboarding shell, and Phase 2
-track core.
+These decisions define the foundation, onboarding shell, track core, and Phase 3
+track-authoring boundary.
 Product-level constraints remain authoritative in the repository product
 contract.
 
@@ -94,6 +94,30 @@ generated, and imported tracks. The loopback-only
 TypeScript validates the response shape and draws the supplied centerline,
 boundaries, and start line as SVG; it contains no track construction or
 validation rules.
+
+## Phase 3 track-authoring boundary
+
+The browser editor owns only interaction history and the ordered `TrackV1`
+piece list. Add, delete, undo, redo, reset, naming, and road-width controls are
+presentation state. Validation and assisted closure are versioned commands to
+the Python core; the browser never derives closure or geometry.
+
+The version 1 Python generator uses deterministic SHA-256 candidate ranking and
+a bounded constrained search of at most 200 candidates. Length selects exactly
+12, 18, or 24 canonical pieces. Difficulty selects documented corridor widths.
+Every candidate is accepted only by the existing Phase 2 compiler.
+
+Track import first parses the JSON document shape in the browser, then requires
+Python validation before selection. Export writes only canonical `TrackV1`
+data. Python saves validated records atomically under the local `tracks`
+directory using hashed filenames, reloads each record through the compiler, and
+isolates unreadable or invalid records so one corrupt file cannot block the
+library.
+
+The loopback service exposes versioned compile, closure-assist, generation, and
+library commands. Preset, edited, generated, imported, and reloaded tracks
+therefore converge on `compile_track_payload`; no TypeScript track-domain path
+exists.
 
 ## Python foundation
 
