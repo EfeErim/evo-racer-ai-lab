@@ -146,6 +146,30 @@ Phase 4 adds the deterministic Python evaluator shared by future algorithms:
 The shared Phase 4 telemetry fixture under `contracts/` is checked from both
 runtimes.
 
+## Fixed-topology genetic algorithm
+
+Phase 5 adds the first Python-owned training algorithm without changing the
+Phase 4 evaluator:
+
+- A versioned `10 -> 6 -> 3` feed-forward network maps normalized telemetry to
+  continuous steering, throttle, and brake controls.
+- Each immutable genome contains the network parameters, five softmax-normalized
+  vehicle performance-budget logits, and full-domain front brake/drive bias
+  genes.
+- An isolated seeded random generator drives deterministic initialization,
+  tournament selection, uniform crossover, bounded Gaussian mutation, and exact
+  elitism.
+- Fitness rewards only net forward lap progress and verified completion
+  efficiency. Raw speed, survival time, and repeated local motion earn nothing;
+  collisions are penalized.
+- Versioned generation reports retain every candidate's fitness, progress,
+  completion, collision, and step results.
+
+The shared Phase 5 fixed-genome fixture under `contracts/` is checked from both
+Python and TypeScript. The browser test checks only the versioned presentation
+shape; Python remains the sole network, vehicle-budget, fitness, and evolution
+authority.
+
 ## Repository layout
 
 ```text
