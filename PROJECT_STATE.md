@@ -2,7 +2,7 @@
 
 ## Current position
 
-- Current phase: `Phase 10 - Hardening and portfolio release`
+- Current phase: `Phase 11 - Public binary publication`
 - Status: `complete`
 - Active milestone: `None - all planned milestones complete`
 - Last verified: `2026-07-29`
@@ -86,6 +86,11 @@
   algorithms at valid minimum product settings.
 - The repository and packaged release contain architecture, user, algorithm
   comparison, demo, and evidence documents with explicit public-claim limits.
+- Version `1.0.0` is published from annotated tag `v1.0.0` as the latest full
+  GitHub Release with the verified Windows ZIP and separate SHA-256 asset.
+- The Phase 11 verifier checks coherent JavaScript/Python package versions,
+  annotated-tag identity, public release state, asset names and sizes, and a
+  fresh-download SHA-256 match.
 
 ## Completed milestones
 
@@ -521,15 +526,51 @@ Verification evidence recorded on `2026-07-29`:
   saved in `docs/verification/phase10-hardening.md`.
 - `git diff --check` passed.
 
+### M11 - Public Binary Publication
+
+Status: `complete`
+
+Delivered:
+
+- [x] Coherent `1.0.0` JavaScript and Python package metadata.
+- [x] Checked-in `v1.0.0` release notes and durable README download links.
+- [x] Annotated source tag `v1.0.0` on the pushed release commit.
+- [x] Latest full GitHub Release with the Windows ZIP and SHA-256 asset.
+- [x] Automated public metadata, tag, asset, and fresh-download verification.
+
+Verification evidence recorded on `2026-07-29`:
+
+- The Phase 10 pre-publication sequence passed formatting, lint, TypeScript and
+  Python type checks, `26` Vitest tests, `68` pytest tests, the development
+  loopback smoke, all `18` deterministic matrix cases, the Windows build, and
+  clean-runtime acceptance.
+- The isolated matrix completed in `81.457872 s`, with a median case time of
+  `4.039459 s` and regression SHA-256
+  `88a77019558f77947536d50b3f61c6badb9234713555f7ea4ef20d38086e8d64`.
+- `npm run test:release` accepted the exact publication ZIP from the normal
+  repository path, restored and completed run
+  `run-f8848e74fb054ce0b9774f7e9b2d49c1`, used loopback only, and spawned no
+  external Node.js or Python process.
+- Release commit `0c566579532f56d92a08790cff5ef44b674bc4c9` was pushed to
+  `main`. Annotated tag `v1.0.0` resolves to that exact commit locally and on
+  GitHub.
+- [GitHub Release `v1.0.0`](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.0.0)
+  is published as the latest full release. Its ZIP is `9,398,174` bytes and its
+  checksum asset is `92` bytes.
+- `npm run test:phase11` downloaded both public assets and reproduced ZIP
+  SHA-256
+  `2462e678368f3e142d801d8c29c327602484d5e24c0bd3441efb0a317f1cf732`.
+- `git diff --cached --check` passed for the Phase 11 release commit.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-All ten planned phases are complete. A later publication task may attach the
-verified Windows ZIP and checksum to a tagged GitHub Release without changing
-the saved evidence or product claim boundary.
+All eleven planned phases are complete. Future work should begin under a new
+version and phase definition while preserving the immutable `v1.0.0` tag,
+published assets, saved evidence, and product claim boundary.
 
 ## State update rule
 
