@@ -2,8 +2,9 @@
 
 ## Status
 
-These decisions define the Phase 0 foundation. Product-level constraints remain
-authoritative in the repository product contract.
+These decisions define the foundation and Phase 1 onboarding shell.
+Product-level constraints remain authoritative in the repository product
+contract.
 
 ## Runtime boundary
 
@@ -45,7 +46,7 @@ without a second physics implementation.
 
 ## Frontend foundation
 
-The Phase 0 shell uses Vite, TypeScript, HTML, and CSS without a UI framework.
+The shell uses Vite, TypeScript, HTML, and CSS without a UI framework.
 TypeScript stays deliberately thin: it renders local data, captures UI-only
 input, and calls the Python core. This keeps the initial dependency surface
 small while preserving typed browser modules and production bundling.
@@ -54,6 +55,21 @@ proves they are needed.
 
 Vite development and preview hosts are explicitly loopback-only. The release
 build will be static local assets served by the packaged launcher.
+
+## Phase 1 onboarding boundary
+
+The TypeScript shell owns route state, presentation-only range feedback,
+accessible interaction, and rendering for Welcome, Track, Training Settings,
+Review, Training, and Results. It cannot enter Training until a versioned
+validation response from Python is valid and the user explicitly presses Start.
+After Start, setup transitions and field mutations are rejected so the reviewed
+configuration remains frozen.
+
+Python owns the `contractVersion: 1` setup validator and the supported preset,
+algorithm, and numeric-range rules. The browser submits the setup to
+`POST /v1/setup/validate` on `127.0.0.1`; this endpoint validates only and never
+creates or starts a run. The shared valid fixture under `contracts/` is consumed
+by both TypeScript and Python tests.
 
 ## Python foundation
 

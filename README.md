@@ -41,7 +41,7 @@ The application intentionally excludes human vehicle controls, multiplayer,
 accounts, 3D graphics, simulation-grade vehicle dynamics, and non-loopback
 runtime networking.
 
-## Phase 0 development setup
+## Development setup
 
 Development requires:
 
@@ -71,15 +71,37 @@ npm run smoke:m0
 The smoke command starts both local processes, verifies their loopback endpoints,
 and shuts them down.
 
+## Offline onboarding shell
+
+Phase 1 provides the complete local shell flow:
+
+```text
+Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
+```
+
+- Welcome explains the offline, observer-only workflow and requires an explicit
+  setup action.
+- Track and training presets provide a safe first-use path.
+- Settings include visible parameter help, bounded inputs, and advanced controls
+  collapsed by default.
+- Review calls the Python-owned versioned validation contract over
+  `127.0.0.1`. Start remains locked until the response is valid.
+- Start is the only action that enters Training. It freezes the reviewed
+  configuration, and the shell exposes no vehicle-driving controls.
+- Training and Results are honest shell states; simulation, evolution, and
+  result analysis connect in their later phases.
+
 ## Repository layout
 
 ```text
-src/                         Minimal TypeScript browser UI and IPC client
+contracts/                   Shared versioned TypeScript/Python fixtures
+src/                         TypeScript browser UI state, views, and IPC client
 tests/                       TypeScript tests
 python/src/evo_racer/        Authoritative Python application/simulation core
 python/tests/                Python tests
 scripts/                     Windows setup, development, and gate scripts
 docs/architecture.md         Locked architecture decisions
+docs/verification/           Saved milestone verification evidence
 ```
 
 Python is authoritative for tracks, simulation, sensors, controller execution,
