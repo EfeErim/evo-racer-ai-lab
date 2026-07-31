@@ -4,6 +4,9 @@
   "status": "completed",
   "generation": 2,
   "totalGenerations": 2,
+  "generationInProgress": false,
+  "activeCandidate": null,
+  "pendingCommand": null,
   "generationReport": {
     "contractVersion": 1,
     "algorithm": "fixed-ga",
@@ -40,6 +43,9 @@
   "selectedCar": {
     "selectedCarId": "g0001-c0002",
     "simulatedSeconds": 15,
+    "x": 18.25,
+    "y": 7.5,
+    "heading": 0.75,
     "speed": 8.5,
     "lateralSpeed": -0.15,
     "steering": 0.25,

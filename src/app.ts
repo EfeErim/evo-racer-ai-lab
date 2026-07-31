@@ -6,6 +6,7 @@ import {
   canStartSession,
   createInitialState,
   getPresentationIssues,
+  maximumCandidateEpisodes,
   transition,
   type AlgorithmId,
   type AppAction,
@@ -33,14 +34,35 @@ import {
   startRun,
   validateSetup,
 } from "./ipc";
+import {
+  interpolateTrackMarker,
+  replayTrackMarkerAt,
+  sameTrackMarker,
+  trackMarkerTransform,
+} from "./live-motion";
+import {
+  mergeObservationSnapshot,
+  observationPollDelay,
+} from "./observer-refresh";
+import {
+  priorGenerationTrails,
+  updateGenerationTrails,
+  type GenerationTrail,
+} from "./generation-trails";
 import type {
   ObservationSnapshotV1,
+  GenerationReplayV1,
   ReplayFrameV1,
   RunDocumentV1,
   RunLibraryResponseV1,
   SelectedCarTelemetryV1,
 } from "./simulation";
-import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
+import { runCompletion, runControls, runProgress } from "./run-presentation";
+import {
+  renderTrackSvg,
+  type CompiledTrackV1,
+  type TrackMarker,
+} from "./track-renderer";
 import {
   SEGMENT_CATALOGUE,
   addEditorPiece,
@@ -62,6 +84,26 @@ import {
 const ROUTE_ORDER = new Map<RouteId, number>(
   ROUTES.map((route, index) => [route.id, index]),
 );
+const MIN_MARKER_TWEEN_MS = 100;
+const MAX_MARKER_TWEEN_MS = 240;
+const MARKER_TWEEN_SCALE = 1.25;
+const CHAMPION_REPLAY_RATE = 2;
+const LIVE_MARKER_SELECTOR = ".live-race-stage .track-replay-marker";
+
+interface LiveMarkerMotion {
+  candidateId: string;
+  from: TrackMarker;
+  to: TrackMarker;
+  startedAt: number;
+  durationMs: number;
+  targetReceivedAt: number;
+}
+
+interface ChampionReplayMotion {
+  key: string;
+  frames: ReplayFrameV1[];
+  startedAt: number;
+}
 
 export interface AppController {
   getState(): AppState;
@@ -78,6 +120,7 @@ interface TrackWorkspaceState {
   active?: CompiledTrackV1;
   library: TrackLibraryResponse | null;
   message: string;
+  toolsOpen: boolean;
 }
 
 type SimulationState =
@@ -96,12 +139,224 @@ export function mountApp(root: HTMLElement): AppController {
   let presetGeometry: PresetGeometryState = { status: "loading" };
   let simulation: SimulationState = { status: "idle" };
   let observationTimer: number | undefined;
+  let observationPending = false;
+  let liveMarkerFrame: number | undefined;
+  let liveMarkerMotion: LiveMarkerMotion | undefined;
+  let championReplayMotion: ChampionReplayMotion | undefined;
+  let queuedChampionReplay: ChampionReplayMotion | undefined;
+  let generationTrails: GenerationTrail[] = [];
   let replayFrameIndex = 0;
   let runLibrary: RunLibraryState = { status: "loading" };
   let trackWorkspace: TrackWorkspaceState = {
     editor: createEditorState(),
     library: null,
     message: "Editor geometry is checked by Python when you validate it.",
+    toolsOpen: false,
+  };
+
+  const cancelLiveMarkerFrame = (): void => {
+    if (liveMarkerFrame !== undefined) {
+      window.cancelAnimationFrame(liveMarkerFrame);
+      liveMarkerFrame = undefined;
+    }
+  };
+
+  const resolvedLiveMarker = (
+    motion: LiveMarkerMotion,
+    now: number,
+  ): TrackMarker => {
+    if (motion.durationMs <= 0) {
+      return motion.to;
+    }
+    return interpolateTrackMarker(
+      motion.from,
+      motion.to,
+      (now - motion.startedAt) / motion.durationMs,
+    );
+  };
+
+  const paintLiveMarker = (marker: TrackMarker): void => {
+    root
+      .querySelector<SVGGElement>(LIVE_MARKER_SELECTOR)
+      ?.setAttribute("transform", trackMarkerTransform(marker));
+  };
+
+  const animateLiveMarker = (now: number): void => {
+    liveMarkerFrame = undefined;
+    if (championReplayMotion !== undefined) {
+      const firstFrame = championReplayMotion.frames[0];
+      const lastFrame = championReplayMotion.frames.at(-1);
+      if (firstFrame === undefined || lastFrame === undefined) {
+        championReplayMotion = undefined;
+        queuedChampionReplay = undefined;
+        return;
+      }
+      const replaySeconds = Math.max(
+        0.1,
+        lastFrame.simulatedSeconds - firstFrame.simulatedSeconds,
+      );
+      const elapsedSeconds =
+        ((now - championReplayMotion.startedAt) / 1000) * CHAMPION_REPLAY_RATE;
+      if (elapsedSeconds >= replaySeconds) {
+        championReplayMotion = queuedChampionReplay ?? {
+          ...championReplayMotion,
+          startedAt: now,
+        };
+        championReplayMotion.startedAt = now;
+        queuedChampionReplay = undefined;
+      }
+      const activeFirst = championReplayMotion.frames[0];
+      const activeLast = championReplayMotion.frames.at(-1);
+      if (activeFirst !== undefined && activeLast !== undefined) {
+        const activeDuration = Math.max(
+          0.1,
+          activeLast.simulatedSeconds - activeFirst.simulatedSeconds,
+        );
+        const activeElapsed =
+          (((now - championReplayMotion.startedAt) / 1000) *
+            CHAMPION_REPLAY_RATE) %
+          activeDuration;
+        const marker = replayTrackMarkerAt(
+          championReplayMotion.frames,
+          activeFirst.simulatedSeconds + activeElapsed,
+        );
+        if (marker !== undefined) {
+          paintLiveMarker(marker);
+        }
+      }
+      liveMarkerFrame = window.requestAnimationFrame(animateLiveMarker);
+      return;
+    }
+    if (liveMarkerMotion === undefined) {
+      return;
+    }
+    paintLiveMarker(resolvedLiveMarker(liveMarkerMotion, now));
+    if (now < liveMarkerMotion.startedAt + liveMarkerMotion.durationMs) {
+      liveMarkerFrame = window.requestAnimationFrame(animateLiveMarker);
+    } else {
+      liveMarkerMotion = {
+        ...liveMarkerMotion,
+        from: liveMarkerMotion.to,
+        startedAt: now,
+        durationMs: 0,
+      };
+    }
+  };
+
+  const requestLiveMarkerFrame = (): void => {
+    liveMarkerFrame ??= window.requestAnimationFrame(animateLiveMarker);
+  };
+
+  const resetLiveMarkerMotion = (): void => {
+    cancelLiveMarkerFrame();
+    liveMarkerMotion = undefined;
+    championReplayMotion = undefined;
+    queuedChampionReplay = undefined;
+  };
+
+  const availableChampionReplay = (): {
+    key: string;
+    replay: GenerationReplayV1;
+  } | null => {
+    if (simulation.status !== "ready") {
+      return null;
+    }
+    const snapshot = simulation.snapshot;
+    if (snapshot.result !== null && snapshot.result.replay.frames.length > 1) {
+      return {
+        key: `${snapshot.runId}:final:${snapshot.result.replay.candidateId}`,
+        replay: snapshot.result.replay,
+      };
+    }
+    if (
+      snapshot.generationReplay !== null &&
+      snapshot.generationReplay !== undefined &&
+      snapshot.generationReplay.frames.length > 1
+    ) {
+      return {
+        key: `${snapshot.runId}:generation:${String(snapshot.generation)}:${snapshot.generationReplay.candidateId}`,
+        replay: snapshot.generationReplay,
+      };
+    }
+    return null;
+  };
+
+  const syncLiveMarkerMotion = (): void => {
+    if (state.route !== "training" || simulation.status !== "ready") {
+      resetLiveMarkerMotion();
+      return;
+    }
+    const replay = availableChampionReplay();
+    if (replay !== null) {
+      const nextReplay = {
+        key: replay.key,
+        frames: replay.replay.frames,
+        startedAt: window.performance.now(),
+      };
+      if (championReplayMotion === undefined) {
+        championReplayMotion = nextReplay;
+      } else if (
+        championReplayMotion.key !== replay.key &&
+        queuedChampionReplay?.key !== replay.key
+      ) {
+        queuedChampionReplay = nextReplay;
+      }
+      liveMarkerMotion = undefined;
+      requestLiveMarkerFrame();
+      return;
+    }
+    if (
+      simulation.snapshot.generationInProgress !== true ||
+      simulation.snapshot.activeCandidate === null ||
+      simulation.snapshot.activeCandidate === undefined ||
+      simulation.snapshot.selectedCar === null
+    ) {
+      resetLiveMarkerMotion();
+      return;
+    }
+    const target = liveTrackMarker(simulation.snapshot.selectedCar);
+    if (target === undefined) {
+      resetLiveMarkerMotion();
+      return;
+    }
+
+    const now = window.performance.now();
+    const candidateId = simulation.snapshot.activeCandidate.candidateId;
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    if (reducedMotion || liveMarkerMotion?.candidateId !== candidateId) {
+      cancelLiveMarkerFrame();
+      liveMarkerMotion = {
+        candidateId,
+        from: target,
+        to: target,
+        startedAt: now,
+        durationMs: 0,
+        targetReceivedAt: now,
+      };
+      paintLiveMarker(target);
+      return;
+    }
+
+    const current = resolvedLiveMarker(liveMarkerMotion, now);
+    if (!sameTrackMarker(liveMarkerMotion.to, target)) {
+      const observedInterval = now - liveMarkerMotion.targetReceivedAt;
+      const durationMs = Math.min(
+        MAX_MARKER_TWEEN_MS,
+        Math.max(MIN_MARKER_TWEEN_MS, observedInterval * MARKER_TWEEN_SCALE),
+      );
+      liveMarkerMotion = {
+        candidateId,
+        from: current,
+        to: target,
+        startedAt: now,
+        durationMs,
+        targetReceivedAt: now,
+      };
+    }
+    paintLiveMarker(current);
+    requestLiveMarkerFrame();
   };
 
   const dispatch = (action: AppAction): void => {
@@ -113,7 +368,9 @@ export function mountApp(root: HTMLElement): AppController {
         observationTimer = undefined;
       }
       simulation = { status: "idle" };
+      generationTrails = [];
       replayFrameIndex = 0;
+      trackWorkspace = { ...trackWorkspace, toolsOpen: false };
     }
     render(state.route !== previousRoute);
   };
@@ -140,13 +397,15 @@ export function mountApp(root: HTMLElement): AppController {
   const scheduleObservation = (): void => {
     if (
       simulation.status !== "ready" ||
-      simulation.snapshot.status !== "running"
+      simulation.snapshot.status !== "running" ||
+      observationPending ||
+      observationTimer !== undefined
     ) {
       return;
     }
     observationTimer = window.setTimeout(() => {
       void observeSession();
-    }, 600);
+    }, observationPollDelay(document.visibilityState));
   };
 
   const applyRunResponse = (
@@ -158,11 +417,15 @@ export function mountApp(root: HTMLElement): AppController {
         message: response.errors[0]?.message ?? "The run command was rejected.",
       };
     } else {
-      simulation = { status: "ready", snapshot: response.snapshot };
-      if (
-        response.snapshot.status === "completed" ||
-        response.snapshot.status === "stopped"
-      ) {
+      const previousSnapshot =
+        simulation.status === "ready" ? simulation.snapshot : undefined;
+      const snapshot = mergeObservationSnapshot(
+        previousSnapshot,
+        response.snapshot,
+      );
+      generationTrails = updateGenerationTrails(generationTrails, snapshot);
+      simulation = { status: "ready", snapshot };
+      if (snapshot.status === "completed" || snapshot.status === "stopped") {
         void refreshRuns();
       }
     }
@@ -178,14 +441,41 @@ export function mountApp(root: HTMLElement): AppController {
       return;
     }
     observationTimer = undefined;
+    if (observationPending) {
+      return;
+    }
+    observationPending = true;
     try {
-      applyRunResponse(await observeRun(simulation.snapshot.runId));
-    } catch {
+      applyRunResponse(
+        await observeRun(
+          simulation.snapshot.runId,
+          simulation.snapshot.generationReplay?.candidateId,
+        ),
+      );
+    } catch (error) {
       simulation = {
         status: "unavailable",
-        message: "The local core could not advance the training run.",
+        message:
+          error instanceof Error
+            ? `Telemetry update failed: ${error.message}`
+            : "The local core could not advance the training run.",
       };
       render();
+    } finally {
+      observationPending = false;
+      scheduleObservation();
+    }
+  };
+
+  const handleVisibilityChange = (): void => {
+    if (observationTimer !== undefined) {
+      window.clearTimeout(observationTimer);
+      observationTimer = undefined;
+    }
+    if (document.visibilityState === "visible") {
+      void observeSession();
+    } else {
+      scheduleObservation();
     }
   };
 
@@ -231,6 +521,7 @@ export function mountApp(root: HTMLElement): AppController {
     }
     const frozenDraft = state.draft;
     simulation = { status: "loading" };
+    generationTrails = [];
     replayFrameIndex = 0;
     dispatch({ type: "start-session" });
     try {
@@ -307,6 +598,7 @@ export function mountApp(root: HTMLElement): AppController {
           trackWorkspace = { ...trackWorkspace, active: compiled.compiled };
         }
       }
+      generationTrails = [];
       dispatch({ type: "restore-session", draft: response.setup });
       applyRunResponse(response);
     } catch {
@@ -536,7 +828,9 @@ export function mountApp(root: HTMLElement): AppController {
       simulation,
       runLibrary,
       replayFrameIndex,
+      generationTrails,
     );
+    syncLiveMarkerMotion();
     bindActions(
       root,
       state,
@@ -574,7 +868,22 @@ export function mountApp(root: HTMLElement): AppController {
         };
         render();
       },
+      (open) => {
+        trackWorkspace = { ...trackWorkspace, toolsOpen: open };
+      },
     );
+
+    const progressRail = root.querySelector<HTMLElement>(".sidebar");
+    const activeProgress = root.querySelector<HTMLElement>(
+      ".progress-item.is-active",
+    );
+    if (progressRail !== null && activeProgress !== null) {
+      progressRail.scrollLeft = Math.max(
+        0,
+        activeProgress.offsetLeft -
+          (progressRail.clientWidth - activeProgress.clientWidth) / 2,
+      );
+    }
 
     if (focusHeading) {
       const pageTitle = root.querySelector<HTMLElement>("#page-title");
@@ -583,6 +892,7 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   render(true);
+  document.addEventListener("visibilitychange", handleVisibilityChange);
   void loadPresetTracks()
     .then((response) => {
       presetGeometry = { status: "ready", presets: response.presets };
@@ -608,6 +918,7 @@ function renderShell(
   simulation: SimulationState,
   runLibrary: RunLibraryState,
   replayFrameIndex: number,
+  generationTrails: readonly GenerationTrail[],
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -678,6 +989,7 @@ function renderShell(
           simulation,
           runLibrary,
           replayFrameIndex,
+          generationTrails,
         )}
       </main>
     </div>
@@ -691,7 +1003,16 @@ function renderRoute(
   simulation: SimulationState,
   runLibrary: RunLibraryState,
   replayFrameIndex: number,
+  generationTrails: readonly GenerationTrail[],
 ): string {
+  const activeTrack =
+    state.draft.track === null
+      ? presetGeometry.status === "ready"
+        ? presetGeometry.presets.find(
+            (candidate) => candidate.track.id === state.draft.trackPreset,
+          )
+        : undefined
+      : trackWorkspace.active;
   switch (state.route) {
     case "welcome":
       return renderWelcome(runLibrary);
@@ -702,18 +1023,15 @@ function renderRoute(
     case "review":
       return renderReview(state);
     case "training":
-      return renderTraining(state, simulation);
-    case "results": {
-      const replayTrack =
-        state.draft.track === null
-          ? presetGeometry.status === "ready"
-            ? presetGeometry.presets.find(
-                (candidate) => candidate.track.id === state.draft.trackPreset,
-              )
-            : undefined
-          : trackWorkspace.active;
-      return renderResults(state, simulation, replayFrameIndex, replayTrack);
-    }
+      return renderTraining(state, simulation, activeTrack, generationTrails);
+    case "results":
+      return renderResults(
+        state,
+        simulation,
+        replayFrameIndex,
+        activeTrack,
+        generationTrails,
+      );
   }
 }
 
@@ -774,19 +1092,19 @@ function renderWelcome(runLibrary: RunLibraryState): string {
     <section class="page welcome-page" aria-labelledby="page-title">
       ${pageHeader(
         "EvoRacer / New experiment",
-        "Set up a racing experiment.",
-        "Choose a track and training configuration. Nothing runs until you review the setup and press Start.",
+        "Start an AI racing experiment.",
+        "Use the recommended first run or customize it. Nothing runs until you review the setup and press Start.",
       )}
 
       <div class="welcome-panel">
         <div class="welcome-summary" aria-label="Experiment setup summary">
           <div class="summary-row">
             <span>Track</span>
-            <strong>Preset, editor, generator, or local file</strong>
+            <strong>Easy Oval</strong>
           </div>
           <div class="summary-row">
             <span>Training</span>
-            <strong>Fixed GA or NEAT</strong>
+            <strong>Quick start · Fixed GA · 80 candidate episodes</strong>
           </div>
           <div class="summary-row">
             <span>Run policy</span>
@@ -796,21 +1114,26 @@ function renderWelcome(runLibrary: RunLibraryState): string {
         <div class="welcome-aside">
           <span class="data-chip">Local only</span>
           <p>No account, cloud connection, telemetry, or automatic training.</p>
-          <button class="button primary" type="button" data-action="begin-setup">
-            Begin experiment setup
-          </button>
+          <div class="welcome-actions">
+            <button class="button primary" type="button" data-action="review">
+              Review recommended setup
+            </button>
+            <button class="button secondary" type="button" data-action="begin-setup">
+              Customize setup
+            </button>
+          </div>
         </div>
       </div>
-      <section class="comparison-panel" aria-labelledby="saved-runs-title">
-        <div class="chart-heading">
+      <details class="comparison-panel saved-runs-panel">
+        <summary class="chart-heading">
           <div>
             <p class="section-kicker">Versioned local recovery</p>
             <h2 id="saved-runs-title">Saved runs</h2>
           </div>
-          <span class="data-chip">Run schema v1</span>
-        </div>
-        ${savedRuns}
-      </section>
+          <span class="data-chip">Open library</span>
+        </summary>
+        <div class="saved-runs-content">${savedRuns}</div>
+      </details>
     </section>
   `;
 }
@@ -861,8 +1184,8 @@ function renderTrack(
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
         "Setup / Track",
-        "Select a track.",
-        "Use a bundled preset or open the custom-track tools. Every option is validated by the local Python core.",
+        "Choose a track.",
+        "Easy Oval is recommended for a first run. Custom track tools stay out of the way until you need them.",
       )}
       <fieldset class="choice-grid">
         <legend class="sr-only">Track preset</legend>
@@ -933,16 +1256,18 @@ function renderTrackWorkbench(workspace: TrackWorkspaceState): string {
   const isolatedCount = workspace.library?.isolated.length ?? 0;
 
   return `
-    <section class="track-workbench" aria-labelledby="track-tools-title">
-      <div class="section-heading">
+    <details class="track-workbench" data-track-tools ${workspace.toolsOpen ? "open" : ""}>
+      <summary class="section-heading">
         <div>
-          <p class="section-kicker">Custom tracks</p>
-          <h2 id="track-tools-title">Edit, generate, or load a track</h2>
+          <p class="section-kicker">Optional</p>
+          <h2>Build or load a custom track</h2>
         </div>
-        <p>All sources use the same local validation and geometry pipeline.</p>
-      </div>
+        <span class="details-action">Open tools</span>
+      </summary>
 
-      <div class="track-tool-grid">
+      <div class="track-workbench-content">
+        <p class="optional-note">Use the editor, deterministic generator, or a local TrackV1 file. Presets above need none of these tools.</p>
+        <div class="track-tool-grid">
         <section class="track-tool-panel editor-panel" aria-labelledby="editor-title">
           <h3 id="editor-title">Sequential editor</h3>
           <div class="editor-fields">
@@ -995,25 +1320,31 @@ function renderTrackWorkbench(workspace: TrackWorkspaceState): string {
           ${library}
           ${isolatedCount > 0 ? `<p class="track-warning">${String(isolatedCount)} corrupt record(s) were isolated.</p>` : ""}
         </section>
+        </div>
+        <p class="track-workbench-status" role="status" aria-live="polite">${escapeHtml(workspace.message)}</p>
       </div>
-      <p class="track-workbench-status" role="status" aria-live="polite">${escapeHtml(workspace.message)}</p>
-    </section>
+    </details>
   `;
 }
 
 function renderSettings(state: AppState): string {
+  const maximumEpisodes = maximumCandidateEpisodes(state.draft.settings);
+  const selectedPreset = TRAINING_PRESETS.find(
+    (preset) =>
+      preset.settings.algorithm === state.draft.settings.algorithm &&
+      preset.settings.populationSize === state.draft.settings.populationSize &&
+      preset.settings.generations === state.draft.settings.generations &&
+      preset.settings.episodeSeconds === state.draft.settings.episodeSeconds &&
+      preset.settings.seed === state.draft.settings.seed,
+  );
   const presets = TRAINING_PRESETS.map((preset) => {
-    const matches = Object.entries(preset.settings).every(
-      ([key, value]) =>
-        state.draft.settings[key as keyof typeof state.draft.settings] ===
-        value,
-    );
+    const selected = preset.id === selectedPreset?.id;
     return `
       <button
-        class="preset-button ${matches ? "is-selected" : ""}"
+        class="preset-button ${selected ? "is-selected" : ""}"
         type="button"
         data-training-preset="${preset.id}"
-        aria-pressed="${String(matches)}"
+        aria-pressed="${String(selected)}"
       >
         <strong>${preset.name}</strong>
         <span>${preset.description}</span>
@@ -1028,30 +1359,36 @@ function renderSettings(state: AppState): string {
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
         "Setup / Training",
-        "Configure training.",
-        "Start with a preset or adjust the core parameters. Advanced settings remain optional.",
+        "Choose a training plan.",
+        "Quick start is recommended for a first run. Pick a preset and continue, or open Customize only when you need exact controls.",
       )}
 
       <section aria-labelledby="preset-title">
         <div class="section-heading">
           <div>
-            <p class="section-kicker">Recommended starting points</p>
-            <h2 id="preset-title">Training presets</h2>
+            <p class="section-kicker">Pick one</p>
+            <h2 id="preset-title">Training plan</h2>
           </div>
         </div>
         <div class="preset-grid">${presets}</div>
       </section>
 
-      <section class="settings-panel" aria-labelledby="settings-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">Core parameters</p>
-            <h2 id="settings-title">Training settings</h2>
-          </div>
-          <p>Changes are checked locally before Start.</p>
-        </div>
+      <p class="workload-note plan-summary">
+        Selected: <strong>${selectedPreset?.name ?? "Custom settings"}</strong> ·
+        maximum <strong>${String(maximumEpisodes)} candidate episodes</strong>.
+        Episodes can end early after a collision or completed lap.
+      </p>
 
-        <div class="field-grid">
+      <details class="settings-panel settings-customizer" ${selectedPreset === undefined ? "open" : ""}>
+        <summary>
+          <span>
+            <strong>Customize training</strong>
+            <small>Optional algorithm and compute controls</small>
+          </span>
+          <span aria-hidden="true">＋</span>
+        </summary>
+        <div class="settings-customizer-content">
+          <div class="field-grid">
           ${renderSelectField(
             "algorithm",
             "Algorithm",
@@ -1085,9 +1422,9 @@ function renderSettings(state: AppState): string {
             300,
             invalidFields.has("episodeSeconds"),
           )}
-        </div>
+          </div>
 
-        <details class="advanced-settings">
+          <details class="advanced-settings">
           <summary>
             <span>
               <strong>Advanced controls</strong>
@@ -1106,8 +1443,9 @@ function renderSettings(state: AppState): string {
               invalidFields.has("seed"),
             )}
           </div>
-        </details>
-      </section>
+          </details>
+        </div>
+      </details>
 
       ${renderActions(
         "track",
@@ -1184,6 +1522,7 @@ function renderReview(state: AppState): string {
       : `${String(state.draft.track.pieces.length)} canonical pieces · local TrackV1`;
   const status = renderValidationStatus(state);
   const startDisabled = !canStartSession(state);
+  const maximumEpisodes = maximumCandidateEpisodes(state.draft.settings);
 
   return `
     <section class="page" aria-labelledby="page-title">
@@ -1219,6 +1558,10 @@ function renderReview(state: AppState): string {
             <div><dt>Episode</dt><dd>${String(state.draft.settings.episodeSeconds)}s</dd></div>
             <div><dt>Seed</dt><dd>${String(state.draft.settings.seed)}</dd></div>
           </dl>
+          <p class="workload-note">
+            Maximum workload: <strong>${String(maximumEpisodes)} candidate episodes</strong>.
+            This is a compute budget, not a wall-clock estimate.
+          </p>
         </section>
       </div>
 
@@ -1284,7 +1627,9 @@ function renderValidationStatus(state: AppState): string {
     state.validation.status === "checked"
       ? state.validation.response.errors
       : getPresentationIssues(state.draft);
-  const errorList = errors.map((error) => `<li>${error.message}</li>`).join("");
+  const errorList = errors
+    .map((error) => `<li>${escapeHtml(error.message)}</li>`)
+    .join("");
 
   return `
     <div class="validation-status is-invalid" role="alert">
@@ -1297,7 +1642,12 @@ function renderValidationStatus(state: AppState): string {
   `;
 }
 
-function renderTraining(state: AppState, simulation: SimulationState): string {
+function renderTraining(
+  state: AppState,
+  simulation: SimulationState,
+  activeTrack: CompiledTrackV1 | undefined,
+  generationTrails: readonly GenerationTrail[],
+): string {
   let observerContent: string;
   if (simulation.status === "loading") {
     observerContent = `
@@ -1309,22 +1659,56 @@ function renderTraining(state: AppState, simulation: SimulationState): string {
     `;
   } else if (simulation.status === "ready") {
     const snapshot = simulation.snapshot;
+    const activeCandidate = snapshot.activeCandidate;
+    const live =
+      snapshot.generationInProgress === true &&
+      activeCandidate !== null &&
+      activeCandidate !== undefined;
+    const replay = snapshot.result?.replay ?? snapshot.generationReplay;
+    const replaying =
+      replay !== null && replay !== undefined && replay.frames.length > 1;
+    const priorTrails = priorGenerationTrails(
+      generationTrails,
+      replay?.candidateId,
+    );
+    const backgroundEvaluation = replaying && live;
+    const algorithm =
+      state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT";
     const telemetry =
       snapshot.selectedCar === null
         ? `
           <div class="training-stage" role="status" aria-live="polite">
             <span class="data-chip">Run ${escapeHtml(snapshot.status)}</span>
-            <h2>Generation ${String(snapshot.generation + 1)} is ready</h2>
-            <p>The next explicit batch command advances one complete generation in Python.</p>
+            <h2>${snapshot.generationInProgress === true ? "Starting" : "Preparing"} generation ${String(snapshot.generation + 1)}</h2>
+            <p>Python is evaluating the next candidate. Live track telemetry will appear here.</p>
           </div>
         `
-        : renderSelectedCarTelemetry(
+        : `
+          ${renderLiveRace(
             snapshot.selectedCar,
-            `${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"} generation champion`,
-            snapshot.status,
-          );
+            activeCandidate,
+            activeTrack,
+            live,
+            replay,
+            priorTrails,
+          )}
+          ${renderSelectedCarTelemetry(
+            snapshot.selectedCar,
+            backgroundEvaluation
+              ? `${algorithm} background candidate (not the replay above)`
+              : live
+                ? `${algorithm} candidate in evaluation`
+                : `${algorithm} generation champion`,
+            backgroundEvaluation
+              ? "background live"
+              : live
+                ? "live"
+                : snapshot.status,
+          )}
+        `;
     observerContent = `
       ${renderRunOverview(snapshot)}
+      ${renderTrainingCompletion(snapshot)}
       ${telemetry}
       ${renderFitnessChart(snapshot.fitnessHistory)}
     `;
@@ -1357,6 +1741,90 @@ function renderTraining(state: AppState, simulation: SimulationState): string {
       ${renderRunControls(simulation)}
     </section>
   `;
+}
+
+function renderLiveRace(
+  telemetry: SelectedCarTelemetryV1,
+  activeCandidate: ObservationSnapshotV1["activeCandidate"],
+  activeTrack: CompiledTrackV1 | undefined,
+  live: boolean,
+  replay: GenerationReplayV1 | undefined | null,
+  priorTrails: readonly GenerationTrail[],
+): string {
+  const firstReplayFrame = replay?.frames[0];
+  const marker =
+    firstReplayFrame === undefined
+      ? liveTrackMarker(telemetry)
+      : {
+          x: firstReplayFrame.x,
+          y: firstReplayFrame.y,
+          heading: firstReplayFrame.heading,
+        };
+  const replaying = replay !== null && replay !== undefined;
+  const candidateLabel = replaying
+    ? `Champion replay · ${String(CHAMPION_REPLAY_RATE)}×`
+    : live && activeCandidate !== null && activeCandidate !== undefined
+      ? `Candidate ${String(activeCandidate.index)} / ${String(activeCandidate.total)}`
+      : "Latest generation champion";
+  const displayId = replaying ? replay.candidateId : telemetry.selectedCarId;
+  return `
+    <section class="live-race-panel" aria-labelledby="live-race-title">
+      <div class="chart-heading">
+        <div>
+          <p class="section-kicker">${replaying ? "Smooth Python champion replay" : live ? "Live Python simulation" : "Latest Python telemetry"}</p>
+          <h2 id="live-race-title">${escapeHtml(displayId)}</h2>
+        </div>
+        <span class="data-chip ${live ? "is-live" : ""}">${candidateLabel}</span>
+      </div>
+      <div
+        class="live-race-stage"
+        role="img"
+        aria-label="${replaying ? "Smooth champion replay" : live ? "Live" : "Latest"} car position${priorTrails.length === 0 ? "" : ` with ${String(priorTrails.length)} previous generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
+      >
+        ${
+          activeTrack === undefined
+            ? '<p class="track-preview-status">Validated track geometry is unavailable.</p>'
+            : marker !== undefined
+              ? renderTrackSvg(activeTrack, marker, priorTrails)
+              : renderTrackSvg(activeTrack, undefined, priorTrails)
+        }
+      </div>
+      ${renderGenerationTrailSummary(priorTrails.length)}
+      <div class="live-race-footer">
+        <span>${replaying ? "Buffered authoritative frames at 60 FPS" : live ? "Accelerated live evaluation" : "Generation boundary"}</span>
+        <strong>${replaying ? `${String(replay.frames.length)} Python frames` : `${telemetry.simulatedSeconds.toFixed(2)} simulated seconds · ${(telemetry.progress * 100).toFixed(1)}%`}</strong>
+      </div>
+    </section>
+  `;
+}
+
+function renderGenerationTrailSummary(count: number): string {
+  if (count === 0) {
+    return "";
+  }
+  return `
+    <div class="generation-trail-summary" aria-live="polite">
+      <span><i aria-hidden="true"></i> Evolution trail</span>
+      <strong>${String(count)} previous champion path${count === 1 ? "" : "s"} · older paths fade</strong>
+    </div>
+  `;
+}
+
+function liveTrackMarker(
+  telemetry: SelectedCarTelemetryV1,
+): { x: number; y: number; heading: number } | undefined {
+  if (
+    telemetry.x === undefined ||
+    telemetry.y === undefined ||
+    telemetry.heading === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    x: telemetry.x,
+    y: telemetry.y,
+    heading: telemetry.heading,
+  };
 }
 
 function renderSelectedCarTelemetry(
@@ -1414,6 +1882,7 @@ function renderSelectedCarTelemetry(
 
 function renderRunOverview(snapshot: ObservationSnapshotV1): string {
   const report = snapshot.generationReport;
+  const progress = runProgress(snapshot);
   return `
     <section class="run-overview" aria-label="Live run status">
       <div>
@@ -1426,6 +1895,31 @@ function renderRunOverview(snapshot: ObservationSnapshotV1): string {
         <div><dt>Median fitness</dt><dd>${report === null ? "—" : report.medianFitness.toFixed(3)}</dd></div>
         <div><dt>Champion</dt><dd>${report === null ? "—" : escapeHtml(report.championId)}</dd></div>
       </dl>
+      <div class="run-progress">
+        <div><span>Overall evaluation progress</span><strong>${progress.percent}</strong></div>
+        <progress max="1" value="${String(progress.fraction)}">${progress.percent}</progress>
+        <p>${escapeHtml(progress.label)}</p>
+      </div>
+    </section>
+  `;
+}
+
+function renderTrainingCompletion(snapshot: ObservationSnapshotV1): string {
+  const completion = runCompletion(snapshot);
+  if (completion === null) {
+    return "";
+  }
+  return `
+    <section class="training-completion" role="status" aria-labelledby="training-completion-title">
+      <p class="section-kicker">Results ready</p>
+      <div class="training-completion-heading">
+        <h2 id="training-completion-title">${completion.title}</h2>
+        <button class="button primary" type="button" data-action="view-results">
+          Open results
+          <span aria-hidden="true">→</span>
+        </button>
+      </div>
+      <p>${completion.message}</p>
     </section>
   `;
 }
@@ -1434,17 +1928,23 @@ function renderRunControls(simulation: SimulationState): string {
   if (simulation.status !== "ready") {
     return "";
   }
-  const status = simulation.snapshot.status;
-  const terminal = status === "completed" || status === "stopped";
+  const controls = runControls(simulation.snapshot);
+  if (
+    simulation.snapshot.status === "completed" ||
+    simulation.snapshot.status === "stopped"
+  ) {
+    return "";
+  }
   return `
     <div class="page-actions run-controls" aria-label="Run controls">
       <div>
-        <button class="button secondary" type="button" data-action="${status === "paused" ? "resume-run" : "pause-run"}" ${terminal ? "disabled" : ""}>
-          ${status === "paused" ? "Resume" : "Pause"}
+        <button class="button secondary" type="button" data-action="${controls.pauseAction === "resume" ? "resume-run" : "pause-run"}" ${controls.pauseDisabled ? "disabled" : ""}>
+          ${controls.pauseLabel}
         </button>
-        <button class="button secondary" type="button" data-action="stop-run" ${terminal ? "disabled" : ""}>
-          Stop
+        <button class="button secondary" type="button" data-action="stop-run" ${controls.stopDisabled ? "disabled" : ""}>
+          ${controls.stopLabel}
         </button>
+        <p class="run-control-note" role="status">${controls.note}</p>
       </div>
       <button class="button primary" type="button" data-action="view-results" ${simulation.snapshot.result === null ? "disabled" : ""}>
         View results
@@ -1507,6 +2007,7 @@ function renderResults(
   simulation: SimulationState,
   replayFrameIndex: number,
   replayTrack: CompiledTrackV1 | undefined,
+  generationTrails: readonly GenerationTrail[],
 ): string {
   const preset = TRACK_PRESETS.find(
     (candidate) => candidate.id === state.draft.trackPreset,
@@ -1537,6 +2038,10 @@ function renderResults(
     return "";
   }
   const snapshot = simulation.snapshot;
+  const priorTrails = priorGenerationTrails(
+    generationTrails,
+    result.replay.candidateId,
+  );
   const frame =
     result.replay.frames[
       Math.min(replayFrameIndex, result.replay.frames.length - 1)
@@ -1610,6 +2115,7 @@ function renderResults(
         result.replay.vehicleSetup.frontDriveBias,
         result.replay.vehicleSetup.frontBrakeBias,
         replayTrack,
+        priorTrails,
       )}
       <section class="comparison-panel" aria-labelledby="run-comparison-title">
         <h2 id="run-comparison-title">Previous saved runs</h2>
@@ -1631,6 +2137,7 @@ function renderReplay(
   frontDriveBias: number,
   frontBrakeBias: number,
   replayTrack: CompiledTrackV1 | undefined,
+  priorTrails: readonly GenerationTrail[],
 ): string {
   if (frame === undefined) {
     return `
@@ -1650,10 +2157,11 @@ function renderReplay(
         ${
           replayTrack === undefined
             ? '<p class="track-preview-status">Validated track geometry is unavailable.</p>'
-            : renderTrackSvg(replayTrack, frame)
+            : renderTrackSvg(replayTrack, frame, priorTrails)
         }
         <p>x ${frame.x.toFixed(2)} · y ${frame.y.toFixed(2)} · ${(frame.progress * 100).toFixed(1)}%</p>
       </div>
+      ${renderGenerationTrailSummary(priorTrails.length)}
       <dl class="telemetry-metrics">
         <div><dt>Steering</dt><dd>${frame.steering.toFixed(3)}</dd></div>
         <div><dt>Throttle</dt><dd>${frame.throttle.toFixed(3)}</dd></div>
@@ -1713,6 +2221,7 @@ function bindActions(
   importTrack: (file: File) => Promise<void>,
   exitApplication: () => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
+  setTrackToolsOpen: (open: boolean) => void,
 ): void {
   root.querySelectorAll<HTMLElement>("[data-route]").forEach((element) => {
     element.addEventListener("click", (event) => {
@@ -1823,6 +2332,12 @@ function bindActions(
   };
   editorName?.addEventListener("change", commitEditorDetails);
   editorWidth?.addEventListener("change", commitEditorDetails);
+
+  root
+    .querySelector<HTMLDetailsElement>("[data-track-tools]")
+    ?.addEventListener("toggle", (event) => {
+      setTrackToolsOpen((event.currentTarget as HTMLDetailsElement).open);
+    });
 
   root
     .querySelectorAll<HTMLButtonElement>("[data-training-preset]")

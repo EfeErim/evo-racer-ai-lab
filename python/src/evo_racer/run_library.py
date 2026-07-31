@@ -6,6 +6,7 @@ import json
 import math
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Final, cast
 
@@ -16,6 +17,8 @@ RUN_LIBRARY_CONTRACT_VERSION: Final = 1
 RUN_SCHEMA_VERSION: Final = 1
 RUN_DOCUMENT_KIND: Final = "evo-racer-run"
 RUN_FILE_NAME: Final = "run.json"
+ATOMIC_REPLACE_ATTEMPTS: Final = 5
+ATOMIC_REPLACE_RETRY_SECONDS: Final = 0.01
 
 
 class RunRecordError(ValueError):
@@ -58,7 +61,7 @@ def save_run_document(document: object, data_root: Path | None = None) -> dict[s
             temporary.flush()
             os.fsync(temporary.fileno())
             temporary_name = temporary.name
-        os.replace(temporary_name, destination)
+        _replace_transiently_locked_file(Path(temporary_name), destination)
     finally:
         if temporary_name is not None:
             Path(temporary_name).unlink(missing_ok=True)
@@ -66,16 +69,40 @@ def save_run_document(document: object, data_root: Path | None = None) -> dict[s
     return validated
 
 
+def _replace_transiently_locked_file(source: Path, destination: Path) -> None:
+    """Retry a bounded Windows sharing violation without weakening atomic replace."""
+    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
+
+
 def read_run_document(run_id: str, data_root: Path | None = None) -> dict[str, object]:
     """Read and validate exactly one local run document."""
     destination = _run_directory(run_id, data_root) / RUN_FILE_NAME
-    if not destination.is_file():
-        raise FileNotFoundError(run_id)
     try:
-        payload: object = json.loads(destination.read_text(encoding="utf-8"))
+        payload: object = json.loads(_read_text_with_retries(destination))
+    except FileNotFoundError as error:
+        raise FileNotFoundError(run_id) from error
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RunRecordError("The local run record is not readable JSON.") from error
     return validate_run_document(payload)
+
+
+def _read_text_with_retries(record: Path) -> str:
+    """Retry the brief Windows read gap around an atomic file replacement."""
+    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            return record.read_text(encoding="utf-8")
+        except (FileNotFoundError, PermissionError):
+            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
+    raise AssertionError("Run record read retry loop ended unexpectedly.")
 
 
 def run_library_payload(data_root: Path | None = None) -> dict[str, object]:
@@ -90,7 +117,7 @@ def run_library_payload(data_root: Path | None = None) -> dict[str, object]:
         try:
             if not record.is_file():
                 raise RunRecordError("The run directory has no run.json record.")
-            payload: object = json.loads(record.read_text(encoding="utf-8"))
+            payload: object = json.loads(_read_text_with_retries(record))
             document = validate_run_document(payload)
             runs.append(run_summary(document))
         except (

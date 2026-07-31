@@ -53,6 +53,35 @@ describe("Phase 2 Python geometry renderer", () => {
     expect(svg).toContain("translate(12.5 4.25) rotate(90)");
   });
 
+  it("renders faded prior-generation paths behind the current marker", () => {
+    const svg = renderTrackSvg(
+      fixture.compiled,
+      { x: 12.5, y: 4.25, heading: 0 },
+      [
+        {
+          candidateId: "g0000-c0001",
+          points: [
+            [0, 0],
+            [10, 4],
+          ],
+        },
+        {
+          candidateId: "g0001-c0002",
+          points: [
+            [0, 0],
+            [18, 8],
+          ],
+        },
+      ],
+    );
+
+    expect(svg.match(/class="generation-trail"/g)).toHaveLength(2);
+    expect(svg).toContain('data-trail-candidate="g0000-c0001"');
+    expect(svg).toContain('d="M 0 0 L 18 8"');
+    expect(svg).toContain('opacity="0.16"');
+    expect(svg).toContain('opacity="0.62"');
+  });
+
   it("rejects malformed geometry contracts", () => {
     expect(() =>
       parsePresetTracksResponse({ contractVersion: 2, presets: [] }),

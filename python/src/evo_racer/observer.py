@@ -9,7 +9,7 @@ import statistics
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from threading import RLock
+from threading import RLock, Thread, current_thread
 from typing import Any, Final, Literal, cast
 
 from evo_racer.evolution import (
@@ -49,6 +49,7 @@ from evo_racer.simulation import (
     EpisodeResult,
     PurePursuitBaseline,
     RandomNetworkBaseline,
+    TelemetrySnapshot,
     TrackGeometry,
     evaluate_episode,
 )
@@ -92,6 +93,11 @@ class RunSession:
         self.result: dict[str, object] | None = None
         self._best: ScoredCandidateValue | None = None
         self._lock = RLock()
+        self._advancing = False
+        self._active_candidate_id: str | None = None
+        self._active_candidate_index: int | None = None
+        self._live_telemetry: TelemetrySnapshot | None = None
+        self._pending_command: Literal["pause", "stop"] | None = None
         self._fixed_ga: FixedGA | None = None
         self._neat_population: Any | None = None
         self._neat_config: Any | None = None
@@ -113,11 +119,16 @@ class RunSession:
     def advance(self) -> None:
         """Run one complete generation without using UI or wall-clock cadence."""
         with self._lock:
-            if self.status != "running":
+            if self.status != "running" or self._advancing:
                 return
             if len(self.reports) >= self.settings.generations:
                 self._finalize("completed")
                 return
+            self._advancing = True
+            self._active_candidate_id = None
+            self._active_candidate_index = None
+            self._live_telemetry = None
+        try:
             report: GenerationReportValue
             if self.settings.algorithm == "fixed-ga":
                 fixed_report, episodes = self._advance_fixed_ga()
@@ -125,6 +136,11 @@ class RunSession:
             else:
                 neat_report, episodes = self._advance_neat()
                 report = neat_report
+        except Exception:
+            with self._lock:
+                self._clear_live_progress()
+            raise
+        with self._lock:
             self.reports.append(report)
             champion = _ranked(report.results)[0]
             self.current_episode = episodes[champion.candidate.candidate_id]
@@ -132,37 +148,74 @@ class RunSession:
                 self._best
             ):
                 self._best = champion
+            pending_command = self._pending_command
+            self._pending_command = None
+            self._clear_live_progress()
             if len(self.reports) >= self.settings.generations:
                 self._finalize("completed")
+            elif pending_command is not None:
+                self._apply_command(pending_command)
 
     def command(self, command: str) -> None:
         """Apply pause, resume, or stop only at deterministic batch boundaries."""
         with self._lock:
-            if command == "pause" and self.status == "running":
-                self.status = "paused"
-            elif command == "resume" and self.status == "paused":
-                self.status = "running"
-            elif command == "stop" and self.status in {"running", "paused"}:
-                if self.reports:
-                    self._finalize("stopped")
-                else:
-                    self.status = "stopped"
+            if self._advancing and command in {"pause", "stop"}:
+                self._pending_command = cast(Literal["pause", "stop"], command)
+                return
+            self._apply_command(command)
 
-    def snapshot(self) -> dict[str, object]:
+    def can_advance(self) -> bool:
+        """Return whether a background generation may be started."""
+        with self._lock:
+            return (
+                self.status == "running"
+                and not self._advancing
+                and len(self.reports) < self.settings.generations
+            )
+
+    def is_advancing(self) -> bool:
+        """Return whether Python is currently evaluating one generation."""
+        with self._lock:
+            return self._advancing
+
+    def snapshot(
+        self,
+        *,
+        include_live: bool = True,
+        known_generation_replay_candidate_id: str | None = None,
+    ) -> dict[str, object]:
         """Return the current versioned observer value."""
         with self._lock:
             latest = self.reports[-1] if self.reports else None
+            live_telemetry = self._live_telemetry if include_live else None
             selected = (
-                self.current_episode.telemetry[-1].to_payload()
+                live_telemetry.to_payload()
+                if live_telemetry is not None
+                else self.current_episode.telemetry[-1].to_payload()
                 if self.current_episode is not None
                 else None
             )
-            return {
+            active_candidate = (
+                {
+                    "candidateId": self._active_candidate_id,
+                    "index": self._active_candidate_index,
+                    "total": self.settings.population_size,
+                }
+                if include_live
+                and self._advancing
+                and self._active_candidate_id is not None
+                and self._active_candidate_index is not None
+                else None
+            )
+            response: dict[str, object] = {
                 "contractVersion": OBSERVATION_CONTRACT_VERSION,
                 "runId": self.run_id,
                 "status": self.status,
                 "generation": len(self.reports),
                 "totalGenerations": self.settings.generations,
+                "generationInProgress": include_live and self._advancing,
+                "activeCandidate": active_candidate,
+                "pendingCommand": self._pending_command if include_live else None,
                 "generationReport": latest.to_payload() if latest is not None else None,
                 "fitnessHistory": [
                     {
@@ -176,10 +229,27 @@ class RunSession:
                 "result": self.result,
                 "previousRuns": [],
             }
+            if include_live:
+                replay_candidate_id = (
+                    self.current_episode.telemetry[0].selected_car_id
+                    if self.current_episode is not None
+                    else None
+                )
+                if replay_candidate_id is None:
+                    response["generationReplay"] = None
+                elif replay_candidate_id != known_generation_replay_candidate_id:
+                    assert self.current_episode is not None
+                    response["generationReplay"] = {
+                        "candidateId": replay_candidate_id,
+                        "frames": [
+                            _replay_frame(frame) for frame in self.current_episode.telemetry
+                        ],
+                    }
+            return response
 
     def to_run_document(self) -> dict[str, object]:
         """Serialize the current generation boundary into the version 1 run schema."""
-        snapshot = self.snapshot()
+        snapshot = self.snapshot(include_live=False)
         track = cast(dict[str, object], self.compiled_track["track"])
         return {
             "schemaVersion": RUN_SCHEMA_VERSION,
@@ -228,6 +298,35 @@ class RunSession:
             )
         return session
 
+    def _apply_command(self, command: str) -> None:
+        """Apply one control command while the session lock is held."""
+        if command == "pause" and self.status == "running":
+            self.status = "paused"
+        elif command == "resume" and self.status == "paused":
+            self.status = "running"
+        elif command == "stop" and self.status in {"running", "paused"}:
+            if self.reports:
+                self._finalize("stopped")
+            else:
+                self.status = "stopped"
+
+    def _clear_live_progress(self) -> None:
+        """Clear transient in-generation state while the session lock is held."""
+        self._advancing = False
+        self._active_candidate_id = None
+        self._active_candidate_index = None
+        self._live_telemetry = None
+
+    def _begin_live_candidate(self, candidate_id: str, index: int) -> None:
+        with self._lock:
+            self._active_candidate_id = candidate_id
+            self._active_candidate_index = index
+            self._live_telemetry = None
+
+    def _publish_live_telemetry(self, snapshot: TelemetrySnapshot) -> None:
+        with self._lock:
+            self._live_telemetry = snapshot
+
     def _advance_fixed_ga(
         self,
     ) -> tuple[GenerationReport, dict[str, EpisodeResult]]:
@@ -235,14 +334,19 @@ class RunSession:
         if ga is None:
             raise RuntimeError("Fixed GA session is not initialized.")
         episodes: dict[str, EpisodeResult] = {}
+        candidate_index = 0
 
         def evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
+            nonlocal candidate_index
+            candidate_index += 1
+            self._begin_live_candidate(candidate.candidate_id, candidate_index)
             episode = evaluate_episode(
                 self.geometry,
                 candidate.controller,
                 candidate.setup,
                 max_seconds=self.settings.episode_seconds,
                 selected_car_id=candidate.candidate_id,
+                telemetry_callback=self._publish_live_telemetry,
             )
             episodes[candidate.candidate_id] = episode
             return episode_fitness(
@@ -271,7 +375,10 @@ class RunSession:
         ) -> None:
             generation = int(population.generation)
             scored: list[NEATScoredCandidate] = []
-            for genome_key, raw_value in sorted(genomes):
+            for candidate_index, (genome_key, raw_value) in enumerate(
+                sorted(genomes),
+                start=1,
+            ):
                 if not isinstance(raw_value, EvoRacerGenome):
                     raise TypeError("NEAT population contains an unsupported genome.")
                 candidate = NEATCandidate(
@@ -280,6 +387,7 @@ class RunSession:
                     network=compile_neat_network(raw_value, active_config),
                     vehicle=raw_value.vehicle_genome,
                 )
+                self._begin_live_candidate(candidate.candidate_id, candidate_index)
                 before_vehicle = raw_value.vehicle_genome
                 episode = evaluate_episode(
                     self.geometry,
@@ -287,6 +395,7 @@ class RunSession:
                     candidate.setup,
                     max_seconds=self.settings.episode_seconds,
                     selected_car_id=candidate.candidate_id,
+                    telemetry_callback=self._publish_live_telemetry,
                 )
                 if raw_value.vehicle_genome != before_vehicle:
                     raise RuntimeError("Vehicle genes changed during active evaluation.")
@@ -412,6 +521,8 @@ class RunManager:
 
     def __init__(self, data_root: Path | None = None) -> None:
         self._sessions: dict[str, RunSession] = {}
+        self._workers: dict[str, Thread] = {}
+        self._worker_errors: dict[str, str] = {}
         self._data_root = data_root
         self._lock = RLock()
 
@@ -450,9 +561,49 @@ class RunManager:
         session = self._session_from_payload(payload)
         if isinstance(session, dict):
             return session
-        session.advance()
-        self._persist(session)
-        return self._response(session)
+        assert isinstance(payload, dict)
+        known_replay = payload.get("knownGenerationReplayCandidateId")
+        if known_replay is not None and (not isinstance(known_replay, str) or not known_replay):
+            return _run_error(
+                "KNOWN_REPLAY_ID_INVALID",
+                "knownGenerationReplayCandidateId",
+                "Known generation replay candidate id must be a non-empty string.",
+            )
+        with self._lock:
+            worker_error = self._worker_errors.get(session.run_id)
+            worker = self._workers.get(session.run_id)
+            if (
+                worker_error is None
+                and (worker is None or not worker.is_alive())
+                and session.can_advance()
+            ):
+                worker = Thread(
+                    target=self._advance_and_persist,
+                    args=(session,),
+                    name=f"evo-racer-generation-{session.run_id}",
+                    daemon=True,
+                )
+                self._workers[session.run_id] = worker
+                worker.start()
+        if worker_error is not None:
+            return _run_error(
+                "RUN_ADVANCE_FAILED",
+                "runId",
+                "The local core could not advance this generation.",
+            )
+        snapshot = session.snapshot(known_generation_replay_candidate_id=known_replay)
+        if snapshot["result"] is not None and worker is not None and worker.is_alive():
+            worker.join()
+            with self._lock:
+                worker_error = self._worker_errors.get(session.run_id)
+            if worker_error is not None:
+                return _run_error(
+                    "RUN_ADVANCE_FAILED",
+                    "runId",
+                    "The local core could not persist this generation.",
+                )
+            snapshot = session.snapshot(known_generation_replay_candidate_id=known_replay)
+        return self._response(session, snapshot=snapshot)
 
     def command(self, payload: object) -> dict[str, object]:
         session = self._session_from_payload(payload)
@@ -467,7 +618,8 @@ class RunManager:
                 "Run command must be pause, resume, or stop.",
             )
         session.command(cast(str, command))
-        self._persist(session)
+        if not session.is_advancing():
+            self._persist(session)
         return self._response(session)
 
     def resume(self, payload: object) -> dict[str, object]:
@@ -498,7 +650,7 @@ class RunManager:
             )
         session.command("resume")
         self._persist(session)
-        return self._response(session)
+        return self._response(session, include_setup=True)
 
     def library(self) -> dict[str, object]:
         """Return durable local run summaries and isolated corrupt records."""
@@ -512,6 +664,7 @@ class RunManager:
         """Delete one durable run and discard any matching in-memory session."""
         with self._lock:
             self._sessions.pop(run_id, None)
+            self._worker_errors.pop(run_id, None)
         try:
             return delete_run(run_id, self._data_root)
         except RunRecordError:
@@ -544,33 +697,56 @@ class RunManager:
     def _persist(self, session: RunSession) -> None:
         save_run_document(session.to_run_document(), self._data_root)
 
-    def _response(self, session: RunSession) -> dict[str, object]:
-        snapshot = session.snapshot()
-        library = self.library()
-        stored_runs = cast(list[dict[str, object]], library["runs"])
-        previous = [
-            {
-                "runId": run["runId"],
-                "algorithm": run["algorithm"],
-                "trackId": run["trackId"],
-                "seed": run["seed"],
-                "generationsCompleted": run["generation"],
-                "championFitness": run["championFitness"],
-                "championProgress": run["championProgress"],
-            }
-            for run in stored_runs
-            if run["runId"] != session.run_id
-            and isinstance(run["championFitness"], float)
-            and isinstance(run["championProgress"], float)
-        ]
-        snapshot["previousRuns"] = previous
-        return {
+    def _advance_and_persist(self, session: RunSession) -> None:
+        try:
+            session.advance()
+            with self._lock:
+                if self._sessions.get(session.run_id) is not session:
+                    return
+                self._persist(session)
+        except Exception as error:
+            with self._lock:
+                self._worker_errors[session.run_id] = type(error).__name__
+        finally:
+            with self._lock:
+                if self._workers.get(session.run_id) is current_thread():
+                    self._workers.pop(session.run_id, None)
+
+    def _response(
+        self,
+        session: RunSession,
+        *,
+        include_setup: bool = False,
+        snapshot: dict[str, object] | None = None,
+    ) -> dict[str, object]:
+        snapshot = session.snapshot() if snapshot is None else snapshot
+        if snapshot["result"] is not None:
+            library = self.library()
+            stored_runs = cast(list[dict[str, object]], library["runs"])
+            snapshot["previousRuns"] = [
+                {
+                    "runId": run["runId"],
+                    "algorithm": run["algorithm"],
+                    "trackId": run["trackId"],
+                    "seed": run["seed"],
+                    "generationsCompleted": run["generation"],
+                    "championFitness": run["championFitness"],
+                    "championProgress": run["championProgress"],
+                }
+                for run in stored_runs
+                if run["runId"] != session.run_id
+                and isinstance(run["championFitness"], float)
+                and isinstance(run["championProgress"], float)
+            ]
+        response = {
             "contractVersion": OBSERVATION_CONTRACT_VERSION,
             "valid": True,
             "errors": [],
             "snapshot": snapshot,
-            "setup": _setup_payload(session),
         }
+        if include_setup:
+            response["setup"] = _setup_payload(session)
+        return response
 
 
 def parse_observation_snapshot(payload: object) -> dict[str, object]:
@@ -680,7 +856,21 @@ def _setup_payload(session: RunSession) -> dict[str, object]:
 
 
 def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
-    return {key: value for key, value in snapshot.items() if key not in {"status", "previousRuns"}}
+    transient = {
+        "status",
+        "previousRuns",
+        "generationInProgress",
+        "activeCandidate",
+        "pendingCommand",
+        "generationReplay",
+    }
+    projection = {key: value for key, value in snapshot.items() if key not in transient}
+    selected = projection.get("selectedCar")
+    if isinstance(selected, dict):
+        projection["selectedCar"] = {
+            key: value for key, value in selected.items() if key not in {"x", "y", "heading"}
+        }
+    return projection
 
 
 def _run_id_from_payload(payload: object) -> str | dict[str, object]:

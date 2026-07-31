@@ -30,6 +30,76 @@ function Wait-ForHealth {
     throw "EvoRacer health endpoint did not become ready within 30 seconds."
 }
 
+$script:SawLiveTelemetry = $false
+$script:SawGenerationReplay = $false
+
+function Wait-ForRunState {
+    param(
+        [Parameter(Mandatory)][string] $RunId,
+        [Parameter(Mandatory)][int] $TargetGeneration,
+        [string] $ExpectedStatus = ""
+    )
+
+    $deadline = [DateTime]::UtcNow.AddSeconds(180)
+    do {
+        $observed = Invoke-RestMethod `
+            -Uri "$appOrigin/v1/runs/observe" `
+            -Method Post `
+            -ContentType "application/json" `
+            -Body (@{ contractVersion = 1; runId = $RunId } | ConvertTo-Json) `
+            -TimeoutSec 10
+        if (-not $observed.valid) {
+            throw "The packaged app rejected a run observation."
+        }
+
+        $selectedCar = $observed.snapshot.selectedCar
+        $positionFields = if ($null -eq $selectedCar) {
+            @()
+        }
+        else {
+            @($selectedCar.PSObject.Properties.Name)
+        }
+        if ($observed.snapshot.generationInProgress -eq $true -and
+            $null -ne $observed.snapshot.activeCandidate -and
+            $positionFields -contains "x" -and
+            $positionFields -contains "y" -and
+            $positionFields -contains "heading") {
+            $script:SawLiveTelemetry = $true
+        }
+
+        $generationReplay = $observed.snapshot.generationReplay
+        $replayFrames = if ($null -eq $generationReplay) {
+            @()
+        }
+        else {
+            @($generationReplay.frames)
+        }
+        $replayFields = if ($replayFrames.Count -eq 0) {
+            @()
+        }
+        else {
+            @($replayFrames[0].PSObject.Properties.Name)
+        }
+        if ($replayFrames.Count -gt 1 -and
+            $replayFields -contains "x" -and
+            $replayFields -contains "y" -and
+            $replayFields -contains "heading" -and
+            $replayFields -contains "simulatedSeconds") {
+            $script:SawGenerationReplay = $true
+        }
+
+        $generationReached = $observed.snapshot.generation -ge $TargetGeneration
+        $statusReached = [string]::IsNullOrEmpty($ExpectedStatus) -or
+            $observed.snapshot.status -eq $ExpectedStatus
+        if ($generationReached -and $statusReached) {
+            return $observed
+        }
+        Start-Sleep -Milliseconds 200
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    throw "The packaged run did not reach generation $TargetGeneration with status '$ExpectedStatus'."
+}
+
 function Start-AcceptanceApp {
     param(
         [Parameter(Mandatory)][string] $Executable,
@@ -149,7 +219,7 @@ try {
         settings = @{
             algorithm = "fixed-ga"
             populationSize = 10
-            generations = 2
+            generations = 3
             episodeSeconds = 15
             seed = 20260729
         }
@@ -165,14 +235,35 @@ try {
     }
     $runId = [string] $started.snapshot.runId
 
-    $observed = Invoke-RestMethod `
-        -Uri "$appOrigin/v1/runs/observe" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body (@{ contractVersion = 1; runId = $runId } | ConvertTo-Json) `
-        -TimeoutSec 120
+    $observed = Wait-ForRunState -RunId $runId -TargetGeneration 1
     if (-not $observed.valid -or $observed.snapshot.generation -ne 1) {
         throw "The packaged app did not save the first complete generation."
+    }
+    if (-not $script:SawLiveTelemetry) {
+        throw "The packaged app did not expose live candidate position telemetry."
+    }
+    if (-not $script:SawGenerationReplay) {
+        throw "The packaged app did not expose a Python generation replay for smooth presentation."
+    }
+    $pauseRequested = Invoke-RestMethod `
+        -Uri "$appOrigin/v1/runs/command" `
+        -Method Post `
+        -ContentType "application/json" `
+        -Body (@{
+            contractVersion = 1
+            runId = $runId
+            command = "pause"
+        } | ConvertTo-Json) `
+        -TimeoutSec 30
+    if (-not $pauseRequested.valid) {
+        throw "The packaged app rejected the pause command."
+    }
+    $paused = Wait-ForRunState `
+        -RunId $runId `
+        -TargetGeneration 2 `
+        -ExpectedStatus "paused"
+    if (-not $paused.valid -or $paused.snapshot.status -ne "paused") {
+        throw "The packaged app did not persist the requested generation-boundary pause."
     }
     Assert-LoopbackOnly -AppProcess $firstProcess
     Stop-AcceptanceApp -AppProcess $firstProcess
@@ -194,12 +285,10 @@ try {
         throw "The packaged app could not resume the saved run."
     }
 
-    $completed = Invoke-RestMethod `
-        -Uri "$appOrigin/v1/runs/observe" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body (@{ contractVersion = 1; runId = $runId } | ConvertTo-Json) `
-        -TimeoutSec 120
+    $completed = Wait-ForRunState `
+        -RunId $runId `
+        -TargetGeneration 3 `
+        -ExpectedStatus "completed"
     if (-not $completed.valid -or
         $completed.snapshot.status -ne "completed" -or
         $completed.snapshot.result.replay.frames.Count -eq 0) {

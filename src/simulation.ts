@@ -1,6 +1,9 @@
 export interface SelectedCarTelemetryV1 {
   selectedCarId: string;
   simulatedSeconds: number;
+  x?: number;
+  y?: number;
+  heading?: number;
   speed: number;
   lateralSpeed: number;
   steering: number;
@@ -68,6 +71,11 @@ export interface ReplayFrameV1 {
   throttle: number;
   brake: number;
   progress: number;
+}
+
+export interface GenerationReplayV1 {
+  candidateId: string;
+  frames: ReplayFrameV1[];
 }
 
 export interface RunResultV1 {
@@ -183,6 +191,14 @@ export interface ObservationSnapshotV1 {
   status: RunStatusV1;
   generation: number;
   totalGenerations: number;
+  generationInProgress?: boolean;
+  activeCandidate?: {
+    candidateId: string;
+    index: number;
+    total: number;
+  } | null;
+  pendingCommand?: "pause" | "stop" | null;
+  generationReplay?: GenerationReplayV1 | null;
   generationReport: GenerationReportV1 | null;
   fitnessHistory: FitnessPointV1[];
   selectedCar: SelectedCarTelemetryV1 | null;
@@ -225,10 +241,24 @@ export function parseSelectedCarTelemetry(
   if (!Array.isArray(sensors) || sensors.length !== 7) {
     throw new Error("Selected-car telemetry requires seven sensor distances.");
   }
+  const positionValues = [record.x, record.y, record.heading];
+  const hasPosition = positionValues.every((item) => item !== undefined);
+  if (!hasPosition && positionValues.some((item) => item !== undefined)) {
+    throw new Error(
+      "Selected-car telemetry position requires x, y, and heading together.",
+    );
+  }
 
   return {
     selectedCarId: requiredString(record.selectedCarId, "selectedCarId"),
     simulatedSeconds: finiteNumber(record.simulatedSeconds, "simulatedSeconds"),
+    ...(hasPosition
+      ? {
+          x: finiteNumber(record.x, "x"),
+          y: finiteNumber(record.y, "y"),
+          heading: finiteNumber(record.heading, "heading"),
+        }
+      : {}),
     speed: finiteNumber(record.speed, "speed"),
     lateralSpeed: finiteNumber(record.lateralSpeed, "lateralSpeed"),
     steering: boundedNumber(record.steering, "steering", -1, 1),
@@ -445,12 +475,70 @@ export function parseObservationSnapshot(
     snapshot.selectedCar === null
       ? null
       : parseSelectedCarTelemetry(snapshot.selectedCar);
+  const generationInProgress =
+    snapshot.generationInProgress === undefined
+      ? undefined
+      : requiredBoolean(snapshot.generationInProgress, "generationInProgress");
+  let activeCandidate: ObservationSnapshotV1["activeCandidate"] | undefined;
+  if (snapshot.activeCandidate !== undefined) {
+    if (snapshot.activeCandidate === null) {
+      activeCandidate = null;
+    } else {
+      const active = asRecord(snapshot.activeCandidate, "activeCandidate");
+      const index = integerNumber(active.index, "activeCandidate.index");
+      const total = integerNumber(active.total, "activeCandidate.total");
+      if (index < 1 || total < 1 || index > total) {
+        throw new Error("Active candidate counters are invalid.");
+      }
+      activeCandidate = {
+        candidateId: requiredString(
+          active.candidateId,
+          "activeCandidate.candidateId",
+        ),
+        index,
+        total,
+      };
+    }
+  }
+  let pendingCommand: ObservationSnapshotV1["pendingCommand"] | undefined;
+  if (snapshot.pendingCommand !== undefined) {
+    if (
+      snapshot.pendingCommand !== null &&
+      snapshot.pendingCommand !== "pause" &&
+      snapshot.pendingCommand !== "stop"
+    ) {
+      throw new Error("Observation snapshot has an unknown pending command.");
+    }
+    pendingCommand = snapshot.pendingCommand;
+  }
+  let generationReplay: ObservationSnapshotV1["generationReplay"] | undefined;
+  if (snapshot.generationReplay !== undefined) {
+    if (snapshot.generationReplay === null) {
+      generationReplay = null;
+    } else {
+      const replay = asRecord(snapshot.generationReplay, "generationReplay");
+      if (!Array.isArray(replay.frames)) {
+        throw new Error("Generation replay frames must be an array.");
+      }
+      generationReplay = {
+        candidateId: requiredString(
+          replay.candidateId,
+          "generationReplay.candidateId",
+        ),
+        frames: replay.frames.map(parseReplayFrame),
+      };
+    }
+  }
   return {
     contractVersion: 1,
     runId: requiredString(snapshot.runId, "runId"),
     status,
     generation,
     totalGenerations,
+    ...(generationInProgress === undefined ? {} : { generationInProgress }),
+    ...(activeCandidate === undefined ? {} : { activeCandidate }),
+    ...(pendingCommand === undefined ? {} : { pendingCommand }),
+    ...(generationReplay === undefined ? {} : { generationReplay }),
     generationReport,
     fitnessHistory: parseFitnessHistory(snapshot.fitnessHistory),
     selectedCar,

@@ -1,6 +1,9 @@
 {
   "selectedCarId": "phase4-fixture",
   "simulatedSeconds": 3.5,
+  "x": 12.75,
+  "y": -4.5,
+  "heading": 1.25,
   "speed": 12.25,
   "lateralSpeed": -0.75,
   "steering": 0.3,

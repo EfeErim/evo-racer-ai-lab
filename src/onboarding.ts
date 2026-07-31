@@ -76,36 +76,36 @@ export const TRAINING_PRESETS = [
   {
     id: "quick",
     name: "Quick start",
-    description: "A short orientation run with a small population.",
+    description: "10 cars × 8 generations × 15 s — fastest visual demo.",
     settings: {
       algorithm: "fixed-ga",
-      populationSize: 24,
-      generations: 12,
-      episodeSeconds: 45,
+      populationSize: 10,
+      generations: 8,
+      episodeSeconds: 15,
       seed: 42,
     },
   },
   {
     id: "balanced",
     name: "Balanced",
-    description: "A practical default for learning the workflow.",
+    description: "24 cars × 20 generations × 30 s — longer learning run.",
     settings: {
       algorithm: "fixed-ga",
-      populationSize: 48,
-      generations: 30,
-      episodeSeconds: 90,
+      populationSize: 24,
+      generations: 20,
+      episodeSeconds: 30,
       seed: 42,
     },
   },
   {
     id: "thorough",
     name: "Thorough",
-    description: "More candidates and generations for a longer experiment.",
+    description: "48 cars × 40 generations × 60 s — extended NEAT experiment.",
     settings: {
       algorithm: "neat",
-      populationSize: 96,
-      generations: 80,
-      episodeSeconds: 150,
+      populationSize: 48,
+      generations: 40,
+      episodeSeconds: 60,
       seed: 42,
     },
   },
@@ -118,6 +118,10 @@ export const TRAINING_PRESETS = [
 
 export type TrainingPresetId = (typeof TRAINING_PRESETS)[number]["id"];
 export type NumericSetting = Exclude<keyof TrainingSettings, "algorithm">;
+
+export function maximumCandidateEpisodes(settings: TrainingSettings): number {
+  return settings.populationSize * settings.generations;
+}
 
 export type AppAction =
   | { type: "begin-setup" }
@@ -135,18 +139,13 @@ export type AppAction =
   | { type: "new-setup" };
 
 export function createInitialState(): AppState {
-  const balanced = TRAINING_PRESETS.find((preset) => preset.id === "balanced");
-  if (balanced === undefined) {
-    throw new Error("Balanced training preset is missing.");
-  }
-
   return {
     route: "welcome",
     draft: {
       contractVersion: 1,
-      trackPreset: null,
+      trackPreset: TRACK_PRESETS[0].id,
       track: null,
-      settings: { ...balanced.settings },
+      settings: { ...TRAINING_PRESETS[0].settings },
     },
     validation: { status: "not-checked" },
     sessionStarted: false,
