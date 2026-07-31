@@ -2,12 +2,12 @@
 
 ## Current position
 
-- Current phase: `Post-release v1.1.0 personal offline hardening`
-- Status: `release candidate verified locally; publication pending`
-- Active milestone: `Publish the verified v1.1.0 portable ZIP`
+- Current phase: `Post-release v1.1.0 maintenance`
+- Status: `v1.1.0 published and publicly verified`
+- Active milestone: `None`
 - Last verified: `2026-07-31`
 
-## Unreleased correction after v1.0.0
+## v1.1.0 personal offline hardening
 
 - Live training now renders the currently evaluated Python candidate moving on
   Python-compiled track geometry from versioned `x`, `y`, and `heading`
@@ -62,6 +62,11 @@
   `EvoRacer.cmd`. Plain Python modules and web assets live under `app`, the
   official checksum-pinned Python 3.13 embeddable runtime lives under `runtime`,
   and the bundle contains no frozen `EvoRacer.exe`.
+- Release commit `bd610fb69aee7b5a7796b588306622b80b538723` and annotated
+  tag `v1.1.0` are pushed. The latest full GitHub Release contains the verified
+  ZIP and checksum assets, and `npm run test:phase11` reproduced SHA-256
+  `8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1`
+  from a fresh public download.
 - Browser observation polling is now capped at `4 Hz` instead of `10 Hz`, a
   `60%` reduction in scheduled full-interface refreshes. Python simulation and
   timestamp-based `requestAnimationFrame` motion remain independent of polling.
@@ -688,15 +693,39 @@ Verification evidence recorded on `2026-07-29`:
   `2462e678368f3e142d801d8c29c327602484d5e24c0bd3441efb0a317f1cf732`.
 - `git diff --cached --check` passed for the Phase 11 release commit.
 
+### M12 - Personal Offline v1.1.0
+
+Status: `complete`
+
+Delivered:
+
+- [x] Durable bounded evolution trails restored from local checkpoints.
+- [x] Same-track, same-budget previous-run comparison.
+- [x] Real Chromium start, queued-stop, and Results acceptance flow.
+- [x] Complete Thorough NEAT preset verification.
+- [x] Transparent portable Windows package without a frozen `EvoRacer.exe`.
+- [x] Latest full GitHub Release with ZIP and SHA-256 assets.
+
+Verification evidence recorded on `2026-07-31`:
+
+- Release commit `bd610fb69aee7b5a7796b588306622b80b538723` was pushed to
+  `main`; annotated tag `v1.1.0` resolves to that commit locally and publicly.
+- [GitHub Release `v1.1.0`](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.1.0)
+  is the latest full release. Its ZIP is `11,745,352` bytes and its checksum
+  asset is `92` bytes.
+- `npm run test:phase11` downloaded the public assets and reproduced ZIP
+  SHA-256
+  `8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1`.
+
 ## Blockers
 
 - None.
 
 ## Next action
 
-All eleven planned phases are complete. Future work should begin under a new
-version and phase definition while preserving the immutable `v1.0.0` tag,
-published assets, saved evidence, and product claim boundary.
+All twelve planned milestones are complete. Future work should begin under a
+new version and milestone definition while preserving the immutable `v1.0.0`
+and `v1.1.0` tags, published assets, saved evidence, and product claim boundary.
 
 ## State update rule
 

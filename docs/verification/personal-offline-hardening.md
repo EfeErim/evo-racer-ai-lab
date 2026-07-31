@@ -78,3 +78,18 @@ The packaging mechanism follows the official Python
 [Windows embeddable distribution guidance](https://docs.python.org/3.13/using/windows.html#the-embeddable-package).
 The browser test follows Playwright's official
 [installation and test-runner guidance](https://playwright.dev/docs/intro).
+
+## Public release
+
+Release commit `bd610fb69aee7b5a7796b588306622b80b538723` and annotated tag
+`v1.1.0` are pushed. The
+[v1.1.0 GitHub Release](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.1.0)
+is the latest full release and contains the verified ZIP plus its separate
+SHA-256 asset.
+
+`npm run test:phase11` verified public tag identity, release state, asset names
+and sizes, and a fresh-download SHA-256 match:
+
+```text
+8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1
+```
