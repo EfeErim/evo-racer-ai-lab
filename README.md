@@ -13,7 +13,7 @@ Download the current stable
 [Windows x64 release](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip)
 and its
 [SHA-256 checksum](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip.sha256).
-Extract the full archive and open `EvoRacer\EvoRacer.exe`; Node.js and Python
+Extract the full archive and open `EvoRacer\EvoRacer.cmd`; Node.js and Python
 are not required on the target computer. The
 [release page](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest)
 contains the versioned notes and both assets.
@@ -141,8 +141,12 @@ TypeScript.
 Phase 3 extends the same `TrackV1` path without moving domain rules into the
 browser:
 
+- Track Builder separates piece editing, deterministic generation, and the
+  local library into focused tabs with a large Python-compiled preview.
 - The sequential TypeScript editor changes only ordered canonical pieces and
-  provides delete, undo, redo, reset, and Python-assisted closure actions.
+  provides reorder, duplicate, delete, undo, redo, reset, and Python-assisted
+  closure actions. Each changed draft must receive a fresh valid Python compile
+  response before **Use this track** becomes available.
 - The Python generator accepts seed, Short/Medium/Long length, and
   Easy/Technical/Hard difficulty. Its versioned bounded search evaluates at
   most 200 candidates and returns deterministic canonical JSON.
@@ -150,7 +154,8 @@ browser:
   Python validator and compiler before the UI can select them.
 - Version 1 track JSON can be imported and exported locally. Saved tracks use
   atomic files under `%LOCALAPPDATA%\EvoRacerAILab\tracks`; unreadable records
-  are isolated from the valid library.
+  are isolated from the valid library. Generated and imported previews require
+  an explicit user selection before they replace the experiment track.
 
 The shared Phase 3 TrackV1 document under `contracts/` is checked from both
 runtimes.
@@ -242,7 +247,8 @@ session:
 - Replay frames contain Python-recorded position, heading, controls, progress,
   controller parameters, and the fixed vehicle setup. TypeScript only places
   those frames on Python-compiled track geometry.
-- Completed runs can be compared from the durable local run library.
+- Completed runs are compared only when track identity, population, generation
+  count, completed generations, and episode duration match.
 
 The shared Phase 7 observation fixture under `contracts/` is parsed by both
 Python and TypeScript.
@@ -263,26 +269,30 @@ Phase 8 saves every run at a complete generation boundary under
   allowing another generation.
 - Corrupt or changed records are isolated without hiding valid tracks or runs.
   Valid runs can be exported as versioned JSON or deleted individually.
+- Each checkpoint retains at most eight sampled generation-champion paths so
+  the Evolution trail survives restart without storing full replay payloads.
 
 The shared Phase 8 run document under `contracts/` is validated by Python and
 parsed structurally by TypeScript.
 
 ## Windows offline package
 
-Phase 9 ships the production browser UI and Python core as one self-contained
-Windows x64 application:
+Phase 9 ships the production browser UI and Python core as a transparent,
+portable Windows x64 folder:
 
-- `EvoRacer.exe` binds only to `127.0.0.1:8765`, serves the built Vite assets,
-  and opens the user's default browser. The browser and Python contracts remain
-  on the same loopback origin.
+- `EvoRacer.cmd` starts the bundled official Python 3.13 embeddable runtime.
+  Plain Python modules live under `app\evo_racer` and built frontend assets live
+  under `app\web`; EvoRacer is not frozen into an application EXE.
+- The local launcher binds only to `127.0.0.1:8765` and opens the user's default
+  browser. Browser and Python contracts remain on the same loopback origin.
 - The application includes an explicit Exit action. It confirms the request,
   finishes the current HTTP response, shuts down the local server, and closes
   the packaged process.
-- PyInstaller `onedir` bundles Python 3.13, neat-python, the NEAT configuration,
+- The portable folder bundles Python 3.13, neat-python, the NEAT configuration,
   and every production frontend asset. Node.js and a system Python installation
   are not required at runtime.
 - The release includes the README, third-party notices, complete Python and
-  PyInstaller license texts, and a separate SHA-256 checksum.
+  neat-python license texts, and a separate SHA-256 checksum.
 
 Build and run the Windows release gate:
 
@@ -298,7 +308,7 @@ release\EvoRacer-Windows-x64.zip
 release\EvoRacer-Windows-x64.zip.sha256
 ```
 
-Users extract the ZIP and run `EvoRacer\EvoRacer.exe`. All application data
+Users extract the ZIP and open `EvoRacer\EvoRacer.cmd`. All application data
 continues to live under `%LOCALAPPDATA%\EvoRacerAILab`.
 
 ## Hardening and evidence
@@ -308,6 +318,9 @@ presets and both algorithms. The matrix is an execution/regression smoke test,
 not a claim that one algorithm learns better. The
 [algorithm comparison](docs/algorithm-comparison.md) separates those smoke
 results from the controlled learning evidence and states the remaining limits.
+The focused `npm run test:e2e` gate exercises the recommended browser flow, and
+`npm run test:thorough` completes the heaviest bundled preset when extended
+acceptance evidence is required.
 
 Architecture decisions, milestone evidence, and public claim boundaries are
 saved in:
@@ -335,7 +348,8 @@ SHA-256 without altering the application or its local-only runtime boundary.
 
 ```text
 contracts/                   Shared versioned TypeScript/Python fixtures
-packaging/                   PyInstaller spec and third-party notices
+packaging/                   Third-party notices for the portable runtime
+e2e/                         Focused Playwright offline user-flow tests
 src/                         TypeScript browser UI state, views, and IPC client
 tests/                       TypeScript tests
 python/src/evo_racer/        Authoritative Python application/simulation core

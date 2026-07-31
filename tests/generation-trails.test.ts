@@ -99,4 +99,22 @@ describe("previous generation champion trails", () => {
     );
     expect(otherRun.map((trail) => trail.runId)).toEqual(["run-b"]);
   });
+
+  it("restores the Python-persisted trail instead of rebuilding browser history", () => {
+    const persisted = [
+      {
+        runId: "run-restored",
+        candidateId: "g0000-c0004",
+        generation: 0,
+        points: [
+          [1, 2],
+          [3, 4],
+        ] as [number, number][],
+      },
+    ];
+    const restored = snapshot("run-restored", undefined);
+    restored.generationTrails = persisted;
+
+    expect(updateGenerationTrails([], restored)).toEqual(persisted);
+  });
 });

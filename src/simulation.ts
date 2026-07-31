@@ -78,6 +78,13 @@ export interface GenerationReplayV1 {
   frames: ReplayFrameV1[];
 }
 
+export interface GenerationTrailV1 {
+  runId: string;
+  candidateId: string;
+  generation: number;
+  points: (readonly [number, number])[];
+}
+
 export interface RunResultV1 {
   metadata: {
     contractVersion: 1;
@@ -131,6 +138,8 @@ export interface PreviousRunSummaryV1 {
   trackId: string;
   seed: number;
   generationsCompleted: number;
+  populationSize: number;
+  episodeSeconds: number;
   championFitness: number;
   championProgress: number;
 }
@@ -199,6 +208,7 @@ export interface ObservationSnapshotV1 {
   } | null;
   pendingCommand?: "pause" | "stop" | null;
   generationReplay?: GenerationReplayV1 | null;
+  generationTrails?: GenerationTrailV1[];
   generationReport: GenerationReportV1 | null;
   fitnessHistory: FitnessPointV1[];
   selectedCar: SelectedCarTelemetryV1 | null;
@@ -529,6 +539,10 @@ export function parseObservationSnapshot(
       };
     }
   }
+  const generationTrails =
+    snapshot.generationTrails === undefined
+      ? undefined
+      : parseGenerationTrails(snapshot.generationTrails);
   return {
     contractVersion: 1,
     runId: requiredString(snapshot.runId, "runId"),
@@ -539,6 +553,7 @@ export function parseObservationSnapshot(
     ...(activeCandidate === undefined ? {} : { activeCandidate }),
     ...(pendingCommand === undefined ? {} : { pendingCommand }),
     ...(generationReplay === undefined ? {} : { generationReplay }),
+    ...(generationTrails === undefined ? {} : { generationTrails }),
     generationReport,
     fitnessHistory: parseFitnessHistory(snapshot.fitnessHistory),
     selectedCar,
@@ -686,6 +701,35 @@ function parseRunResult(value: unknown): RunResultV1 {
   };
 }
 
+function parseGenerationTrails(value: unknown): GenerationTrailV1[] {
+  if (!Array.isArray(value) || value.length > 8) {
+    throw new Error("generationTrails must contain at most eight paths.");
+  }
+  return value.map((item, index) => {
+    const trail = asRecord(item, `generationTrails[${String(index)}]`);
+    if (!Array.isArray(trail.points) || trail.points.length > 64) {
+      throw new Error("Generation trail points are invalid.");
+    }
+    return {
+      runId: requiredString(trail.runId, "generationTrail.runId"),
+      candidateId: requiredString(
+        trail.candidateId,
+        "generationTrail.candidateId",
+      ),
+      generation: integerNumber(trail.generation, "generationTrail.generation"),
+      points: trail.points.map((point) => {
+        if (!Array.isArray(point) || point.length !== 2) {
+          throw new Error("Generation trail point must contain x and y.");
+        }
+        return [
+          finiteNumber(point[0], "generationTrail.x"),
+          finiteNumber(point[1], "generationTrail.y"),
+        ];
+      }),
+    };
+  });
+}
+
 function parseReplayFrame(value: unknown): ReplayFrameV1 {
   const frame = asRecord(value, "Replay frame");
   return {
@@ -717,6 +761,8 @@ function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
         run.generationsCompleted,
         "generationsCompleted",
       ),
+      populationSize: integerNumber(run.populationSize, "populationSize"),
+      episodeSeconds: finiteNumber(run.episodeSeconds, "episodeSeconds"),
       championFitness: finiteNumber(run.championFitness, "championFitness"),
       championProgress: boundedNumber(
         run.championProgress,

@@ -1,20 +1,25 @@
-import type { GenerationReplayV1, ObservationSnapshotV1 } from "./simulation";
+import type {
+  GenerationReplayV1,
+  GenerationTrailV1,
+  ObservationSnapshotV1,
+} from "./simulation";
 import type { TrackPoint } from "./track-renderer";
 
 export const MAX_RECORDED_GENERATION_TRAILS = 8;
 export const MAX_VISIBLE_PRIOR_TRAILS = 7;
 export const MAX_TRAIL_POINTS = 64;
 
-export interface GenerationTrail {
-  runId: string;
-  candidateId: string;
-  points: TrackPoint[];
-}
+export type GenerationTrail = GenerationTrailV1;
 
 export function updateGenerationTrails(
   previous: readonly GenerationTrail[],
   snapshot: ObservationSnapshotV1,
 ): GenerationTrail[] {
+  if (snapshot.generationTrails !== undefined) {
+    return snapshot.generationTrails
+      .filter((trail) => trail.runId === snapshot.runId)
+      .slice(-MAX_RECORDED_GENERATION_TRAILS);
+  }
   const sameRun = previous.filter((trail) => trail.runId === snapshot.runId);
   const replay = availableReplay(snapshot);
   if (
@@ -29,6 +34,7 @@ export function updateGenerationTrails(
     {
       runId: snapshot.runId,
       candidateId: replay.candidateId,
+      generation: snapshot.generation - 1,
       points: sampleReplayPoints(replay),
     },
   ].slice(-MAX_RECORDED_GENERATION_TRAILS);

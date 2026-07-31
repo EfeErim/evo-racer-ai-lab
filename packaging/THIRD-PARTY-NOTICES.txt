@@ -5,12 +5,10 @@ This distribution includes:
 
 - Python 3.13, licensed under the Python Software Foundation License.
 - neat-python 2.0.0, licensed under the BSD 3-Clause License reproduced below.
-- A PyInstaller 6.21.0 bootloader. PyInstaller's GPL license includes a special
-  exception permitting distribution of bundled applications. The complete
-  PyInstaller license is included with the application.
 
-The complete Python and PyInstaller license texts are copied into the
-distribution's licenses directory by the release build.
+The complete Python and neat-python license texts are copied into the
+distribution's licenses directory by the release build. Application Python
+modules and web assets remain plain files outside executable archives.
 
 neat-python 2.0.0
 -----------------

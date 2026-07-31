@@ -4,7 +4,9 @@ import {
   addEditorPiece,
   createEditorState,
   deleteEditorPiece,
+  duplicateEditorPiece,
   editorTrack,
+  moveEditorPiece,
   parseTrackDocument,
   redoEditor,
   resetEditor,
@@ -34,6 +36,21 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
   it("does not allow the only start-finish piece to be deleted", () => {
     const state = createEditorState();
     expect(deleteEditorPiece(state, 0)).toBe(state);
+  });
+
+  it("reorders and duplicates editable pieces without moving the start line", () => {
+    const initial = createEditorState("track-draft-7");
+    const moved = moveEditorPiece(initial, 1, 1);
+    const duplicated = duplicateEditorPiece(moved, 1);
+
+    expect(editorTrack(moved).pieces[1]?.kind).toBe("turn-left-90");
+    expect(editorTrack(moved).pieces[2]?.kind).toBe("straight-long");
+    expect(editorTrack(duplicated).pieces[1]).toEqual(
+      editorTrack(duplicated).pieces[2],
+    );
+    expect(moveEditorPiece(initial, 1, -1)).toBe(initial);
+    expect(duplicateEditorPiece(initial, 0)).toBe(initial);
+    expect(editorTrack(resetEditor(duplicated)).id).toBe("track-draft-7");
   });
 
   it("round-trips versioned canonical JSON and fails safely on unknown shapes", () => {

@@ -12,6 +12,7 @@ import {
   transition,
   type SetupValidationResponse,
 } from "../src/onboarding";
+import { serviceUnavailableResponse } from "../src/ipc";
 
 interface ValidationFixture {
   request: ReturnType<typeof createInitialState>["draft"];
@@ -145,5 +146,30 @@ describe("Phase 1 onboarding contract", () => {
     expect(restored.route).toBe("training");
     expect(restored.sessionStarted).toBe(true);
     expect(restored.draft).toEqual(fixture.request);
+  });
+});
+
+describe("setup validation transport errors", () => {
+  it("distinguishes an HTTP rejection from an unavailable local core", () => {
+    expect(
+      serviceUnavailableResponse(
+        new Error("Local validation failed with status 403."),
+      ),
+    ).toEqual({
+      contractVersion: 1,
+      valid: false,
+      errors: [
+        {
+          code: "LOCAL_VALIDATION_REQUEST_FAILED",
+          field: "service",
+          message:
+            "Local validation failed with status 403. Confirm that the app is open on a supported loopback address.",
+        },
+      ],
+    });
+
+    expect(serviceUnavailableResponse().errors[0]?.code).toBe(
+      "SERVICE_UNAVAILABLE",
+    );
   });
 });

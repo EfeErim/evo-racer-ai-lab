@@ -63,6 +63,7 @@ def test_interrupted_generation_boundary_resumes_deterministically(
     assert isinstance(resumed_snapshot, dict)
     assert resumed_snapshot["status"] == "running"
     assert resumed_snapshot["generation"] == 1
+    assert len(resumed_snapshot["generationTrails"]) == 1
 
     deadline = time.monotonic() + 5
     while True:
@@ -79,6 +80,60 @@ def test_interrupted_generation_boundary_resumes_deterministically(
     assert actual["generationReport"] == expected["generationReport"]
     assert actual["selectedCar"] == expected["selectedCar"]
     assert actual["result"] == expected["result"]
+    assert actual["generationTrails"] == expected["generationTrails"]
+
+
+def test_generation_trails_are_bounded_and_persisted(tmp_path: Path) -> None:
+    session = _session(generations=2, run_id="run-trails")
+    session.advance()
+    session.command("pause")
+    saved = save_run_document(session.to_run_document(), tmp_path)
+    checkpoint = saved["checkpoint"]
+    assert isinstance(checkpoint, dict)
+    snapshot = checkpoint["snapshot"]
+    assert isinstance(snapshot, dict)
+    trails = snapshot["generationTrails"]
+    assert isinstance(trails, list)
+    assert len(trails) == 1
+    assert trails[0]["runId"] == "run-trails"
+    assert 1 < len(trails[0]["points"]) <= 64
+
+    restored = RunManager(tmp_path).resume({"contractVersion": 1, "runId": "run-trails"})
+    restored_snapshot = restored["snapshot"]
+    assert isinstance(restored_snapshot, dict)
+    assert restored_snapshot["generationTrails"] == trails
+
+
+def test_terminal_run_comparison_requires_identical_track_and_budget(tmp_path: Path) -> None:
+    def completed(run_id: str, *, seed: int, episode_seconds: float = 0.2) -> RunSession:
+        session = RunSession(
+            run_id=run_id,
+            compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
+            settings=RunSettings(
+                algorithm="fixed-ga",
+                population_size=4,
+                generations=1,
+                episode_seconds=episode_seconds,
+                seed=seed,
+            ),
+        )
+        session.advance()
+        save_run_document(session.to_run_document(), tmp_path)
+        return session
+
+    comparable = completed("run-comparable", seed=100)
+    completed("run-other-budget", seed=101, episode_seconds=0.3)
+    current = completed("run-current", seed=102)
+    manager = RunManager(tmp_path)
+
+    response = manager._response(current)
+    snapshot = response["snapshot"]
+    assert isinstance(snapshot, dict)
+    previous = snapshot["previousRuns"]
+    assert isinstance(previous, list)
+    assert [item["runId"] for item in previous] == [comparable.run_id]
+    assert previous[0]["populationSize"] == 4
+    assert previous[0]["episodeSeconds"] == 0.2
 
 
 def test_restart_preserves_tracks_and_runs_while_corrupt_run_is_isolated(

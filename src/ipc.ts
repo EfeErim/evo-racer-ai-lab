@@ -243,15 +243,24 @@ export function selectCompiledTrack(
   return response.valid ? response.compiled : undefined;
 }
 
-export function serviceUnavailableResponse(): SetupValidationResponse {
+export function serviceUnavailableResponse(
+  error?: unknown,
+): SetupValidationResponse {
+  const rejectedByCore =
+    error instanceof Error &&
+    error.message.startsWith("Local validation failed with status ");
   return {
     contractVersion: 1,
     valid: false,
     errors: [
       {
-        code: "SERVICE_UNAVAILABLE",
+        code: rejectedByCore
+          ? "LOCAL_VALIDATION_REQUEST_FAILED"
+          : "SERVICE_UNAVAILABLE",
         field: "service",
-        message: "The local core is unavailable. Start it, then review again.",
+        message: rejectedByCore
+          ? `${error.message} Confirm that the app is open on a supported loopback address.`
+          : "The local core is unavailable. Start it, then review again.",
       },
     ],
   };

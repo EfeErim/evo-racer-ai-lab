@@ -182,6 +182,8 @@
       "trackId": "easy-oval",
       "seed": 7,
       "generationsCompleted": 2,
+      "populationSize": 10,
+      "episodeSeconds": 15,
       "championFitness": 70,
       "championProgress": 0.05833333
     }

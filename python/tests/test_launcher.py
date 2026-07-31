@@ -4,6 +4,8 @@ import webbrowser
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from evo_racer import launcher
 
 
@@ -44,3 +46,12 @@ def test_launcher_opens_production_frontend_and_closes_server(
     assert opened_urls == ["http://127.0.0.1:8765/"]
     assert fake_server.served
     assert fake_server.closed
+
+
+def test_launcher_accepts_portable_data_root_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("EVORACER_DATA_ROOT", str(tmp_path))
+
+    assert launcher.parse_args([]).data_root == tmp_path
