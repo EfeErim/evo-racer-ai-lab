@@ -52,8 +52,8 @@ The application includes:
 - Fixed-step arcade vehicle physics with continuous steering, throttle, and brake
   controller outputs.
 - Fixed-topology genetic algorithm and feed-forward NEAT training.
-- Live observation, pause/resume/stop, telemetry, champion replay, and run
-  comparison.
+- Smooth Python-recorded champion observation, faded prior-generation evolution
+  trails, pause/resume/stop, telemetry, replay, and run comparison.
 - Versioned, local-only tracks, runs, checkpoints, and exports.
 
 The application intentionally excludes human vehicle controls, multiplayer,
@@ -226,13 +226,17 @@ UX remain later-phase work.
 Phase 7 connects both algorithms to one Python-owned, generation-batched run
 session:
 
-- Start freezes the validated track and training settings. Each observation
-  command advances one complete generation through the existing fixed-step
+- Start freezes the validated track and training settings. Observation commands
+  start or poll one background generation through the existing fixed-step
   evaluator, independent of browser render cadence.
 - Pause and resume operate only between deterministic generation batches. Stop
   produces a terminal result after at least one completed generation.
-- Training displays the live generation, best and median fitness, selected-car
-  controls, progress, speed, and seven road-edge sensors.
+- Training displays the currently evaluated candidate moving on the compiled
+  track, plus live position, heading, controls, progress, speed, and seven
+  road-edge sensors. Generation fitness values appear at the deterministic
+  generation boundary.
+- Training and Results retain up to seven prior generation-champion paths from
+  recorded Python replay points, with older paths faded behind the current car.
 - Results include complete versioned run metadata, fitness history, champion
   and identical-setup baseline comparisons, and a recorded champion replay.
 - Replay frames contain Python-recorded position, heading, controls, progress,

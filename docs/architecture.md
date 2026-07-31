@@ -140,6 +140,12 @@ centerline, and seven sensors intersect rays with the left/right boundaries
 already derived by the canonical track compiler. No duplicate track geometry is
 persisted or constructed in TypeScript.
 
+The sweep retains the centerline projection of the exact safe point it returns.
+The episode evaluator reuses that projection for progress and the next
+observation instead of projecting the same post-step position a second time.
+This is internal calculation reuse; it does not change collision, progress,
+physics-step, or telemetry contracts.
+
 The seeded random-network and Pure Pursuit baselines implement the same
 controller protocol and run through the same evaluator. Pure Pursuit follows
 the lookahead-point approach documented in R. Craig Coulter's
@@ -219,17 +225,52 @@ metadata, baseline evaluation, replay recording, and generation-boundary
 persistence.
 
 The browser sends explicit version 1 start, observe, pause, resume, and stop
-commands. One observe command advances exactly one complete generation through
-the existing Fixed GA or NEAT lifecycle. Pause and resume change only whether a
-later batch may start. They do not alter the seeded generator, fixed `1/60 s`
-physics steps, controller ordering, or result sequence. Rendering never
-supplies a simulation delta or step count.
+commands. Observe starts at most one background generation and then polls
+versioned snapshots while the existing Fixed GA or NEAT lifecycle evaluates it.
+Pause and resume change only whether a later batch may start. They do not alter
+the seeded generator, fixed `1/60 s` physics steps, controller ordering, or
+result sequence. Rendering never supplies a simulation delta or step count.
 
 Every observation snapshot contains run status, generation counters, the latest
-Python generation report, fitness history, and selected-car telemetry. Terminal
-results add metadata that identifies the run id, algorithm, seed, canonical
-track hash, population, requested and completed generations, episode duration,
-fixed time step, and all participating contract versions.
+Python generation report, fitness history, and selected-car telemetry.
+In-generation snapshots additionally expose the active candidate index and its
+Python-owned position, heading, controls, sensors, simulated time, and progress.
+TypeScript places that marker on Python-compiled geometry without computing a
+physics step. Terminal results add metadata that identifies the run id,
+algorithm, seed, canonical track hash, population, requested and completed
+generations, episode duration, fixed time step, and all participating contract
+versions.
+
+At a generation boundary, Python also exposes a transient `generationReplay`
+made from the recorded telemetry of that generation's champion. This observer
+field is deliberately omitted from persisted run documents. Once the first
+generation is available, the browser presents those authoritative frames at
+`2x` simulated speed with `requestAnimationFrame`, interpolating position and
+the shortest heading arc between adjacent timestamps. The interpolation creates
+visual frames only: training continues in the background at full speed and no
+predicted state is returned to Python.
+
+After receiving a replay, the version 1 client includes its candidate id as the
+optional `knownGenerationReplayCandidateId` on later observe commands. If that
+candidate is still current, Python omits `generationReplay` and does not rebuild
+or serialize its frames. TypeScript merges that transport delta with only the
+same run's cached replay; a new candidate replaces it and a new run cannot
+inherit it. Python still sends `generationReplay: null` before any replay exists,
+so absence has the narrow meaning of "the acknowledged replay is unchanged."
+
+The browser also samples each newly received generation replay to at most 64 of
+its recorded `(x, y)` points. It keeps a bounded session history of eight paths:
+the current champion plus up to seven prior champions. The renderer draws only
+the prior paths as progressively faded dashed SVG lines behind the animated
+current marker. This is presentation state, is cleared for new and restored
+runs, is not written to `RunV1`, and never derives physics or predicted motion.
+
+Observation delivery is visibility-aware: the browser schedules at `250 ms`
+while visible and `1000 ms` while hidden, allows at most one request in flight,
+and observes immediately when the document becomes visible again. The Python
+worker keeps evaluating at full speed in either state. These intervals govern
+only UI snapshots and cannot supply simulation time or change deterministic
+results.
 
 Python re-evaluates the immutable best candidate to record replay frames at a
 fixed six-step sampling interval. Each frame carries position, heading, motion,
@@ -241,8 +282,8 @@ vehicle setup.
 TypeScript parses and renders these values only. It owns the live status view,
 pause/resume/stop buttons, SVG fitness chart, comparison tables, and replay
 frame navigation. The replay marker is placed on geometry already returned by
-the Python track compiler; no browser physics, scoring, or track construction
-is introduced.
+the Python track compiler; presentation interpolation never performs browser
+physics, scoring, or track construction.
 
 ## Phase 8 persistence and recovery boundary
 

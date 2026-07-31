@@ -12,9 +12,23 @@
 
 - Use English product copy.
 - Open on Welcome/Setup and never auto-start a race or training run.
-- Use the flow `Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results`.
-- Explain parameters in plain language, show safe validation, and keep advanced controls collapsed by default.
+- Offer a recommended `Easy Oval + Quick start` path from Welcome directly to
+  Review, plus the full
+  `Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results`
+  customization flow.
+- Explain parameters in plain language, show safe validation, and keep the saved
+  run library, custom-track tools, and exact training controls collapsed by
+  default.
 - Let the user pause, resume, stop, inspect telemetry, replay a champion, and compare results.
+- Show completed-generation and active-candidate progress during training. Make
+  generation-boundary control behavior and queued pause/stop commands explicit.
+- When a run becomes terminal, surface its Results action with the completion
+  status instead of requiring a page-length scroll through telemetry.
+- While training, render the currently evaluated Python candidate moving on the
+  Python-compiled track from versioned position and heading telemetry.
+- After the first completed generation, continuously render the latest Python
+  generation-champion replay. Browser interpolation may fill presentation frames
+  only; it must not predict, advance, or otherwise alter the Python simulation.
 - Provide no vehicle-driving controls. Pointer and keyboard interaction are UI-only.
 - Freeze run configuration after Start. Visualization-only controls may not alter simulation outcomes.
 
@@ -136,6 +150,23 @@ browser:
 - Exchange batched commands and observation snapshots over versioned JSON on
   `127.0.0.1`. Rendering frequency may not drive or alter the fixed simulation
   step.
+- Run generation evaluation independently of browser polling. Publish
+  in-generation candidate identity, position, heading, controls, sensors, and
+  progress without letting UI cadence select or advance a physics step.
+- The browser may acknowledge the generation-replay candidate it already holds.
+  Python may omit only that unchanged transient replay from a later observation;
+  the browser must retain it only for the same run and replace it when Python
+  publishes a different candidate. A missing acknowledged replay is a transport
+  delta, not an instruction to erase the visible replay.
+- During one active browser session, retain sampled paths from the seven prior
+  Python generation-champion replays and draw them behind the current replay.
+  Fade older paths, label the overlay as presentation history, bound every path
+  to 64 recorded points, and clear the history for a new or restored run. Do not
+  infer motion, persist the trail, or let it affect simulation or evolution.
+- Poll observations at `250 ms` while the document is visible and at `1000 ms`
+  while it is hidden, with an immediate observation when visibility returns.
+  Visibility may change presentation traffic only; it may not pause, accelerate,
+  select, or otherwise alter Python evaluation.
 
 ## Persistence and release
 

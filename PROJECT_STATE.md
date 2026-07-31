@@ -5,7 +5,96 @@
 - Current phase: `Phase 11 - Public binary publication`
 - Status: `complete`
 - Active milestone: `None - all planned milestones complete`
-- Last verified: `2026-07-29`
+- Last verified: `2026-07-31`
+
+## Unreleased correction after v1.0.0
+
+- Live training now renders the currently evaluated Python candidate moving on
+  Python-compiled track geometry from versioned `x`, `y`, and `heading`
+  telemetry.
+- Generation evaluation runs in a background worker so browser polling can
+  observe candidate identity, position, controls, sensors, simulated time, and
+  progress without driving the fixed simulation step.
+- After the first generation, Training continuously presents the latest Python
+  generation champion at `2x` simulated speed. `requestAnimationFrame` fills
+  visual frames between recorded Python timestamps without predicting or
+  advancing simulation state.
+- Training and Results now keep an **Evolution trail** of up to seven prior
+  Python generation-champion paths. Each stored path is sampled to at most 64
+  recorded points, older paths fade behind the current replay, and new/restored
+  runs cannot inherit presentation history.
+- Transient `generationReplay` frames remain outside persisted run documents,
+  and Windows checkpoint replacement now retries only bounded transient sharing
+  violations while preserving atomic `os.replace` persistence.
+- Reused Python centerline and boundary segment geometry reduced the verified
+  18-case deterministic matrix from `81.457872 s` / `4.039459 s` median to
+  `26.195954 s` while matching every reviewed result.
+- Quick start is now the initial preset at `10 x 8 x 15 s`; Balanced is
+  `24 x 20 x 30 s`, Thorough is `48 x 40 x 60 s`, and Settings/Review expose
+  the maximum candidate-episode workload before Start.
+- Welcome now offers a validated `Easy Oval + Quick start` path directly to
+  Review. Saved runs, custom-track tools, and exact training controls are
+  collapsed by default while the full customization flow remains available.
+- Browser observation polling is now capped at `4 Hz` instead of `10 Hz`, a
+  `60%` reduction in scheduled full-interface refreshes. Python simulation and
+  timestamp-based `requestAnimationFrame` motion remain independent of polling.
+- Hidden tabs reduce observation delivery to `1 Hz` and refresh immediately on
+  return. The Python worker continues at full speed and only one browser request
+  may be in flight.
+- The browser acknowledges its current generation-replay candidate, allowing
+  Python to omit an unchanged 151-frame replay without rebuilding it. The
+  measured response fell from `30,314` to `632` bytes (`97.915%`), and 200
+  snapshot-build-plus-serialization iterations fell from `0.233250 s` to
+  `0.003173 s` (`98.64%`). Same-run caching and cross-run isolation are covered
+  in both runtimes.
+- Active observation responses omit repeated setup data and avoid scanning the
+  complete run library until a terminal result. In a 12-run local library, 20
+  response builds fell from `0.3904666000 s` to `0.0000233000 s`, and each
+  response fell from `1667` to `343` bytes.
+- Sensor rays now reject impossible boundary intersections through precomputed
+  segment bounds. Three alternating identical Fixed GA generation measurements
+  reduced the median from `1.351269 s` to `0.645795 s` while every terminal
+  snapshot remained equal.
+- Centerline projection now compares squared distances in the segment loop, and
+  sensor sweeps reuse one finite nearby-segment filter across all seven rays.
+  Five same-command Fixed GA measurements reduced the median from `0.648346 s`
+  to `0.609922 s`, another measured `5.9%` reduction.
+- Champion replay timestamp lookup now uses binary search. A 4,096-frame,
+  60,000-lookup presentation microbenchmark fell from `147.164 ms` to
+  `14.872 ms` (`9.9x`) without changing authoritative Python frames.
+- Physics steps now retain the swept safe point's centerline projection for
+  progress instead of calculating the same post-step projection twice. A
+  profiled generation reduced projection calls from `19,083` to `9,548`, and
+  seven same-command measurements reduced the median from `0.716530 s` to
+  `0.569015 s` (`20.6%`) with equal result projections.
+- Terminal status is exposed only after its atomic checkpoint is durable, and
+  run reads tolerate the bounded Windows sharing gap around replacement. The
+  restart-complete-export-delete service regression passed 10 consecutive runs.
+- Training distinguishes the live candidate, a background candidate while a
+  champion replay is shown, and the completed generation champion. The
+  simplified setup and these states passed desktop and `390 x 844` browser
+  inspection with no warning/error log and no page-level horizontal overflow.
+- Training now exposes honest generation/candidate evaluation progress, labels
+  Pause and Stop as generation-boundary actions, and visibly acknowledges
+  queued commands. The narrow-screen step rail keeps the active route centered
+  across observation renders without showing a native scrollbar.
+- Completed and stopped runs now surface **Open results** directly below run
+  status and omit redundant terminal controls. The action stayed fully visible
+  in desktop and `390 x 844` mobile viewports and opened the complete Results
+  route with no browser warning/error log.
+- The full Phase 10 gate passed with `46` Vitest tests, `87` pytest tests, all
+  `18` deterministic matrix cases, and clean-runtime Windows acceptance that
+  requires both live candidate position telemetry and a multi-frame Python
+  generation replay.
+- The latest deterministic matrix completed in `10.651053 s`. The rebuilt local
+  ZIP is verified, but this correction is not part of the immutable published
+  `v1.0.0` tag or its public assets. Its SHA-256 is
+  `a064939f1097cc135880efd7e52f1df87bc784440b1d9f7bd7eb12791a40e8f3`.
+- Detailed evidence is saved in
+  `docs/verification/live-training-observer.md` and
+  `docs/verification/training-performance.md`, with the smooth-presentation
+  correction in `docs/verification/smooth-training-replay.md` and the simplified
+  setup audit in `docs/verification/setup-experience.md`.
 
 ## Verified repository facts
 
@@ -59,11 +148,12 @@
 - Python owns version 1 run sessions, generation-batched advancement,
   pause/resume/stop state, observation snapshots, terminal metadata, baseline
   comparison, and replay recording.
-- Browser cadence changes only when another complete Python generation is
-  requested; it never supplies physics steps or a simulation delta.
+- Browser observation and presentation cadence never supplies physics steps or
+  a simulation delta.
 - The observer and Results UI render Python generation reports, selected-car
-  telemetry, fitness history, baseline comparisons, and champion replay on
-  Python-compiled track geometry.
+  telemetry, fitness history, baseline comparisons, and Python-recorded champion
+  replay on Python-compiled track geometry. Smooth motion interpolates only
+  between timestamped Python frames.
 - Python owns version 1 atomic run documents with embedded TrackV1 identity,
   frozen settings, observation checkpoints, and canonical SHA-256 integrity.
 - Service restart never starts training. Explicit resume reconstructs Fixed GA

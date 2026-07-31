@@ -119,6 +119,7 @@ M6 gate:
 Deliver:
 
 - Live generation/fitness/telemetry display
+- Live selected-candidate motion on Python-compiled track geometry
 - Pause/resume/stop
 - Charts, champion replay, baseline and run comparison
 - Versioned observation snapshots from the Python core; UI cadence remains
@@ -127,7 +128,25 @@ Deliver:
 M7 gate:
 
 - Runtime configuration cannot be edited after Start.
+- The currently evaluated candidate visibly moves from Python position and
+  heading snapshots while a generation is in progress.
+- After the first completed generation, the latest Python generation-champion
+  replay is continuously presented with smooth visual interpolation independent
+  of training cadence.
+- An acknowledged, unchanged generation replay may be omitted from subsequent
+  observation payloads without rebuilding its frames or clearing the same-run
+  browser replay. A different run or candidate never inherits that cache.
+- Training and Results overlay up to seven prior generation-champion paths from
+  recorded Python replay points, with older paths visibly faded and the current
+  replay marker unobscured. New and restored runs start with no inherited trail.
+- Hidden documents reduce observation polling to `1 Hz`; visible documents poll
+  at `4 Hz` and refresh immediately when brought back. Evaluation outcomes and
+  throughput remain independent of document visibility.
 - Pause/resume does not alter outcomes.
+- Training shows overall and active-candidate progress, and visibly acknowledges
+  pause/stop commands queued for a deterministic generation boundary.
+- A terminal run exposes its Results action beside the completion status at
+  desktop and narrow-screen sizes.
 - Replay reproduces controls, motion, and fixed vehicle genes.
 - Result metadata fully identifies the run.
 
