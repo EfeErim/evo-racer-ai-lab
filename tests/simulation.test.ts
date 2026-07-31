@@ -44,6 +44,12 @@ describe("Phase 4 selected-car telemetry contract", () => {
         sensorDistances: [1, 2],
       }),
     ).toThrow("seven sensor distances");
+    expect(() =>
+      parseSelectedCarTelemetry({
+        ...(fixture as object),
+        heading: undefined,
+      }),
+    ).toThrow("requires x, y, and heading together");
   });
 });
 
@@ -88,5 +94,51 @@ describe("Phase 7 observation and results contract", () => {
     expect(() => parseObservationSnapshot(invalid)).toThrow(
       "outside its contract range",
     );
+  });
+
+  it("accepts versioned live candidate progress and position", () => {
+    const live = structuredClone(observationFixture) as Record<string, unknown>;
+    live.status = "running";
+    live.generation = 0;
+    live.generationInProgress = true;
+    live.activeCandidate = {
+      candidateId: "g0000-c0004",
+      index: 5,
+      total: 10,
+    };
+    live.pendingCommand = null;
+    live.result = null;
+    live.generationReplay = {
+      candidateId: "g0000-c0003",
+      frames: [
+        {
+          simulatedSeconds: 0.5,
+          x: 1,
+          y: 2,
+          heading: 0.25,
+          speed: 3,
+          lateralSpeed: 0,
+          steering: 0.1,
+          throttle: 0.8,
+          brake: 0,
+          progress: 0.02,
+        },
+      ],
+    };
+
+    const parsed = parseObservationSnapshot(live);
+
+    expect(parsed.generationInProgress).toBe(true);
+    expect(parsed.activeCandidate).toEqual({
+      candidateId: "g0000-c0004",
+      index: 5,
+      total: 10,
+    });
+    expect(parsed.selectedCar).toMatchObject({
+      x: 18.25,
+      y: 7.5,
+      heading: 0.75,
+    });
+    expect(parsed.generationReplay?.candidateId).toBe("g0000-c0003");
   });
 });

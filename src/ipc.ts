@@ -79,11 +79,17 @@ export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
   );
 }
 
-export async function observeRun(runId: string): Promise<RunResponseV1> {
+export async function observeRun(
+  runId: string,
+  knownGenerationReplayCandidateId?: string,
+): Promise<RunResponseV1> {
   return parseRunResponse(
     await postJson<unknown>("/v1/runs/observe", {
       contractVersion: 1,
       runId,
+      ...(knownGenerationReplayCandidateId === undefined
+        ? {}
+        : { knownGenerationReplayCandidateId }),
     }),
   );
 }

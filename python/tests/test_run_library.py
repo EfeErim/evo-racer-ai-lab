@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +12,7 @@ from evo_racer.observer import RunManager, RunSession, RunSettings
 from evo_racer.run_library import (
     delete_run,
     export_run_payload,
+    read_run_document,
     run_library_payload,
     save_run_document,
     validate_run_document,
@@ -61,9 +64,16 @@ def test_interrupted_generation_boundary_resumes_deterministically(
     assert resumed_snapshot["status"] == "running"
     assert resumed_snapshot["generation"] == 1
 
-    completed = restarted.observe({"contractVersion": 1, "runId": interrupted.run_id})
-    actual = completed["snapshot"]
-    assert isinstance(actual, dict)
+    deadline = time.monotonic() + 5
+    while True:
+        completed = restarted.observe({"contractVersion": 1, "runId": interrupted.run_id})
+        actual = completed["snapshot"]
+        assert isinstance(actual, dict)
+        if actual["status"] == "completed":
+            break
+        if time.monotonic() >= deadline:
+            pytest.fail("Restored background generation did not complete.")
+        time.sleep(0.005)
     assert actual["status"] == "completed"
     assert actual["fitnessHistory"] == expected["fitnessHistory"]
     assert actual["generationReport"] == expected["generationReport"]
@@ -119,6 +129,56 @@ def test_atomic_run_export_and_delete_use_the_same_versioned_document(
     assert exported["run"] == saved
     assert delete_run(session.run_id, tmp_path)["deleted"] is True
     assert run_library_payload(tmp_path)["runs"] == []
+
+
+def test_atomic_save_retries_a_transient_windows_sharing_violation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(run_id="run-retry")
+    document = session.to_run_document()
+    real_replace = os.replace
+    attempts = 0
+
+    def transient_replace(source: str | Path, destination: str | Path) -> None:
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise PermissionError("transient sharing violation")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", transient_replace)
+
+    assert save_run_document(document, tmp_path) == document
+    assert attempts == 3
+    assert read_run_document("run-retry", tmp_path) == document
+
+
+def test_run_export_retries_a_transient_windows_read_gap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _session(run_id="run-read-retry")
+    document = session.to_run_document()
+    save_run_document(document, tmp_path)
+    record = tmp_path / "runs" / session.run_id / "run.json"
+    real_read_text = Path.read_text
+    attempts = 0
+
+    def transient_read_text(path: Path, *args: Any, **kwargs: Any) -> str:
+        nonlocal attempts
+        if path == record:
+            attempts += 1
+            if attempts < 3:
+                raise PermissionError("transient sharing violation")
+        return real_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", transient_read_text)
+
+    exported = export_run_payload(session.run_id, tmp_path)
+    assert exported["valid"] is True
+    assert exported["run"] == document
+    assert attempts == 3
 
 
 def test_tampered_checkpoint_digest_isolated_without_blocking_valid_run(

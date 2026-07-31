@@ -1,3 +1,5 @@
+import { trackMarkerTransform } from "./live-motion";
+
 export type TrackPoint = readonly [number, number];
 
 export interface TrackPieceV1 {
@@ -47,6 +49,11 @@ export interface TrackMarker {
   heading: number;
 }
 
+export interface TrackTrail {
+  candidateId: string;
+  points: readonly TrackPoint[];
+}
+
 export function parsePresetTracksResponse(
   payload: unknown,
 ): PresetTracksResponse {
@@ -66,6 +73,7 @@ export function parsePresetTracksResponse(
 export function renderTrackSvg(
   compiled: CompiledTrackV1,
   marker?: TrackMarker,
+  trails: readonly TrackTrail[] = [],
 ): string {
   const points = [
     ...compiled.geometry.leftBoundary,
@@ -95,6 +103,21 @@ export function renderTrackSvg(
       <path class="track-centerline" d="${pathData(compiled.geometry.centerline)}" pathLength="100" />
       <path class="track-boundary" d="${pathData(compiled.geometry.leftBoundary)}" />
       <path class="track-boundary" d="${pathData(compiled.geometry.rightBoundary)}" />
+      <g class="generation-trails" aria-hidden="true">
+        ${trails
+          .filter((trail) => trail.points.length > 1)
+          .map(
+            (trail, index) => `
+              <path
+                class="generation-trail"
+                data-trail-candidate="${escapeAttribute(trail.candidateId)}"
+                d="${pathData(trail.points)}"
+                opacity="${trailOpacity(index, trails.length)}"
+              />
+            `,
+          )
+          .join("")}
+      </g>
       <line
         class="track-start-line"
         x1="${formatNumber(compiled.geometry.checkpoints[0]?.left[0] ?? 0)}"
@@ -108,7 +131,7 @@ export function renderTrackSvg(
           : `
             <g
               class="track-replay-marker"
-              transform="translate(${formatNumber(marker.x)} ${formatNumber(marker.y)}) rotate(${formatNumber((marker.heading * 180) / Math.PI)})"
+              transform="${trackMarkerTransform(marker)}"
             >
               <rect x="-1.2" y="-0.55" width="2.4" height="1.1" rx="0.25" />
               <line x1="0" y1="0" x2="1.8" y2="0" />
@@ -117,6 +140,13 @@ export function renderTrackSvg(
       }
     </svg>
   `;
+}
+
+function trailOpacity(index: number, total: number): string {
+  if (total <= 1) {
+    return "0.62";
+  }
+  return formatNumber(0.16 + (index / (total - 1)) * 0.46);
 }
 
 function pathData(points: readonly TrackPoint[]): string {

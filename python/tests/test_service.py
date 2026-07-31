@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -376,12 +377,18 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
             "/v1/runs/command",
             {"contractVersion": 1, "runId": run_id, "command": "resume"},
         )
-        completed = post(
-            "/v1/runs/observe",
-            {"contractVersion": 1, "runId": run_id},
-        )
-
-        snapshot = completed["snapshot"]
+        deadline = time.monotonic() + 30
+        while True:
+            completed = post(
+                "/v1/runs/observe",
+                {"contractVersion": 1, "runId": run_id},
+            )
+            snapshot = completed["snapshot"]
+            if snapshot["status"] == "completed":
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail("Background service generation did not complete.")
+            time.sleep(0.01)
         assert snapshot["status"] == "completed"
         assert snapshot["generation"] == 1
         assert snapshot["result"]["metadata"]["runId"] == run_id
@@ -451,10 +458,17 @@ def test_phase_eight_run_library_resume_export_and_delete_survive_restart(
             {"contractVersion": 1, "runId": session.run_id},
         )
         assert resumed["snapshot"]["status"] == "running"
-        completed = post(
-            "/v1/runs/observe",
-            {"contractVersion": 1, "runId": session.run_id},
-        )
+        deadline = time.monotonic() + 5
+        while True:
+            completed = post(
+                "/v1/runs/observe",
+                {"contractVersion": 1, "runId": session.run_id},
+            )
+            if completed["snapshot"]["status"] == "completed":
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail("Restored background service run did not complete.")
+            time.sleep(0.01)
         assert completed["snapshot"]["status"] == "completed"
 
         exported = get(f"/v1/runs/library/{session.run_id}/export")

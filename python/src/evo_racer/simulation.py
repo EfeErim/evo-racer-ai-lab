@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import random
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Protocol
 
@@ -117,6 +118,7 @@ class StepResult:
     state: VehicleState
     controls: Controls
     collided: bool
+    projection: TrackProjection
 
 
 @dataclass(frozen=True, slots=True)
@@ -135,6 +137,9 @@ class TelemetrySnapshot:
         return {
             "selectedCarId": self.selected_car_id,
             "simulatedSeconds": _rounded(self.simulated_seconds),
+            "x": _rounded(self.state.x),
+            "y": _rounded(self.state.y),
+            "heading": _rounded(self.state.heading),
             "speed": _rounded(self.state.forward_speed),
             "lateralSpeed": _rounded(self.state.lateral_speed),
             "steering": _rounded(self.controls.steering),
@@ -206,10 +211,40 @@ class TrackGeometry:
         self.road_width = road_width
         self.spawn = spawn
         cumulative = [0.0]
+        centerline_segments: list[tuple[float, float, float, float, float, float, float]] = []
         for start, end in zip(centerline, centerline[1:], strict=False):
+            segment_x = end[0] - start[0]
+            segment_y = end[1] - start[1]
+            length_squared = segment_x * segment_x + segment_y * segment_y
             cumulative.append(cumulative[-1] + math.dist(start, end))
+            centerline_segments.append(
+                (
+                    start[0],
+                    start[1],
+                    segment_x,
+                    segment_y,
+                    length_squared,
+                    math.sqrt(length_squared),
+                    math.atan2(segment_y, segment_x),
+                )
+            )
         self.cumulative_distances = tuple(cumulative)
         self.length = cumulative[-1]
+        self.centerline_segments = tuple(centerline_segments)
+        self.boundary_segments = tuple(
+            (
+                start[0],
+                start[1],
+                end[0] - start[0],
+                end[1] - start[1],
+                min(start[0], end[0]),
+                max(start[0], end[0]),
+                min(start[1], end[1]),
+                max(start[1], end[1]),
+            )
+            for boundary in self.boundaries
+            for start, end in zip(boundary, boundary[1:], strict=False)
+        )
 
     @classmethod
     def from_compiled(cls, compiled: dict[str, object]) -> TrackGeometry:
@@ -247,35 +282,45 @@ class TrackGeometry:
 
     def project(self, point: Point) -> TrackProjection:
         """Project a point onto the closest closed centerline segment."""
-        best: TrackProjection | None = None
-        for index, (start, end) in enumerate(
-            zip(self.centerline, self.centerline[1:], strict=False)
-        ):
-            segment_x = end[0] - start[0]
-            segment_y = end[1] - start[1]
-            length_squared = segment_x * segment_x + segment_y * segment_y
+        best_point: Point | None = None
+        best_distance_squared = math.inf
+        best_path_distance = 0.0
+        best_tangent_heading = 0.0
+        for index, (
+            start_x,
+            start_y,
+            segment_x,
+            segment_y,
+            length_squared,
+            segment_length,
+            tangent_heading,
+        ) in enumerate(self.centerline_segments):
             if length_squared == 0.0:
                 continue
-            offset_x = point[0] - start[0]
-            offset_y = point[1] - start[1]
+            offset_x = point[0] - start_x
+            offset_y = point[1] - start_y
             along = _clamp(
                 (offset_x * segment_x + offset_y * segment_y) / length_squared,
                 0.0,
                 1.0,
             )
-            closest = (start[0] + segment_x * along, start[1] + segment_y * along)
-            distance = math.dist(point, closest)
-            candidate = TrackProjection(
-                point=closest,
-                distance=distance,
-                path_distance=self.cumulative_distances[index] + math.sqrt(length_squared) * along,
-                tangent_heading=math.atan2(segment_y, segment_x),
-            )
-            if best is None or candidate.distance < best.distance:
-                best = candidate
-        if best is None:
+            closest = (start_x + segment_x * along, start_y + segment_y * along)
+            distance_x = point[0] - closest[0]
+            distance_y = point[1] - closest[1]
+            distance_squared = distance_x * distance_x + distance_y * distance_y
+            if distance_squared < best_distance_squared:
+                best_point = closest
+                best_distance_squared = distance_squared
+                best_path_distance = self.cumulative_distances[index] + segment_length * along
+                best_tangent_heading = tangent_heading
+        if best_point is None:
             raise ValueError("Track contains no usable centerline segment.")
-        return best
+        return TrackProjection(
+            point=best_point,
+            distance=math.sqrt(best_distance_squared),
+            path_distance=best_path_distance,
+            tangent_heading=best_tangent_heading,
+        )
 
     def point_at(self, path_distance: float) -> Point:
         """Interpolate a point at wrapped distance around the loop."""
@@ -301,32 +346,91 @@ class TrackGeometry:
 
     def sweep(self, start: Point, end: Point) -> tuple[Point, bool]:
         """Sweep the vehicle center and return the last collision-free point."""
+        position, collided, _ = self._sweep_with_projection(start, end, None)
+        return position, collided
+
+    def _sweep_with_projection(
+        self,
+        start: Point,
+        end: Point,
+        start_projection: TrackProjection | None,
+    ) -> tuple[Point, bool, TrackProjection]:
+        """Sweep once and retain the projection of the returned safe point."""
         distance = math.dist(start, end)
         sample_count = max(1, math.ceil(distance / 0.2))
         last_safe = start
+        last_projection = start_projection if start_projection is not None else self.project(start)
         for sample in range(1, sample_count + 1):
             amount = sample / sample_count
             point = (
                 start[0] + (end[0] - start[0]) * amount,
                 start[1] + (end[1] - start[1]) * amount,
             )
-            if not self.on_road(point):
-                return last_safe, True
+            projection = self.project(point)
+            if projection.distance > self.road_width / 2.0 - VEHICLE_RADIUS:
+                return last_safe, True, last_projection
             last_safe = point
-        return end, False
+            last_projection = projection
+        return end, False, last_projection
 
     def sensor_distances(self, state: VehicleState) -> tuple[float, ...]:
         """Intersect deterministic rays with Python-derived road boundaries."""
         distances: list[float] = []
+        search_min_x = state.x - SENSOR_RANGE
+        search_max_x = state.x + SENSOR_RANGE
+        search_min_y = state.y - SENSOR_RANGE
+        search_max_y = state.y + SENSOR_RANGE
+        nearby_segments = tuple(
+            segment
+            for segment in self.boundary_segments
+            if not (
+                segment[5] < search_min_x
+                or segment[4] > search_max_x
+                or segment[7] < search_min_y
+                or segment[6] > search_max_y
+            )
+        )
         for angle in SENSOR_ANGLES:
             heading = state.heading + angle
-            direction = (math.cos(heading), math.sin(heading))
+            direction_x = math.cos(heading)
+            direction_y = math.sin(heading)
+            ray_end_x = state.x + direction_x * SENSOR_RANGE
+            ray_end_y = state.y + direction_y * SENSOR_RANGE
+            ray_min_x = min(state.x, ray_end_x)
+            ray_max_x = max(state.x, ray_end_x)
+            ray_min_y = min(state.y, ray_end_y)
+            ray_max_y = max(state.y, ray_end_y)
             nearest = SENSOR_RANGE
-            for boundary in self.boundaries:
-                for start, end in zip(boundary, boundary[1:], strict=False):
-                    hit = _ray_segment_distance((state.x, state.y), direction, start, end)
-                    if hit is not None:
-                        nearest = min(nearest, hit)
+            for (
+                start_x,
+                start_y,
+                segment_x,
+                segment_y,
+                segment_min_x,
+                segment_max_x,
+                segment_min_y,
+                segment_max_y,
+            ) in nearby_segments:
+                if (
+                    segment_max_x < ray_min_x
+                    or segment_min_x > ray_max_x
+                    or segment_max_y < ray_min_y
+                    or segment_min_y > ray_max_y
+                ):
+                    continue
+                offset_x = start_x - state.x
+                offset_y = start_y - state.y
+                denominator = direction_x * segment_y - direction_y * segment_x
+                if abs(denominator) <= 1e-12:
+                    continue
+                ray_distance = (offset_x * segment_y - offset_y * segment_x) / denominator
+                segment_amount = (offset_x * direction_y - offset_y * direction_x) / denominator
+                if (
+                    ray_distance >= 0.0
+                    and 0.0 <= segment_amount <= 1.0
+                    and ray_distance <= SENSOR_RANGE
+                ):
+                    nearest = min(nearest, ray_distance)
             distances.append(nearest)
         return tuple(distances)
 
@@ -408,6 +512,7 @@ def step_physics(
     geometry: TrackGeometry,
     *,
     dt: float = FIXED_TIME_STEP,
+    current_projection: TrackProjection | None = None,
 ) -> StepResult:
     """Advance exactly one fixed arcade-physics step."""
     if dt != FIXED_TIME_STEP:
@@ -448,7 +553,9 @@ def step_physics(
     velocity_x = math.cos(heading) * forward_speed - math.sin(heading) * lateral_speed
     velocity_y = math.sin(heading) * forward_speed + math.cos(heading) * lateral_speed
     candidate = (state.x + velocity_x * dt, state.y + velocity_y * dt)
-    position, collided = geometry.sweep((state.x, state.y), candidate)
+    position, collided, projection = geometry._sweep_with_projection(
+        (state.x, state.y), candidate, current_projection
+    )
     if collided:
         forward_speed = 0.0
         lateral_speed = 0.0
@@ -464,6 +571,7 @@ def step_physics(
         ),
         controls=controls,
         collided=collided,
+        projection=projection,
     )
 
 
@@ -475,6 +583,7 @@ def evaluate_episode(
     max_seconds: float = 120.0,
     selected_car_id: str = "baseline-01",
     telemetry_interval_steps: int = TELEMETRY_INTERVAL_STEPS,
+    telemetry_callback: Callable[[TelemetrySnapshot], None] | None = None,
 ) -> EpisodeResult:
     """Run one deterministic episode independently of render cadence."""
     max_steps = round(max_seconds / FIXED_TIME_STEP)
@@ -497,7 +606,6 @@ def evaluate_episode(
 
     for step_index in range(max_steps):
         sensors = geometry.sensor_distances(state)
-        projection = geometry.project((state.x, state.y))
         observation = Observation(
             state=state,
             progress_distance=projection.path_distance,
@@ -509,10 +617,16 @@ def evaluate_episode(
         if controller.parameters != fixed_parameters:
             raise RuntimeError("Controller and vehicle parameters must remain fixed in an episode.")
 
-        result = step_physics(state, controls, fixed_setup, geometry)
+        result = step_physics(
+            state,
+            controls,
+            fixed_setup,
+            geometry,
+            current_projection=projection,
+        )
         state = result.state
         steps = step_index + 1
-        next_projection = geometry.project((state.x, state.y))
+        next_projection = result.projection
         delta = next_projection.path_distance - previous_path_distance
         if delta < -geometry.length / 2.0:
             delta += geometry.length
@@ -521,18 +635,20 @@ def evaluate_episode(
         travelled_progress += delta
         best_progress = max(best_progress, travelled_progress)
         previous_path_distance = next_projection.path_distance
+        projection = next_projection
 
         if step_index % telemetry_interval_steps == 0 or result.collided:
-            telemetry.append(
-                TelemetrySnapshot(
-                    selected_car_id=selected_car_id,
-                    simulated_seconds=steps * FIXED_TIME_STEP,
-                    state=state,
-                    controls=controls,
-                    progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
-                    sensor_distances=geometry.sensor_distances(state),
-                )
+            snapshot = TelemetrySnapshot(
+                selected_car_id=selected_car_id,
+                simulated_seconds=steps * FIXED_TIME_STEP,
+                state=state,
+                controls=controls,
+                progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+                sensor_distances=geometry.sensor_distances(state),
             )
+            telemetry.append(snapshot)
+            if telemetry_callback is not None:
+                telemetry_callback(snapshot)
 
         if result.collided:
             collision_count += 1
@@ -543,16 +659,17 @@ def evaluate_episode(
             break
 
     if not telemetry or telemetry[-1].simulated_seconds != steps * FIXED_TIME_STEP:
-        telemetry.append(
-            TelemetrySnapshot(
-                selected_car_id=selected_car_id,
-                simulated_seconds=steps * FIXED_TIME_STEP,
-                state=state,
-                controls=controls,
-                progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
-                sensor_distances=geometry.sensor_distances(state),
-            )
+        snapshot = TelemetrySnapshot(
+            selected_car_id=selected_car_id,
+            simulated_seconds=steps * FIXED_TIME_STEP,
+            state=state,
+            controls=controls,
+            progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+            sensor_distances=geometry.sensor_distances(state),
         )
+        telemetry.append(snapshot)
+        if telemetry_callback is not None:
+            telemetry_callback(snapshot)
 
     return EpisodeResult(
         controller=controller.name,
@@ -642,9 +759,9 @@ def parse_telemetry_payload(payload: object) -> TelemetrySnapshot:
         selected_car_id=_required_string(payload.get("selectedCarId"), "selectedCarId"),
         simulated_seconds=_finite_number(payload.get("simulatedSeconds"), "simulatedSeconds"),
         state=VehicleState(
-            x=0.0,
-            y=0.0,
-            heading=0.0,
+            x=_finite_number(payload.get("x"), "x"),
+            y=_finite_number(payload.get("y"), "y"),
+            heading=_finite_number(payload.get("heading"), "heading"),
             forward_speed=_finite_number(payload.get("speed"), "speed"),
             lateral_speed=_finite_number(payload.get("lateralSpeed"), "lateralSpeed"),
             steering=_finite_number(payload.get("steering"), "steering"),

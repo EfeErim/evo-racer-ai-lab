@@ -455,6 +455,12 @@ h3 {
   margin-top: auto;
 }
 
+.welcome-actions {
+  display: grid;
+  width: 100%;
+  gap: 0.5rem;
+}
+
 .data-chip {
   display: inline-flex;
   min-height: 1.5rem;
@@ -680,10 +686,46 @@ h3 {
 
 .track-workbench {
   margin-top: 1.25rem;
-  padding: 1rem;
   border: 1px solid var(--border);
   border-radius: 0.4rem;
   background: #151a1f;
+}
+
+.track-workbench > summary {
+  padding: 1rem;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+
+.track-workbench > summary::-webkit-details-marker,
+.saved-runs-panel > summary::-webkit-details-marker,
+.settings-customizer > summary::-webkit-details-marker {
+  display: none;
+}
+
+.track-workbench-content {
+  padding: 0 1rem 1rem;
+}
+
+.details-action,
+.optional-note {
+  color: var(--text-dim);
+  font-size: 0.65rem;
+}
+
+.track-workbench[open] .details-action {
+  font-size: 0;
+}
+
+.track-workbench[open] .details-action::after {
+  content: "Close tools";
+  font-size: 0.65rem;
+}
+
+.optional-note {
+  margin: 0 0 0.85rem;
+  line-height: 1.5;
 }
 
 .section-heading,
@@ -944,6 +986,65 @@ h3 {
   padding: 1rem;
 }
 
+.plan-summary {
+  margin-bottom: 1rem;
+}
+
+.settings-customizer > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  list-style: none;
+}
+
+.settings-customizer > summary strong,
+.settings-customizer > summary small {
+  display: block;
+}
+
+.settings-customizer > summary strong {
+  font-size: 0.72rem;
+}
+
+.settings-customizer > summary small {
+  margin-top: 0.2rem;
+  color: var(--text-dim);
+  font-size: 0.6rem;
+}
+
+.settings-customizer-content {
+  padding-top: 1rem;
+}
+
+.saved-runs-panel > summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.saved-runs-content {
+  padding-top: 1rem;
+}
+
+.workload-note {
+  padding: 0.65rem 0.75rem;
+  margin: 0 0 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  color: var(--text-muted);
+  background: #151a1f;
+  font-size: 0.64rem;
+  line-height: 1.5;
+}
+
+.review-card .workload-note {
+  margin: 0.85rem 0 0;
+}
+
+.workload-note strong {
+  color: #d5dde5;
+}
+
 .field-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1066,6 +1167,108 @@ h3 {
   background: #151a1f;
 }
 
+.live-race-panel {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.4rem;
+  background: #151a1f;
+}
+
+.live-race-stage {
+  display: grid;
+  min-height: 24rem;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  place-items: center;
+  background:
+    linear-gradient(rgb(255 255 255 / 1.5%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(255 255 255 / 1.5%) 1px, transparent 1px),
+    #101519;
+  background-size: 24px 24px;
+}
+
+.live-race-stage .track-geometry {
+  width: 100%;
+  height: 24rem;
+}
+
+.live-race-panel .track-replay-marker {
+  filter: drop-shadow(0 0 0.75rem rgb(101 220 148 / 80%));
+  will-change: transform;
+}
+
+.live-race-panel .track-replay-marker rect {
+  fill: #65dc94;
+}
+
+.generation-trail {
+  fill: none;
+  stroke: #d8a85d;
+  stroke-dasharray: 2.4 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.generation-trail-summary {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+}
+
+.generation-trail-summary span {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.generation-trail-summary i {
+  display: inline-block;
+  width: 1rem;
+  border-top: 2px dashed #d8a85d;
+}
+
+.generation-trail-summary strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.data-chip.is-live::before {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-right: 0.4rem;
+  border-radius: 50%;
+  background: #65dc94;
+  box-shadow: 0 0 0 0.2rem rgb(101 220 148 / 15%);
+  content: "";
+}
+
+.live-race-footer {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+}
+
+.live-race-footer strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .run-overview,
 .result-summary,
 .fitness-chart,
@@ -1130,6 +1333,89 @@ h3 {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.run-progress {
+  grid-column: 1 / -1;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.run-progress > div {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.run-progress strong {
+  color: var(--text);
+  font-size: 0.72rem;
+}
+
+.run-progress progress {
+  display: block;
+  width: 100%;
+  height: 0.45rem;
+  margin-top: 0.55rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #0f1317;
+  color: var(--accent);
+}
+
+.run-progress progress::-webkit-progress-bar {
+  background: #0f1317;
+}
+
+.run-progress progress::-webkit-progress-value {
+  background: var(--accent);
+}
+
+.run-progress progress::-moz-progress-bar {
+  background: var(--accent);
+}
+
+.training-completion {
+  padding: 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid #3f674f;
+  border-radius: 0.4rem;
+  background: #152019;
+}
+
+.training-completion-heading {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.training-completion h2 {
+  margin-top: 0.25rem;
+  font-size: 1rem;
+}
+
+.training-completion p:not(.section-kicker) {
+  margin: 0.35rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.training-completion .button {
+  flex: 0 0 auto;
+}
+
+.run-control-note {
+  margin: 0.55rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.62rem;
 }
 
 .fitness-chart {
@@ -1547,8 +1833,13 @@ h3 {
     height: auto;
     padding: 0.5rem 1rem;
     overflow-x: auto;
+    scrollbar-width: none;
     border-right: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar::-webkit-scrollbar {
+    display: none;
   }
 
   .sidebar-label,

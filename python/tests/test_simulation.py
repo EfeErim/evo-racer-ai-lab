@@ -8,11 +8,15 @@ import pytest
 
 from evo_racer.simulation import (
     FIXED_TIME_STEP,
+    SENSOR_ANGLES,
+    SENSOR_RANGE,
     Controls,
     Observation,
     PurePursuitBaseline,
     RandomNetworkBaseline,
+    TelemetrySnapshot,
     TrackGeometry,
+    TrackProjection,
     VehicleSetup,
     VehicleState,
     evaluate_episode,
@@ -24,6 +28,34 @@ from evo_racer.simulation import (
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase4-telemetry.json"
+
+
+def _unfiltered_sensor_distances(geometry: TrackGeometry, state: VehicleState) -> tuple[float, ...]:
+    distances: list[float] = []
+    for angle in SENSOR_ANGLES:
+        heading = state.heading + angle
+        direction_x = math.cos(heading)
+        direction_y = math.sin(heading)
+        nearest = SENSOR_RANGE
+        for boundary in geometry.boundaries:
+            for start, end in zip(boundary, boundary[1:], strict=False):
+                segment_x = end[0] - start[0]
+                segment_y = end[1] - start[1]
+                offset_x = start[0] - state.x
+                offset_y = start[1] - state.y
+                denominator = direction_x * segment_y - direction_y * segment_x
+                if abs(denominator) <= 1e-12:
+                    continue
+                ray_distance = (offset_x * segment_y - offset_y * segment_x) / denominator
+                segment_amount = (offset_x * direction_y - offset_y * direction_x) / denominator
+                if (
+                    ray_distance >= 0.0
+                    and 0.0 <= segment_amount <= 1.0
+                    and ray_distance <= SENSOR_RANGE
+                ):
+                    nearest = min(nearest, ray_distance)
+        distances.append(nearest)
+    return tuple(distances)
 
 
 def _advance(
@@ -159,6 +191,47 @@ def test_swept_collision_and_sensors_use_derived_track_corridor() -> None:
     assert state.forward_speed == 0.0
 
 
+def test_physics_step_reuses_the_swept_safe_projection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    geometry = preset_geometry("easy-oval")
+    initial_projection = geometry.project((geometry.spawn.x, geometry.spawn.y))
+    real_project = geometry.project
+    project_calls = 0
+
+    def counted_project(point: tuple[float, float]) -> TrackProjection:
+        nonlocal project_calls
+        project_calls += 1
+        return real_project(point)
+
+    monkeypatch.setattr(geometry, "project", counted_project)
+    result = step_physics(
+        geometry.spawn,
+        Controls(steering=0.0, throttle=1.0, brake=0.0),
+        VehicleSetup(),
+        geometry,
+        current_projection=initial_projection,
+    )
+
+    assert project_calls == 1
+    assert result.projection == real_project((result.state.x, result.state.y))
+
+
+@pytest.mark.parametrize("track_id", tuple(track.track_id for track in PRESET_TRACKS))
+@pytest.mark.parametrize("heading_offset", (0.0, 0.37, -1.1))
+def test_sensor_bounds_filter_preserves_intersections(track_id: str, heading_offset: float) -> None:
+    geometry = preset_geometry(track_id)
+    state = VehicleState(
+        x=geometry.spawn.x,
+        y=geometry.spawn.y,
+        heading=geometry.spawn.heading + heading_offset,
+    )
+
+    assert geometry.sensor_distances(state) == pytest.approx(
+        _unfiltered_sensor_distances(geometry, state), rel=0.0, abs=1e-12
+    )
+
+
 class _MutatingController:
     def __init__(self) -> None:
         self.weight = 0.0
@@ -234,6 +307,24 @@ def test_random_network_baseline_is_seeded_and_fixed() -> None:
 
     assert first.controller_parameters == second.controller_parameters
     assert first.to_payload() == second.to_payload()
+
+
+def test_episode_publishes_real_position_telemetry_without_changing_result() -> None:
+    published: list[TelemetrySnapshot] = []
+    result = evaluate_episode(
+        preset_geometry("easy-oval"),
+        PurePursuitBaseline(),
+        max_seconds=0.2,
+        telemetry_interval_steps=2,
+        telemetry_callback=published.append,
+    )
+
+    assert tuple(published) == result.telemetry
+    assert len(published) > 1
+    payload = published[-1].to_payload()
+    assert payload["x"] == pytest.approx(published[-1].state.x)
+    assert payload["y"] == pytest.approx(published[-1].state.y)
+    assert payload["heading"] == pytest.approx(published[-1].state.heading)
 
 
 def test_shared_telemetry_fixture_round_trips_in_python() -> None:
