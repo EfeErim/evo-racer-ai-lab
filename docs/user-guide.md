@@ -34,17 +34,19 @@ it is reachable from the same computer, not from the local network or internet.
 
 ## Run a first experiment
 
-The setup flow is always:
+For the simplest first run:
+
+1. On Welcome, choose **Review recommended setup**. This selects **Easy Oval**
+   and **Quick start**.
+2. Wait for **Configuration valid** on Review.
+3. Read the frozen track and settings, then choose **Start training**.
+
+Choose **Customize setup** instead when you want a different track or training
+plan. That path is:
 
 ```text
 Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
 ```
-
-1. On Welcome, choose **Begin experiment setup**.
-2. Select **Easy Oval** for the simplest first track.
-3. On Training Settings, choose **Quick start** or enter valid values.
-4. On Review, wait for **Configuration valid**.
-5. Read the frozen track and settings, then choose **Start training**.
 
 Opening a screen or validating settings never starts training. Only the Start
 button creates a run.
@@ -57,7 +59,7 @@ Three bundled presets are ready to use:
 - **Technical Circuit** mixes corner types.
 - **Chicane Challenge** emphasizes rapid direction changes.
 
-The Track screen also includes:
+Open **Build or load a custom track** on the Track screen to use:
 
 - a sequential piece editor with undo, redo, reset, delete, and assisted
   closure;
@@ -69,6 +71,9 @@ be selected. An invalid import is rejected with a stable error instead of being
 loaded into a run.
 
 ## Training settings
+
+Choose a training plan first. The exact controls below stay collapsed under
+**Customize training** unless you need them.
 
 **Algorithm**
 
@@ -90,20 +95,61 @@ Larger populations require more work per generation.
 candidate. Simulation uses a fixed `1/60 s` step; it does not depend on browser
 rendering speed.
 
-**Random seed** is under Advanced controls. Reusing the same supported
-configuration and seed is intended to reproduce the same result sequence.
+**Random seed** is under Advanced controls inside **Customize training**.
+Reusing the same supported configuration and seed is intended to reproduce the
+same result sequence.
+
+The bundled presets expose their maximum workload directly:
+
+- **Quick start** is the default visual demo: 10 candidates, 8 generations,
+  and 15 simulated seconds per episode.
+- **Balanced** is a longer Fixed GA run: 24 candidates, 20 generations, and 30
+  simulated seconds per episode.
+- **Thorough** is an extended NEAT experiment: 48 candidates, 40 generations,
+  and 60 simulated seconds per episode.
+
+The Settings and Review screens show the maximum candidate-episode count before
+Start. A collision or completed lap can end an episode early. Existing saved
+runs keep their original frozen settings; choose New setup to use a newer
+preset.
 
 ## Observe and control a run
 
-Training shows the current generation, best and median fitness, the selected
-candidate, continuous steering/throttle/brake outputs, progress, speed, and
-seven road-edge sensors.
+During the first generation, Training shows the currently evaluated candidate
+moving from live Python snapshots. After that generation completes, the panel
+continuously plays the latest Python generation champion at `2x` simulated
+speed. The browser fills only the visual frames between recorded Python
+positions, so motion stays smooth while training continues at full speed.
+As new generations finish, the track keeps up to seven earlier champion paths
+as an **Evolution trail**. Older paths are fainter, so the newest route is easy
+to compare with earlier attempts. The same trail remains visible in Results for
+the current session; starting or restoring another run clears it.
+If the EvoRacer tab is in the background, training still runs at full speed but
+the interface checks for new observations less often. Returning to the tab
+triggers an immediate refresh; no manual catch-up or resume action is needed.
+The same screen shows continuous steering/throttle/brake outputs, progress,
+speed, seven road-edge sensors, and candidate position within the population.
+Best and median fitness update when a complete generation reaches its
+deterministic boundary.
 
-- **Pause** prevents a later generation batch from starting.
+The overall progress bar combines completed generations with the candidates
+already completed in the active generation. It is evaluation progress, not a
+wall-clock estimate.
+
+- **Pause after generation** prevents a later generation batch from starting.
 - **Resume** permits the next complete batch.
-- **Stop** finishes the run after a completed generation boundary.
+- **Stop after generation** finishes the run after a completed generation
+  boundary.
 - **View results** opens the terminal result once a run has stopped or
   completed.
+
+While Python is evaluating a generation, Pause or Stop is queued rather than
+interrupting a candidate episode. The button and status note confirm the queued
+command until that deterministic boundary is reached.
+
+When the run completes or stops, a **Results ready** panel appears immediately
+below the run status. Use **Open results** there to continue without scrolling
+through the telemetry and replay panels first.
 
 The reviewed configuration is locked after Start. The controls on this screen
 manage the experiment only; they do not drive the vehicle.
