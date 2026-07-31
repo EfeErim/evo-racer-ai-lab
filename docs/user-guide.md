@@ -24,13 +24,14 @@ core on the same computer.
 
    The two hashes must match.
 
-3. Extract the entire ZIP. Do not move only `EvoRacer.exe` out of its folder;
-   the adjacent bundled files are required.
-4. Open `EvoRacer\EvoRacer.exe`.
+3. Extract the entire ZIP. Keep `EvoRacer.cmd`, `app`, and `runtime` together.
+4. Open `EvoRacer\EvoRacer.cmd`.
 
 Node.js and Python are not required on the target computer. The application
 opens its interface at `http://127.0.0.1:8765`. This address is loopback-only:
 it is reachable from the same computer, not from the local network or internet.
+Application Python modules and web assets remain visible under `app`; they are
+not frozen into an EvoRacer application EXE.
 
 ## Run a first experiment
 
@@ -59,12 +60,22 @@ Three bundled presets are ready to use:
 - **Technical Circuit** mixes corner types.
 - **Chicane Challenge** emphasizes rapid direction changes.
 
-Open **Build or load a custom track** on the Track screen to use:
+Select **Open Track Builder** on the Track screen. The workspace has three
+focused tabs:
 
-- a sequential piece editor with undo, redo, reset, delete, and assisted
-  closure;
-- a deterministic generator controlled by seed, length, and difficulty; and
-- versioned TrackV1 JSON import, export, save, and delete.
+- **Build** provides a large Python-compiled preview, track name and road-width
+  controls, a readable piece palette, reorder/duplicate/delete actions,
+  undo/redo/reset, and Python-assisted closure. Python revalidates the canonical
+  draft after each edit and shows stable issue codes when the loop is invalid.
+- **Generate** creates a deterministic track from seed, length, and difficulty.
+  Generation produces a verified preview; choose **Use this track** explicitly
+  to apply it to the experiment or **Edit pieces** to continue in Build.
+- **Library** imports versioned TrackV1 JSON and manages atomically saved local
+  tracks. Saved tracks can be selected, edited, exported, or deleted after a
+  confirmation.
+
+Builder drafts and generated/imported previews never select themselves. A
+custom track enters the setup only after **Use this track** is pressed.
 
 Every source passes through the same Python compiler and validator before it can
 be selected. An invalid import is rejected with a stable error instead of being
@@ -122,8 +133,9 @@ speed. The browser fills only the visual frames between recorded Python
 positions, so motion stays smooth while training continues at full speed.
 As new generations finish, the track keeps up to seven earlier champion paths
 as an **Evolution trail**. Older paths are fainter, so the newest route is easy
-to compare with earlier attempts. The same trail remains visible in Results for
-the current session; starting or restoring another run clears it.
+to compare with earlier attempts. Up to eight sampled paths are saved with the
+run, so reopening that same run restores its own trail without inheriting paths
+from another experiment.
 If the EvoRacer tab is in the background, training still runs at full speed but
 the interface checks for new observations less often. Returning to the tab
 triggers an immediate refresh; no manual catch-up or resume action is needed.
@@ -162,6 +174,8 @@ Results contain:
 - best and median fitness history;
 - the champion compared with a seeded random network and Pure Pursuit using the
   champion's vehicle setup; and
+- earlier saved champions only when their track, population, generation budget,
+  completed generations, and episode duration match; and
 - a Python-recorded replay with motion, controller outputs, and fixed vehicle
   values.
 

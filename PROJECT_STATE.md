@@ -2,9 +2,9 @@
 
 ## Current position
 
-- Current phase: `Phase 11 - Public binary publication`
-- Status: `complete`
-- Active milestone: `None - all planned milestones complete`
+- Current phase: `Post-release v1.1.0 personal offline hardening`
+- Status: `release candidate verified locally; publication pending`
+- Active milestone: `Publish the verified v1.1.0 portable ZIP`
 - Last verified: `2026-07-31`
 
 ## Unreleased correction after v1.0.0
@@ -21,11 +21,13 @@
   advancing simulation state.
 - Training and Results now keep an **Evolution trail** of up to seven prior
   Python generation-champion paths. Each stored path is sampled to at most 64
-  recorded points, older paths fade behind the current replay, and new/restored
-  runs cannot inherit presentation history.
+  recorded points, older paths fade behind the current replay, and each atomic
+  checkpoint retains at most eight paths. Restored runs recover only their own
+  trail and cannot inherit presentation history from another run.
 - Transient `generationReplay` frames remain outside persisted run documents,
-  and Windows checkpoint replacement now retries only bounded transient sharing
-  violations while preserving atomic `os.replace` persistence.
+  while bounded generation-path summaries remain inside. Windows checkpoint
+  replacement retries only bounded transient sharing violations while
+  preserving atomic `os.replace` persistence.
 - Reused Python centerline and boundary segment geometry reduced the verified
   18-case deterministic matrix from `81.457872 s` / `4.039459 s` median to
   `26.195954 s` while matching every reviewed result.
@@ -35,6 +37,31 @@
 - Welcome now offers a validated `Easy Oval + Quick start` path directly to
   Review. Saved runs, custom-track tools, and exact training controls are
   collapsed by default while the full customization flow remains available.
+- Track Builder is now a first-class, closed-by-default workspace with distinct
+  Build, Generate, and Library tabs. Build provides a large Python-compiled
+  preview, readable segment palette, reorder/duplicate/delete controls,
+  undo/redo/reset, assisted closure, automatic Python validation, stable issue
+  codes, and explicit selection. Generated, imported, and saved tracks remain
+  previews until the user chooses them for the experiment.
+- Terminal previous-run comparison now includes only identical track hashes,
+  populations, requested and completed generations, and episode durations.
+- Pause or Stop requested immediately after Start is queued for the first
+  generation boundary instead of creating a terminal zero-generation run with
+  no Results payload.
+- The post-redesign `npm run test:phase10` gate passed with `54` Vitest tests,
+  `96` pytest tests, all `18` deterministic matrix cases, a transparent Windows
+  portable release build, and clean-runtime acceptance. The accepted local ZIP
+  SHA-256 is `8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1`.
+- Playwright `1.61.1` completed the real Chromium recommended setup, explicit
+  Start, queued Stop, and Results flow without console errors.
+- The complete Thorough preset (`NEAT`, `48 x 40 x 60 s`) finished all `40`
+  generations in `207.521299 s`; its champion reached progress `1.0`, the
+  checkpoint was `62,465` bytes, and the persisted trail remained bounded at
+  eight paths.
+- The Windows release is now a transparent portable folder started by
+  `EvoRacer.cmd`. Plain Python modules and web assets live under `app`, the
+  official checksum-pinned Python 3.13 embeddable runtime lives under `runtime`,
+  and the bundle contains no frozen `EvoRacer.exe`.
 - Browser observation polling is now capped at `4 Hz` instead of `10 Hz`, a
   `60%` reduction in scheduled full-interface refreshes. Python simulation and
   timestamp-based `requestAnimationFrame` motion remain independent of polling.
@@ -94,7 +121,10 @@
   `docs/verification/live-training-observer.md` and
   `docs/verification/training-performance.md`, with the smooth-presentation
   correction in `docs/verification/smooth-training-replay.md` and the simplified
-  setup audit in `docs/verification/setup-experience.md`.
+  setup audit in `docs/verification/setup-experience.md`. The complete Track
+  Builder redesign audit is in
+  `docs/verification/track-builder-redesign.md`; personal offline hardening is
+  recorded in `docs/verification/personal-offline-hardening.md`.
 
 ## Verified repository facts
 
@@ -164,10 +194,11 @@
 - The production launcher serves built frontend assets and versioned Python
   contracts from one `127.0.0.1:8765` origin and supports explicit graceful
   shutdown.
-- PyInstaller `onedir` bundles the Python core, neat-python configuration, and
-  Vite assets without requiring installed Node.js or Python at runtime.
+- The portable release keeps Python modules and Vite assets as visible files,
+  uses a checksum-pinned official Python 3.13 embeddable runtime, and requires
+  no installed Node.js or Python.
 - The release workflow creates `EvoRacer-Windows-x64.zip`, a separate SHA-256
-  checksum, README, third-party notices, and complete Python/PyInstaller
+  checksum, README, third-party notices, and complete Python/neat-python
   licenses.
 - Python owns the Phase 10 deterministic regression matrix through the same
   preset compiler, run session, Fixed GA, NEAT, evaluator, result, and replay
@@ -535,27 +566,29 @@ Delivered:
 
 - [x] Production static frontend and Python loopback core under one launcher.
 - [x] Browser-open behavior and explicit graceful shutdown.
-- [x] PyInstaller `onedir` bundle with all runtime dependencies and local assets.
+- [x] Transparent `app/` plus embedded `runtime/` portable folder with no frozen
+      EvoRacer application EXE.
 - [x] `EvoRacer-Windows-x64.zip` and matching SHA-256 checksum.
-- [x] README, third-party notices, Python license, and PyInstaller license.
+- [x] README, third-party notices, Python license, and neat-python license.
 - [x] Clean-runtime, offline-boundary, persistence, restore, replay, and browser
       acceptance.
 
-Verification evidence recorded on `2026-07-29`:
+Latest verification evidence recorded on `2026-07-31`:
 
-- `npm run check` passed Prettier, ESLint, TypeScript type-check, 25 Vitest
-  tests, Ruff format/lint, strict mypy, 67 pytest tests, and the Vite production
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 54 Vitest
+  tests, Ruff format/lint, strict mypy, 96 pytest tests, and the Vite production
   build.
 - `npm run smoke:m0` passed with the development frontend and Python service on
   loopback.
-- `npm run build:release` completed with PyInstaller `6.21.0` on Windows 11 x64
-  and created the release ZIP, checksum, and notices.
+- `npm run build:release` verified and extracted official embedded Python
+  `3.13.5`, copied plain application modules/assets, and created the portable
+  release ZIP, checksum, and notices.
 - Final `release\EvoRacer-Windows-x64.zip` SHA-256:
-  `ab1a3126385c2c536169bb50124df436b4043ad4ab3afc74b6d4b518179b6149`.
+  `8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1`.
 - `npm run test:release` launched the extracted app with a system-only `PATH`,
   no Python environment, and unreachable outbound proxies. It saved generation
-  `1 / 2`, shut down, restored run
-  `run-22089c3857804993b70dd2d0fccbeb9c`, completed `2 / 2`, and returned replay
+  `1 / 3`, shut down, restored run
+  `run-c0fe1bc150b54b66b9eefc45de0fe7b8`, completed `3 / 3`, and returned replay
   frames.
 - The packaged process opened only loopback sockets and spawned no Node.js or
   Python child process.
@@ -564,9 +597,12 @@ Verification evidence recorded on `2026-07-29`:
   replay, saved-run listing, and the Exit action.
 - Browser console warnings/errors and non-local resource references were both
   zero. At `390 x 844`, document `scrollWidth` equaled `clientWidth` (`375`).
-- The Exit action returned its shutdown view and terminated `EvoRacer.exe`.
+- The extracted bundle contained `EvoRacer.cmd`, visible `app/evo_racer` and
+  `app/web` trees, isolated `runtime`, and no frozen `EvoRacer.exe`.
 - Detailed evidence is saved in
-  `docs/verification/phase9-windows-offline-package.md`.
+  `docs/verification/phase9-windows-offline-package.md` for the original v1.0.0
+  package and `docs/verification/personal-offline-hardening.md` for the current
+  portable package.
 - `git diff --check` passed.
 
 ### M10 - Hardening and Portfolio Release

@@ -155,6 +155,56 @@ def test_setup_validation_contract_does_not_start_a_run() -> None:
         thread.join(timeout=2)
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "http://127.0.0.1:4173",
+        "http://127.0.0.1:5173",
+        "http://localhost:4173",
+        "http://localhost:5173",
+    ],
+)
+def test_setup_validation_accepts_supported_loopback_ui_origins(origin: str) -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(  # noqa: S310
+        f"http://{host}:{port}/v1/setup/validate",
+        method="POST",
+        headers={"Content-Type": "application/json", "Origin": origin},
+        data=json.dumps(
+            {
+                "contractVersion": 1,
+                "trackPreset": "easy-oval",
+                "settings": {
+                    "algorithm": "neat",
+                    "populationSize": 37,
+                    "generations": 6,
+                    "episodeSeconds": 45,
+                    "seed": 999,
+                },
+            }
+        ).encode("utf-8"),
+    )
+
+    try:
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            payload: dict[str, Any] = json.load(response)
+
+        assert response.status == HTTPStatus.OK
+        assert response.headers["Access-Control-Allow-Origin"] == origin
+        assert payload == {"contractVersion": 1, "valid": True, "errors": []}
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
     server = create_server(port=0)
     address = server.server_address
@@ -355,7 +405,7 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
                 "settings": {
                     "algorithm": "fixed-ga",
                     "populationSize": 10,
-                    "generations": 1,
+                    "generations": 2,
                     "episodeSeconds": 15,
                     "seed": 42,
                 },
@@ -367,12 +417,20 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
             "/v1/runs/command",
             {"contractVersion": 1, "runId": run_id, "command": "pause"},
         )
-        assert paused["snapshot"]["status"] == "paused"
-        unchanged = post(
-            "/v1/runs/observe",
-            {"contractVersion": 1, "runId": run_id},
-        )
-        assert unchanged["snapshot"]["generation"] == 0
+        assert paused["snapshot"]["status"] == "running"
+        assert paused["snapshot"]["pendingCommand"] == "pause"
+        deadline = time.monotonic() + 30
+        while True:
+            unchanged = post(
+                "/v1/runs/observe",
+                {"contractVersion": 1, "runId": run_id},
+            )
+            if unchanged["snapshot"]["status"] == "paused":
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail("Background service generation did not pause.")
+            time.sleep(0.01)
+        assert unchanged["snapshot"]["generation"] == 1
         post(
             "/v1/runs/command",
             {"contractVersion": 1, "runId": run_id, "command": "resume"},
@@ -390,7 +448,7 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
                 pytest.fail("Background service generation did not complete.")
             time.sleep(0.01)
         assert snapshot["status"] == "completed"
-        assert snapshot["generation"] == 1
+        assert snapshot["generation"] == 2
         assert snapshot["result"]["metadata"]["runId"] == run_id
         assert snapshot["result"]["replay"]["frames"]
     finally:

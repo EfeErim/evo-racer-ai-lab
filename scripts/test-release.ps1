@@ -102,16 +102,18 @@ function Wait-ForRunState {
 
 function Start-AcceptanceApp {
     param(
-        [Parameter(Mandatory)][string] $Executable,
+        [Parameter(Mandatory)][string] $BundleRoot,
         [Parameter(Mandatory)][string] $LocalData
     )
 
+    $runtimePython = Join-Path $BundleRoot "runtime\python.exe"
+    $staticRoot = Join-Path $BundleRoot "app\web"
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-    $startInfo.FileName = $Executable
-    $startInfo.Arguments = "--no-browser --data-root `"$LocalData`""
+    $startInfo.FileName = $runtimePython
+    $startInfo.Arguments = "-m evo_racer.launcher --no-browser --data-root `"$LocalData`" --static-root `"$staticRoot`""
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
-    $startInfo.WorkingDirectory = Split-Path -Parent $Executable
+    $startInfo.WorkingDirectory = $BundleRoot
     $startInfo.EnvironmentVariables["PATH"] = "$env:SystemRoot\System32"
     $startInfo.EnvironmentVariables["HTTP_PROXY"] = "http://127.0.0.1:9"
     $startInfo.EnvironmentVariables["HTTPS_PROXY"] = "http://127.0.0.1:9"
@@ -168,6 +170,66 @@ function Stop-AcceptanceApp {
     }
 }
 
+function Test-PortableStarter {
+    param(
+        [Parameter(Mandatory)][string] $BundleRoot,
+        [Parameter(Mandatory)][string] $LocalData
+    )
+
+    $starterPath = Join-Path $BundleRoot "EvoRacer.cmd"
+    $previousDataRoot = $env:EVORACER_DATA_ROOT
+    $env:EVORACER_DATA_ROOT = $LocalData
+    try {
+        $starter = Start-Process `
+            -FilePath $starterPath `
+            -WorkingDirectory $BundleRoot `
+            -WindowStyle Hidden `
+            -PassThru
+        $starter.WaitForExit(10000) | Out-Null
+        $health = $null
+        $deadline = [DateTime]::UtcNow.AddSeconds(30)
+        do {
+            try {
+                $health = Invoke-RestMethod -Uri "$appOrigin/health" -TimeoutSec 2
+                if ($health.status -eq "ready") {
+                    break
+                }
+            }
+            catch {
+                Start-Sleep -Milliseconds 200
+            }
+        } while ([DateTime]::UtcNow -lt $deadline)
+        if ($null -eq $health -or $health.status -ne "ready") {
+            throw "EvoRacer.cmd did not start the portable application."
+        }
+        $listener = Get-NetTCPConnection `
+            -LocalAddress "127.0.0.1" `
+            -LocalPort 8765 `
+            -State Listen `
+            -ErrorAction Stop |
+            Select-Object -First 1
+        $portableProcess = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)"
+        $expectedRuntime = Join-Path $BundleRoot "runtime\pythonw.exe"
+        if ($portableProcess.ExecutablePath -ne $expectedRuntime) {
+            throw "EvoRacer.cmd started an unexpected runtime process."
+        }
+        $runtimeProcess = [System.Diagnostics.Process]::GetProcessById($listener.OwningProcess)
+        Invoke-RestMethod -Uri "$appOrigin/v1/app/shutdown" -Method Post -TimeoutSec 5 | Out-Null
+        if (-not $runtimeProcess.WaitForExit(10000)) {
+            $runtimeProcess.Kill()
+            throw "EvoRacer.cmd runtime did not shut down within 10 seconds."
+        }
+    }
+    finally {
+        if ($null -eq $previousDataRoot) {
+            Remove-Item Env:EVORACER_DATA_ROOT -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:EVORACER_DATA_ROOT = $previousDataRoot
+        }
+    }
+}
+
 if (-not (Test-Path -LiteralPath $zipPath) -or
     -not (Test-Path -LiteralPath $checksumPath)) {
     throw "Build the Phase 9 release before running acceptance: npm run build:release"
@@ -190,24 +252,31 @@ New-Item -ItemType Directory -Path $extractRoot, $dataRoot -Force | Out-Null
 Expand-Archive -LiteralPath $zipPath -DestinationPath $extractRoot
 
 $bundleRoot = Join-Path $extractRoot "EvoRacer"
-$executable = Join-Path $bundleRoot "EvoRacer.exe"
 foreach ($requiredPath in @(
-    $executable,
+    (Join-Path $bundleRoot "EvoRacer.cmd"),
+    (Join-Path $bundleRoot "runtime\python.exe"),
+    (Join-Path $bundleRoot "runtime\pythonw.exe"),
+    (Join-Path $bundleRoot "app\evo_racer\launcher.py"),
+    (Join-Path $bundleRoot "app\web\index.html"),
     (Join-Path $bundleRoot "README.md"),
     (Join-Path $bundleRoot "USER-GUIDE.md"),
     (Join-Path $bundleRoot "THIRD-PARTY-NOTICES.txt"),
     (Join-Path $bundleRoot "licenses\PYTHON-LICENSE.txt"),
-    (Join-Path $bundleRoot "licenses\PYINSTALLER-LICENSE.txt")
+    (Join-Path $bundleRoot "licenses\NEAT-PYTHON-LICENSE.txt")
 )) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Release content is missing: $requiredPath"
     }
 }
+if (Get-ChildItem -LiteralPath $bundleRoot -Filter "EvoRacer.exe" -Recurse) {
+    throw "The portable release contains a frozen EvoRacer.exe."
+}
 
 $firstProcess = $null
 $secondProcess = $null
 try {
-    $firstProcess = Start-AcceptanceApp -Executable $executable -LocalData $dataRoot
+    Test-PortableStarter -BundleRoot $bundleRoot -LocalData $dataRoot
+    $firstProcess = Start-AcceptanceApp -BundleRoot $bundleRoot -LocalData $dataRoot
     $index = Invoke-WebRequest -Uri "$appOrigin/" -TimeoutSec 5 -UseBasicParsing
     if ($index.StatusCode -ne 200 -or $index.Content -notmatch "EvoRacer") {
         throw "The packaged production frontend did not load."
@@ -269,7 +338,7 @@ try {
     Stop-AcceptanceApp -AppProcess $firstProcess
     $firstProcess = $null
 
-    $secondProcess = Start-AcceptanceApp -Executable $executable -LocalData $dataRoot
+    $secondProcess = Start-AcceptanceApp -BundleRoot $bundleRoot -LocalData $dataRoot
     $library = Invoke-RestMethod -Uri "$appOrigin/v1/runs/library" -TimeoutSec 10
     if ($library.runs.runId -notcontains $runId) {
         throw "The packaged app did not restore the saved run after restart."
@@ -301,7 +370,8 @@ try {
     Write-Host "Phase 9 release acceptance passed."
     Write-Host "Archive SHA-256: $actualHash"
     Write-Host "Run restored and completed: $runId"
-    Write-Host "Packaged process used loopback only and spawned no Node.js or Python process."
+    Write-Host "EvoRacer.cmd started the adjacent portable runtime successfully."
+    Write-Host "Portable runtime used loopback only and spawned no external Node.js or Python process."
 }
 finally {
     if ($null -ne $firstProcess -and -not $firstProcess.HasExited) {

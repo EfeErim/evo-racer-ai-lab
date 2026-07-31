@@ -64,11 +64,11 @@ import {
   type TrackMarker,
 } from "./track-renderer";
 import {
-  SEGMENT_CATALOGUE,
   addEditorPiece,
-  createEditorState,
   deleteEditorPiece,
+  duplicateEditorPiece,
   editorTrack,
+  moveEditorPiece,
   parseTrackDocument,
   redoEditor,
   replaceEditorTrack,
@@ -78,8 +78,13 @@ import {
   updateEditorDetails,
   type EditorState,
   type SegmentKind,
-  type TrackLibraryResponse,
 } from "./track-workbench";
+import {
+  createTrackWorkspaceState,
+  renderTrackBuilder,
+  type TrackBuilderTab,
+  type TrackWorkspaceState,
+} from "./track-builder";
 
 const ROUTE_ORDER = new Map<RouteId, number>(
   ROUTES.map((route, index) => [route.id, index]),
@@ -115,14 +120,6 @@ type PresetGeometryState =
   | { status: "ready"; presets: CompiledTrackV1[] }
   | { status: "unavailable" };
 
-interface TrackWorkspaceState {
-  editor: EditorState;
-  active?: CompiledTrackV1;
-  library: TrackLibraryResponse | null;
-  message: string;
-  toolsOpen: boolean;
-}
-
 type SimulationState =
   | { status: "idle" }
   | { status: "loading" }
@@ -147,12 +144,10 @@ export function mountApp(root: HTMLElement): AppController {
   let generationTrails: GenerationTrail[] = [];
   let replayFrameIndex = 0;
   let runLibrary: RunLibraryState = { status: "loading" };
-  let trackWorkspace: TrackWorkspaceState = {
-    editor: createEditorState(),
-    library: null,
-    message: "Editor geometry is checked by Python when you validate it.",
-    toolsOpen: false,
-  };
+  let trackValidationRequest = 0;
+  let trackWorkspace = createTrackWorkspaceState(
+    `custom-${Date.now().toString(36)}`,
+  );
 
   const cancelLiveMarkerFrame = (): void => {
     if (liveMarkerFrame !== undefined) {
@@ -386,10 +381,10 @@ export function mountApp(root: HTMLElement): AppController {
     try {
       const response = await validateSetup(state.draft);
       dispatch({ type: "validation-received", response });
-    } catch {
+    } catch (error) {
       dispatch({
         type: "validation-received",
-        response: serviceUnavailableResponse(),
+        response: serviceUnavailableResponse(error),
       });
     }
   };
@@ -544,7 +539,10 @@ export function mountApp(root: HTMLElement): AppController {
     } catch {
       trackWorkspace = {
         ...trackWorkspace,
-        message: "The local track library is unavailable.",
+        notice: {
+          tone: "error",
+          message: "The local track library is unavailable.",
+        },
       };
     }
     render();
@@ -595,7 +593,7 @@ export function mountApp(root: HTMLElement): AppController {
       if (response.setup.track !== null) {
         const compiled = await compileTrack(response.setup.track);
         if (compiled.valid && compiled.compiled !== undefined) {
-          trackWorkspace = { ...trackWorkspace, active: compiled.compiled };
+          trackWorkspace = { ...trackWorkspace, selected: compiled.compiled };
         }
       }
       generationTrails = [];
@@ -611,9 +609,111 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const useCompiled = (compiled: CompiledTrackV1, message: string): void => {
-    trackWorkspace = { ...trackWorkspace, active: compiled, message };
+    trackWorkspace = {
+      ...trackWorkspace,
+      selected: compiled,
+      notice: { tone: "success", message },
+    };
     dispatch({ type: "select-custom-track", track: compiled.track });
   };
+
+  const setEditorDraft = (editor: EditorState, message: string): void => {
+    trackWorkspace = {
+      ...trackWorkspace,
+      editor,
+      editorPreview: undefined,
+      editorValidation: { status: "checking", errors: [] },
+      notice: { tone: "info", message },
+    };
+    render();
+    void validateEditorDraft();
+  };
+
+  const validateEditorDraft = async (): Promise<void> => {
+    const requestId = ++trackValidationRequest;
+    const draft = editorTrack(trackWorkspace.editor);
+    trackWorkspace = {
+      ...trackWorkspace,
+      pending: "validate",
+      editorValidation: { status: "checking", errors: [] },
+    };
+    render();
+    try {
+      const response = await compileTrack(draft);
+      if (requestId !== trackValidationRequest) {
+        return;
+      }
+      if (response.valid && response.compiled !== undefined) {
+        trackWorkspace = {
+          ...trackWorkspace,
+          pending: null,
+          editorPreview: response.compiled,
+          editorValidation: { status: "valid", errors: [] },
+          notice: {
+            tone: "success",
+            message: "Draft geometry is valid and ready to use.",
+          },
+        };
+      } else {
+        trackWorkspace = {
+          ...trackWorkspace,
+          pending: null,
+          editorPreview: undefined,
+          editorValidation: {
+            status: "invalid",
+            errors: response.errors,
+          },
+          notice: {
+            tone: "warning",
+            message:
+              response.errors[0]?.message ??
+              "The draft needs changes before it can be used.",
+          },
+        };
+      }
+    } catch {
+      if (requestId !== trackValidationRequest) {
+        return;
+      }
+      trackWorkspace = {
+        ...trackWorkspace,
+        pending: null,
+        editorPreview: undefined,
+        editorValidation: { status: "invalid", errors: [] },
+        notice: {
+          tone: "error",
+          message: "The local Python core could not validate this draft.",
+        },
+      };
+    }
+    render();
+  };
+
+  const saveCompiledTrack = async (
+    compiled: CompiledTrackV1,
+  ): Promise<void> => {
+    trackWorkspace = { ...trackWorkspace, pending: "save" };
+    render();
+    const result = await saveTrack(compiled.track);
+    trackWorkspace = {
+      ...trackWorkspace,
+      pending: null,
+      notice: {
+        tone: result.saved ? "success" : "error",
+        message: result.saved
+          ? "Track saved atomically to the local library."
+          : (result.errors[0]?.message ?? "Track could not be saved."),
+      },
+    };
+    await refreshLibrary();
+  };
+
+  const libraryTrack = (
+    trackId: string | undefined,
+  ): CompiledTrackV1 | undefined =>
+    trackWorkspace.library?.tracks.find(
+      (candidate) => candidate.track.id === trackId,
+    );
 
   const handleTrackAction = async (
     action: string,
@@ -621,173 +721,329 @@ export function mountApp(root: HTMLElement): AppController {
   ): Promise<void> => {
     try {
       switch (action) {
-        case "editor-add": {
-          const kind = element.dataset.segmentKind as SegmentKind | undefined;
-          if (kind !== undefined) {
-            trackWorkspace = {
-              ...trackWorkspace,
-              editor: addEditorPiece(trackWorkspace.editor, kind),
-              active: undefined,
-              message: "Sequence changed. Validate it with the local core.",
-            };
+        case "open-builder":
+          trackWorkspace = {
+            ...trackWorkspace,
+            toolsOpen: true,
+            tab: "build",
+            notice: {
+              tone: "info",
+              message: "Checking the starter draft with the local Python core.",
+            },
+          };
+          render();
+          if (trackWorkspace.editorValidation.status === "unchecked") {
+            void validateEditorDraft();
           }
-          render();
           return;
-        }
-        case "editor-delete": {
-          const index = Number(element.dataset.pieceIndex);
-          trackWorkspace = {
-            ...trackWorkspace,
-            editor: deleteEditorPiece(trackWorkspace.editor, index),
-            active: undefined,
-            message: "Sequence changed. Validate it with the local core.",
-          };
-          render();
-          return;
-        }
-        case "editor-undo":
-          trackWorkspace = {
-            ...trackWorkspace,
-            editor: undoEditor(trackWorkspace.editor),
-            active: undefined,
-          };
-          render();
-          return;
-        case "editor-redo":
-          trackWorkspace = {
-            ...trackWorkspace,
-            editor: redoEditor(trackWorkspace.editor),
-            active: undefined,
-          };
-          render();
-          return;
-        case "editor-reset":
-          trackWorkspace = {
-            ...trackWorkspace,
-            editor: resetEditor(trackWorkspace.editor),
-            active: undefined,
-            message: "Editor reset to the safe starter loop.",
-          };
-          render();
-          return;
-        case "editor-validate": {
-          const response = await compileTrack(
-            editorTrack(trackWorkspace.editor),
-          );
-          if (response.valid && response.compiled !== undefined) {
-            useCompiled(response.compiled, "Edited track validated by Python.");
-          } else {
+        case "open-selected-builder":
+          if (trackWorkspace.selected !== undefined) {
             trackWorkspace = {
               ...trackWorkspace,
-              active: undefined,
-              message:
-                response.errors[0]?.message ?? "The edited track is invalid.",
+              toolsOpen: true,
+              tab: "build",
+              editor: replaceEditorTrack(
+                trackWorkspace.editor,
+                trackWorkspace.selected.track,
+              ),
+              editorPreview: trackWorkspace.selected,
+              editorValidation: { status: "valid", errors: [] },
+              notice: {
+                tone: "success",
+                message: "Selected track loaded into the piece editor.",
+              },
             };
             render();
           }
           return;
+        case "close-builder":
+          trackWorkspace = { ...trackWorkspace, toolsOpen: false };
+          render();
+          return;
+        case "builder-tab": {
+          const tab = element.dataset.builderTab as TrackBuilderTab | undefined;
+          if (tab === "build" || tab === "generate" || tab === "library") {
+            trackWorkspace = { ...trackWorkspace, tab };
+            render();
+          }
+          return;
         }
+        case "editor-add": {
+          const kind = element.dataset.segmentKind as SegmentKind | undefined;
+          if (kind !== undefined) {
+            setEditorDraft(
+              addEditorPiece(trackWorkspace.editor, kind),
+              "Piece added. Python is checking the new sequence.",
+            );
+          }
+          return;
+        }
+        case "editor-delete": {
+          const index = Number(element.dataset.pieceIndex);
+          setEditorDraft(
+            deleteEditorPiece(trackWorkspace.editor, index),
+            "Piece removed. Python is checking the new sequence.",
+          );
+          return;
+        }
+        case "editor-duplicate": {
+          const index = Number(element.dataset.pieceIndex);
+          setEditorDraft(
+            duplicateEditorPiece(trackWorkspace.editor, index),
+            "Piece duplicated. Python is checking the new sequence.",
+          );
+          return;
+        }
+        case "editor-move": {
+          const index = Number(element.dataset.pieceIndex);
+          const direction = Number(element.dataset.direction) === -1 ? -1 : 1;
+          setEditorDraft(
+            moveEditorPiece(trackWorkspace.editor, index, direction),
+            "Piece order changed. Python is checking the new sequence.",
+          );
+          return;
+        }
+        case "editor-undo":
+          setEditorDraft(
+            undoEditor(trackWorkspace.editor),
+            "Change undone. Python is checking the restored sequence.",
+          );
+          return;
+        case "editor-redo":
+          setEditorDraft(
+            redoEditor(trackWorkspace.editor),
+            "Change restored. Python is checking the sequence.",
+          );
+          return;
+        case "editor-reset":
+          setEditorDraft(
+            resetEditor(trackWorkspace.editor),
+            "Editor reset to the safe starter loop. Python is checking it.",
+          );
+          return;
         case "editor-assist": {
+          ++trackValidationRequest;
+          trackWorkspace = {
+            ...trackWorkspace,
+            pending: "assist",
+            notice: {
+              tone: "info",
+              message: "Python is searching for a safe closing sequence.",
+            },
+          };
+          render();
           const response = await assistTrackClosure(
             editorTrack(trackWorkspace.editor),
           );
           if (response.valid && response.compiled !== undefined) {
             trackWorkspace = {
               ...trackWorkspace,
+              pending: null,
               editor: replaceEditorTrack(
                 trackWorkspace.editor,
                 response.compiled.track,
               ),
+              editorPreview: response.compiled,
+              editorValidation: { status: "valid", errors: [] },
+              notice: {
+                tone: "success",
+                message: `Python added ${String(response.addedPieces?.length ?? 0)} piece(s) and verified the closed loop.`,
+              },
             };
-            useCompiled(
-              response.compiled,
-              `Python added ${String(response.addedPieces?.length ?? 0)} piece(s) to close the loop.`,
-            );
           } else {
             trackWorkspace = {
               ...trackWorkspace,
-              message:
-                response.errors[0]?.message ??
-                "No safe assisted closure was found.",
+              pending: null,
+              editorPreview: undefined,
+              editorValidation: {
+                status: "invalid",
+                errors: response.errors,
+              },
+              notice: {
+                tone: "warning",
+                message:
+                  response.errors[0]?.message ??
+                  "No safe assisted closure was found.",
+              },
             };
-            render();
           }
+          render();
           return;
         }
+        case "use-editor":
+          if (trackWorkspace.editorPreview !== undefined) {
+            useCompiled(
+              trackWorkspace.editorPreview,
+              "Custom track selected for this experiment.",
+            );
+          }
+          return;
         case "generate": {
           const seed =
             root.querySelector<HTMLInputElement>("[data-generator-seed]")
               ?.valueAsNumber ?? 0;
-          const length =
-            root.querySelector<HTMLSelectElement>("[data-generator-length]")
-              ?.value ?? "medium";
-          const difficulty =
-            root.querySelector<HTMLSelectElement>("[data-generator-difficulty]")
-              ?.value ?? "technical";
-          const response = await generateTrack({
+          const length = root.querySelector<HTMLInputElement>(
+            'input[name="generator-length"]:checked',
+          )?.value as "short" | "medium" | "long" | undefined;
+          const difficulty = root.querySelector<HTMLInputElement>(
+            'input[name="generator-difficulty"]:checked',
+          )?.value as "easy" | "technical" | "hard" | undefined;
+          const generator = {
             seed,
-            length: length as "short" | "medium" | "long",
-            difficulty: difficulty as "easy" | "technical" | "hard",
+            length: length ?? trackWorkspace.generator.length,
+            difficulty: difficulty ?? trackWorkspace.generator.difficulty,
+          };
+          trackWorkspace = {
+            ...trackWorkspace,
+            generator,
+            pending: "generate",
+            notice: {
+              tone: "info",
+              message: "Python is searching the bounded deterministic space.",
+            },
+          };
+          render();
+          const response = await generateTrack({
+            ...generator,
           });
           if (response.valid && response.compiled !== undefined) {
-            useCompiled(
-              response.compiled,
-              "Generated track selected from deterministic Python output.",
-            );
+            trackWorkspace = {
+              ...trackWorkspace,
+              pending: null,
+              generatedPreview: response.compiled,
+              notice: {
+                tone: "success",
+                message: `Generated and verified ${String(response.compiled.track.pieces.length)} canonical pieces.`,
+              },
+            };
           } else {
             trackWorkspace = {
               ...trackWorkspace,
-              message:
-                response.errors[0]?.message ?? "Track generation failed.",
+              pending: null,
+              generatedPreview: undefined,
+              notice: {
+                tone: "error",
+                message:
+                  response.errors[0]?.message ?? "Track generation failed.",
+              },
+            };
+          }
+          render();
+          return;
+        }
+        case "use-generated":
+          if (trackWorkspace.generatedPreview !== undefined) {
+            useCompiled(
+              trackWorkspace.generatedPreview,
+              "Generated track selected for this experiment.",
+            );
+          }
+          return;
+        case "edit-generated":
+          if (trackWorkspace.generatedPreview !== undefined) {
+            trackWorkspace = {
+              ...trackWorkspace,
+              tab: "build",
+              editor: replaceEditorTrack(
+                trackWorkspace.editor,
+                trackWorkspace.generatedPreview.track,
+              ),
+              editorPreview: trackWorkspace.generatedPreview,
+              editorValidation: { status: "valid", errors: [] },
+              notice: {
+                tone: "success",
+                message: "Generated track loaded into the piece editor.",
+              },
+            };
+            render();
+          }
+          return;
+        case "save-editor":
+          if (trackWorkspace.editorPreview !== undefined) {
+            await saveCompiledTrack(trackWorkspace.editorPreview);
+          }
+          return;
+        case "save-generated":
+          if (trackWorkspace.generatedPreview !== undefined) {
+            await saveCompiledTrack(trackWorkspace.generatedPreview);
+          }
+          return;
+        case "export-editor":
+          if (trackWorkspace.editorPreview !== undefined) {
+            downloadTrack(trackWorkspace.editorPreview);
+          }
+          return;
+        case "export-generated":
+          if (trackWorkspace.generatedPreview !== undefined) {
+            downloadTrack(trackWorkspace.generatedPreview);
+          }
+          return;
+        case "use-library": {
+          const compiled = libraryTrack(element.dataset.trackId);
+          if (compiled !== undefined) {
+            useCompiled(compiled, "Saved track selected for this experiment.");
+          }
+          return;
+        }
+        case "edit-library": {
+          const compiled = libraryTrack(element.dataset.trackId);
+          if (compiled !== undefined) {
+            trackWorkspace = {
+              ...trackWorkspace,
+              tab: "build",
+              editor: replaceEditorTrack(trackWorkspace.editor, compiled.track),
+              editorPreview: compiled,
+              editorValidation: { status: "valid", errors: [] },
+              notice: {
+                tone: "success",
+                message: "Saved track loaded into the piece editor.",
+              },
             };
             render();
           }
           return;
         }
-        case "save-active":
-          if (trackWorkspace.active !== undefined) {
-            const result = await saveTrack(trackWorkspace.active.track);
-            trackWorkspace = {
-              ...trackWorkspace,
-              message: result.saved
-                ? "Track saved atomically to the local library."
-                : (result.errors[0]?.message ?? "Track could not be saved."),
-            };
-            await refreshLibrary();
-          }
-          return;
-        case "use-library": {
-          const trackId = element.dataset.trackId;
-          const compiled = trackWorkspace.library?.tracks.find(
-            (candidate) => candidate.track.id === trackId,
-          );
+        case "export-library": {
+          const compiled = libraryTrack(element.dataset.trackId);
           if (compiled !== undefined) {
-            useCompiled(compiled, "Local-library track selected.");
+            downloadTrack(compiled);
           }
           return;
         }
         case "delete-library": {
           const trackId = element.dataset.trackId;
-          if (trackId !== undefined) {
+          const compiled = libraryTrack(trackId);
+          if (
+            trackId !== undefined &&
+            compiled !== undefined &&
+            window.confirm(
+              `Delete “${compiled.track.name}” from the local track library?`,
+            )
+          ) {
+            trackWorkspace = { ...trackWorkspace, pending: "delete" };
+            render();
             await deleteTrack(trackId);
             trackWorkspace = {
               ...trackWorkspace,
-              message: "Local track deleted.",
+              pending: null,
+              notice: {
+                tone: "success",
+                message: "Track deleted from the local library.",
+              },
             };
             await refreshLibrary();
           }
           return;
         }
-        case "export-active":
-          if (trackWorkspace.active !== undefined) {
-            downloadTrack(trackWorkspace.active);
-          }
-          return;
       }
     } catch {
       trackWorkspace = {
         ...trackWorkspace,
-        message: "The local Python track command could not be completed.",
+        pending: null,
+        notice: {
+          tone: "error",
+          message: "The local Python track command could not be completed.",
+        },
       };
       render();
     }
@@ -800,21 +1056,40 @@ export function mountApp(root: HTMLElement): AppController {
       if (!response.valid || response.compiled === undefined) {
         trackWorkspace = {
           ...trackWorkspace,
-          message:
-            response.errors[0]?.message ?? "The imported track is invalid.",
+          notice: {
+            tone: "error",
+            message:
+              response.errors[0]?.message ?? "The imported track is invalid.",
+          },
         };
         render();
         return;
       }
-      useCompiled(
-        response.compiled,
-        "Imported TrackV1 validated and selected by Python.",
-      );
+      trackWorkspace = {
+        ...trackWorkspace,
+        toolsOpen: true,
+        tab: "build",
+        editor: replaceEditorTrack(
+          trackWorkspace.editor,
+          response.compiled.track,
+        ),
+        editorPreview: response.compiled,
+        editorValidation: { status: "valid", errors: [] },
+        notice: {
+          tone: "success",
+          message:
+            "Imported TrackV1 loaded into the editor after Python validation.",
+        },
+      };
+      render();
     } catch (error) {
       trackWorkspace = {
         ...trackWorkspace,
-        message:
-          error instanceof Error ? error.message : "Track import failed.",
+        notice: {
+          tone: "error",
+          message:
+            error instanceof Error ? error.message : "Track import failed.",
+        },
       };
       render();
     }
@@ -860,16 +1135,16 @@ export function mountApp(root: HTMLElement): AppController {
         }
       },
       (name, roadWidth) => {
+        setEditorDraft(
+          updateEditorDetails(trackWorkspace.editor, name, roadWidth),
+          "Track details changed. Python is checking the draft.",
+        );
+      },
+      (seed, length, difficulty) => {
         trackWorkspace = {
           ...trackWorkspace,
-          editor: updateEditorDetails(trackWorkspace.editor, name, roadWidth),
-          active: undefined,
-          message: "Editor details changed. Validate the track again.",
+          generator: { seed, length, difficulty },
         };
-        render();
-      },
-      (open) => {
-        trackWorkspace = { ...trackWorkspace, toolsOpen: open };
       },
     );
 
@@ -1012,7 +1287,7 @@ function renderRoute(
             (candidate) => candidate.track.id === state.draft.trackPreset,
           )
         : undefined
-      : trackWorkspace.active;
+      : trackWorkspace.selected;
   switch (state.route) {
     case "welcome":
       return renderWelcome(runLibrary);
@@ -1185,13 +1460,13 @@ function renderTrack(
       ${pageHeader(
         "Setup / Track",
         "Choose a track.",
-        "Easy Oval is recommended for a first run. Custom track tools stay out of the way until you need them.",
+        "Start from a verified preset or open Track Builder for a custom circuit.",
       )}
       <fieldset class="choice-grid">
         <legend class="sr-only">Track preset</legend>
         ${cards}
       </fieldset>
-      ${renderTrackWorkbench(trackWorkspace)}
+      ${renderTrackBuilder(trackWorkspace, state.draft.track !== null)}
       ${renderActions(
         "welcome",
         "settings",
@@ -1199,131 +1474,6 @@ function renderTrack(
         state.draft.trackPreset === null,
       )}
     </section>
-  `;
-}
-
-function renderTrackWorkbench(workspace: TrackWorkspaceState): string {
-  const editor = workspace.editor.present;
-  const sequence = editor.pieces
-    .map(
-      (piece, index) => `
-        <li>
-          <span>${String(index + 1).padStart(2, "0")} · ${escapeHtml(piece.kind)}</span>
-          <button
-            type="button"
-            data-track-action="editor-delete"
-            data-piece-index="${String(index)}"
-            ${piece.kind === "start-finish" ? "disabled" : ""}
-            aria-label="Delete ${escapeHtml(piece.kind)} at position ${String(index + 1)}"
-          >Delete</button>
-        </li>
-      `,
-    )
-    .join("");
-  const catalogue = SEGMENT_CATALOGUE.filter((kind) => kind !== "start-finish")
-    .map(
-      (kind) => `
-        <button
-          type="button"
-          data-track-action="editor-add"
-          data-segment-kind="${kind}"
-        >${kind}</button>
-      `,
-    )
-    .join("");
-  const activePreview =
-    workspace.active === undefined
-      ? '<p class="track-preview-status">No validated custom track selected.</p>'
-      : renderTrackSvg(workspace.active);
-  const library =
-    workspace.library === null
-      ? '<p class="track-tool-empty">Loading local library…</p>'
-      : workspace.library.tracks.length === 0
-        ? '<p class="track-tool-empty">No saved tracks yet.</p>'
-        : `<ul class="library-list">${workspace.library.tracks
-            .map(
-              (compiled) => `
-                <li>
-                  <span><strong>${escapeHtml(compiled.track.name)}</strong><small>${String(compiled.track.pieces.length)} pieces</small></span>
-                  <span class="compact-actions">
-                    <button type="button" data-track-action="use-library" data-track-id="${escapeHtml(compiled.track.id)}">Use</button>
-                    <button type="button" data-track-action="delete-library" data-track-id="${escapeHtml(compiled.track.id)}">Delete</button>
-                  </span>
-                </li>
-              `,
-            )
-            .join("")}</ul>`;
-  const isolatedCount = workspace.library?.isolated.length ?? 0;
-
-  return `
-    <details class="track-workbench" data-track-tools ${workspace.toolsOpen ? "open" : ""}>
-      <summary class="section-heading">
-        <div>
-          <p class="section-kicker">Optional</p>
-          <h2>Build or load a custom track</h2>
-        </div>
-        <span class="details-action">Open tools</span>
-      </summary>
-
-      <div class="track-workbench-content">
-        <p class="optional-note">Use the editor, deterministic generator, or a local TrackV1 file. Presets above need none of these tools.</p>
-        <div class="track-tool-grid">
-        <section class="track-tool-panel editor-panel" aria-labelledby="editor-title">
-          <h3 id="editor-title">Sequential editor</h3>
-          <div class="editor-fields">
-            <label>Name <input data-editor-name value="${escapeHtml(editor.name)}" /></label>
-            <label>Road width <input data-editor-width type="number" min="8" max="20" step="0.5" value="${String(editor.roadWidth)}" /></label>
-          </div>
-          <div class="catalogue-buttons" aria-label="Add a track piece">${catalogue}</div>
-          <ol class="piece-sequence">${sequence}</ol>
-          <div class="compact-actions">
-            <button type="button" data-track-action="editor-undo" ${workspace.editor.past.length === 0 ? "disabled" : ""}>Undo</button>
-            <button type="button" data-track-action="editor-redo" ${workspace.editor.future.length === 0 ? "disabled" : ""}>Redo</button>
-            <button type="button" data-track-action="editor-reset">Reset</button>
-            <button type="button" data-track-action="editor-assist">Assist closure</button>
-            <button class="accent" type="button" data-track-action="editor-validate">Validate & use</button>
-          </div>
-        </section>
-
-        <section class="track-tool-panel" aria-labelledby="generator-title">
-          <h3 id="generator-title">Deterministic generator</h3>
-          <div class="editor-fields">
-            <label>Seed <input data-generator-seed type="number" min="0" max="2147483647" step="1" value="42" /></label>
-            <label>Length
-              <select data-generator-length>
-                <option value="short">Short · 12</option>
-                <option value="medium" selected>Medium · 18</option>
-                <option value="long">Long · 24</option>
-              </select>
-            </label>
-            <label>Difficulty
-              <select data-generator-difficulty>
-                <option value="easy">Easy</option>
-                <option value="technical" selected>Technical</option>
-                <option value="hard">Hard</option>
-              </select>
-            </label>
-          </div>
-          <button class="accent" type="button" data-track-action="generate">Generate & use</button>
-
-          <h3>Import / export</h3>
-          <label class="file-input">Import TrackV1 JSON <input type="file" accept="application/json,.json" data-track-import /></label>
-          <div class="compact-actions">
-            <button type="button" data-track-action="export-active" ${workspace.active === undefined ? "disabled" : ""}>Export selected</button>
-            <button type="button" data-track-action="save-active" ${workspace.active === undefined ? "disabled" : ""}>Save locally</button>
-          </div>
-          <div class="active-track-preview">${activePreview}</div>
-        </section>
-
-        <section class="track-tool-panel" aria-labelledby="library-title">
-          <h3 id="library-title">Local track library</h3>
-          ${library}
-          ${isolatedCount > 0 ? `<p class="track-warning">${String(isolatedCount)} corrupt record(s) were isolated.</p>` : ""}
-        </section>
-        </div>
-        <p class="track-workbench-status" role="status" aria-live="polite">${escapeHtml(workspace.message)}</p>
-      </div>
-    </details>
   `;
 }
 
@@ -2060,10 +2210,11 @@ function renderResults(
     .join("");
   const previous =
     snapshot.previousRuns.length === 0
-      ? "<p>No earlier durable run is available for comparison.</p>"
+      ? "<p>No earlier run has the same track and evaluation budget.</p>"
       : `
+        <p class="comparison-note">Only runs with the same track, population, generation count, and episode duration are shown.</p>
         <table>
-          <thead><tr><th>Run</th><th>Algorithm</th><th>Seed</th><th>Champion</th></tr></thead>
+          <thead><tr><th>Run</th><th>Algorithm</th><th>Seed</th><th>Generations</th><th>Champion</th><th>Progress</th></tr></thead>
           <tbody>
             ${snapshot.previousRuns
               .map(
@@ -2072,7 +2223,9 @@ function renderResults(
                     <th scope="row">${escapeHtml(run.runId.slice(0, 16))}</th>
                     <td>${escapeHtml(run.algorithm)}</td>
                     <td>${String(run.seed)}</td>
+                    <td>${String(run.generationsCompleted)}</td>
                     <td>${run.championFitness.toFixed(3)}</td>
+                    <td>${(run.championProgress * 100).toFixed(1)}%</td>
                   </tr>
                 `,
               )
@@ -2221,7 +2374,11 @@ function bindActions(
   importTrack: (file: File) => Promise<void>,
   exitApplication: () => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
-  setTrackToolsOpen: (open: boolean) => void,
+  updateGenerator: (
+    seed: number,
+    length: "short" | "medium" | "long",
+    difficulty: "easy" | "technical" | "hard",
+  ) => void,
 ): void {
   root.querySelectorAll<HTMLElement>("[data-route]").forEach((element) => {
     element.addEventListener("click", (event) => {
@@ -2331,12 +2488,34 @@ function bindActions(
     }
   };
   editorName?.addEventListener("change", commitEditorDetails);
+  editorWidth?.addEventListener("input", () => {
+    const output = editorWidth.parentElement?.querySelector("output");
+    if (output !== null && output !== undefined) {
+      output.textContent = `${String(editorWidth.valueAsNumber)} m`;
+    }
+  });
   editorWidth?.addEventListener("change", commitEditorDetails);
 
+  const updateGeneratorDraft = (): void => {
+    const seed =
+      root.querySelector<HTMLInputElement>("[data-generator-seed]")
+        ?.valueAsNumber ?? 0;
+    const length = root.querySelector<HTMLInputElement>(
+      'input[name="generator-length"]:checked',
+    )?.value as "short" | "medium" | "long" | undefined;
+    const difficulty = root.querySelector<HTMLInputElement>(
+      'input[name="generator-difficulty"]:checked',
+    )?.value as "easy" | "technical" | "hard" | undefined;
+    if (length !== undefined && difficulty !== undefined) {
+      updateGenerator(seed, length, difficulty);
+    }
+  };
   root
-    .querySelector<HTMLDetailsElement>("[data-track-tools]")
-    ?.addEventListener("toggle", (event) => {
-      setTrackToolsOpen((event.currentTarget as HTMLDetailsElement).open);
+    .querySelectorAll<HTMLInputElement>(
+      '[data-generator-seed], input[name="generator-length"], input[name="generator-difficulty"]',
+    )
+    .forEach((input) => {
+      input.addEventListener("change", updateGeneratorDraft);
     });
 
   root

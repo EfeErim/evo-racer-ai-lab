@@ -1,7 +1,7 @@
 param(
     [string] $Owner = "EfeErim",
     [string] $Repository = "evo-racer-ai-lab",
-    [string] $Tag = "v1.0.0"
+    [string] $Tag = "v1.1.0"
 )
 
 $ErrorActionPreference = "Stop"

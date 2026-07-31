@@ -138,7 +138,7 @@ M7 gate:
   browser replay. A different run or candidate never inherits that cache.
 - Training and Results overlay up to seven prior generation-champion paths from
   recorded Python replay points, with older paths visibly faded and the current
-  replay marker unobscured. New and restored runs start with no inherited trail.
+  replay marker unobscured. Saved runs restore only their own bounded trail.
 - Hidden documents reduce observation polling to `1 Hz`; visible documents poll
   at `4 Hz` and refresh immediately when brought back. Evaluation outcomes and
   throughput remain independent of document visibility.
@@ -169,7 +169,8 @@ M8 gate:
 Deliver:
 
 - Production static frontend, Python local core/launcher, graceful shutdown
-- PyInstaller `onedir` bundle, release ZIP, checksum, notices
+- Transparent portable folder with official embedded Python, plain application
+  files, release ZIP, checksum, and notices
 
 M9 gate:
 
@@ -177,6 +178,7 @@ M9 gate:
 - Works with outbound networking disabled.
 - Makes zero non-loopback requests.
 - Opens, trains, replays, saves, and restores offline.
+- Contains no frozen EvoRacer application executable or executable code archive.
 
 ## Phase 10 - Hardening and portfolio release
 

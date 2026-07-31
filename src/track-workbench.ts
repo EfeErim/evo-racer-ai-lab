@@ -16,7 +16,96 @@ export const SEGMENT_CATALOGUE = [
 
 export type SegmentKind = (typeof SEGMENT_CATALOGUE)[number];
 
-interface EditorSnapshot {
+export interface SegmentDefinition {
+  kind: SegmentKind;
+  label: string;
+  description: string;
+  symbol: string;
+  group: "Straight" | "Corner" | "Technical";
+}
+
+export const SEGMENT_DEFINITIONS: readonly SegmentDefinition[] = [
+  {
+    kind: "start-finish",
+    label: "Start / finish",
+    description: "Required timing line and spawn reference.",
+    symbol: "S/F",
+    group: "Straight",
+  },
+  {
+    kind: "straight-short",
+    label: "Short straight",
+    description: "A compact 20 m straight.",
+    symbol: "—",
+    group: "Straight",
+  },
+  {
+    kind: "straight-long",
+    label: "Long straight",
+    description: "A fast 40 m straight.",
+    symbol: "━━",
+    group: "Straight",
+  },
+  {
+    kind: "turn-left-45",
+    label: "Left 45°",
+    description: "A gentle left-hand bend.",
+    symbol: "↖",
+    group: "Corner",
+  },
+  {
+    kind: "turn-right-45",
+    label: "Right 45°",
+    description: "A gentle right-hand bend.",
+    symbol: "↗",
+    group: "Corner",
+  },
+  {
+    kind: "turn-left-90",
+    label: "Left 90°",
+    description: "A quarter-turn to the left.",
+    symbol: "↰",
+    group: "Corner",
+  },
+  {
+    kind: "turn-right-90",
+    label: "Right 90°",
+    description: "A quarter-turn to the right.",
+    symbol: "↱",
+    group: "Corner",
+  },
+  {
+    kind: "hairpin-left",
+    label: "Left hairpin",
+    description: "A tight 180° left turn.",
+    symbol: "⤺",
+    group: "Technical",
+  },
+  {
+    kind: "hairpin-right",
+    label: "Right hairpin",
+    description: "A tight 180° right turn.",
+    symbol: "⤻",
+    group: "Technical",
+  },
+  {
+    kind: "chicane-left",
+    label: "Left chicane",
+    description: "Left-right direction change.",
+    symbol: "⌁L",
+    group: "Technical",
+  },
+  {
+    kind: "chicane-right",
+    label: "Right chicane",
+    description: "Right-left direction change.",
+    symbol: "R⌁",
+    group: "Technical",
+  },
+] as const;
+
+export interface EditorSnapshot {
+  id: string;
   name: string;
   roadWidth: number;
   pieces: TrackPieceV1[];
@@ -39,9 +128,10 @@ const STARTER_PIECES: readonly SegmentKind[] = [
   "turn-left-90",
 ];
 
-export function createEditorState(): EditorState {
+export function createEditorState(trackId = "custom-track"): EditorState {
   return {
     present: {
+      id: trackId,
       name: "My Track",
       roadWidth: 10,
       pieces: STARTER_PIECES.map((kind) => ({ kind })),
@@ -80,6 +170,49 @@ export function deleteEditorPiece(
   });
 }
 
+export function moveEditorPiece(
+  state: EditorState,
+  index: number,
+  direction: -1 | 1,
+): EditorState {
+  const destination = index + direction;
+  if (
+    index <= 0 ||
+    index >= state.present.pieces.length ||
+    destination <= 0 ||
+    destination >= state.present.pieces.length
+  ) {
+    return state;
+  }
+  const pieces = state.present.pieces.map((piece) => ({ ...piece }));
+  const source = pieces[index];
+  const target = pieces[destination];
+  if (source === undefined || target === undefined) {
+    return state;
+  }
+  pieces[index] = target;
+  pieces[destination] = source;
+  return commit(state, { ...state.present, pieces });
+}
+
+export function duplicateEditorPiece(
+  state: EditorState,
+  index: number,
+): EditorState {
+  const piece = state.present.pieces[index];
+  if (piece === undefined || piece.kind === "start-finish") {
+    return state;
+  }
+  return commit(state, {
+    ...state.present,
+    pieces: [
+      ...state.present.pieces.slice(0, index + 1),
+      { ...piece },
+      ...state.present.pieces.slice(index + 1),
+    ],
+  });
+}
+
 export function updateEditorDetails(
   state: EditorState,
   name: string,
@@ -93,6 +226,7 @@ export function replaceEditorTrack(
   track: TrackV1,
 ): EditorState {
   return commit(state, {
+    id: track.id,
     name: track.name,
     roadWidth: track.roadWidth,
     pieces: track.pieces.map((piece) => ({ ...piece })),
@@ -123,19 +257,22 @@ export function redoEditor(state: EditorState): EditorState {
   };
 }
 
-export function resetEditor(_state: EditorState): EditorState {
-  void _state;
-  return createEditorState();
+export function resetEditor(state: EditorState): EditorState {
+  return createEditorState(state.present.id);
 }
 
 export function editorTrack(state: EditorState): TrackV1 {
   return {
     schemaVersion: 1,
-    id: "edited-local-track",
+    id: state.present.id,
     name: state.present.name.trim() || "My Track",
     roadWidth: state.present.roadWidth,
     pieces: state.present.pieces.map((piece) => ({ ...piece })),
   };
+}
+
+export function segmentDefinition(kind: string): SegmentDefinition | undefined {
+  return SEGMENT_DEFINITIONS.find((definition) => definition.kind === kind);
 }
 
 export function parseTrackDocument(source: string): TrackV1 {

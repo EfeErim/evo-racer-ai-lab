@@ -223,6 +223,9 @@ def validate_run_document(payload: object) -> dict[str, object]:
         raise RunRecordError("Checkpoint fitnessHistory must be an array.")
     if not isinstance(snapshot.get("previousRuns"), list):
         raise RunRecordError("Checkpoint previousRuns must be an array.")
+    generation_trails = snapshot.get("generationTrails")
+    if generation_trails is not None:
+        _validate_generation_trails(generation_trails, run_id, generation)
     result = snapshot.get("result")
     if status in {"running", "paused"} and result is not None:
         raise RunRecordError("Interrupted checkpoints cannot contain terminal results.")
@@ -257,7 +260,11 @@ def run_summary(document: dict[str, object]) -> dict[str, object]:
     result = snapshot.get("result")
     champion_fitness: float | None = None
     champion_progress: float | None = None
+    track_sha256: str | None = None
     if isinstance(result, dict):
+        metadata = result.get("metadata")
+        if isinstance(metadata, dict) and isinstance(metadata.get("trackSha256"), str):
+            track_sha256 = metadata["trackSha256"]
         champion = result.get("champion")
         if isinstance(champion, dict):
             fitness = champion.get("fitness")
@@ -272,13 +279,47 @@ def run_summary(document: dict[str, object]) -> dict[str, object]:
         "algorithm": settings["algorithm"],
         "trackId": track["id"],
         "trackName": track["name"],
+        "trackSha256": track_sha256,
         "seed": settings["seed"],
+        "populationSize": settings["populationSize"],
+        "episodeSeconds": settings["episodeSeconds"],
         "generation": checkpoint["generation"],
         "totalGenerations": settings["generations"],
         "resumable": checkpoint["status"] in {"running", "paused"},
         "championFitness": champion_fitness,
         "championProgress": champion_progress,
     }
+
+
+def _validate_generation_trails(value: object, run_id: str, generation: int) -> None:
+    if not isinstance(value, list) or len(value) > 8:
+        raise RunRecordError("Checkpoint generationTrails must contain at most eight paths.")
+    for index, item in enumerate(value):
+        trail = _object(item, f"generationTrails[{index}]")
+        if trail.get("runId") != run_id:
+            raise RunRecordError("Generation trail run identity is invalid.")
+        if not isinstance(trail.get("candidateId"), str) or not trail["candidateId"]:
+            raise RunRecordError("Generation trail candidate identity is invalid.")
+        trail_generation = _integer(
+            trail.get("generation"), f"generationTrails[{index}].generation", minimum=0
+        )
+        if trail_generation >= generation:
+            raise RunRecordError("Generation trail exceeds the checkpoint generation.")
+        points = trail.get("points")
+        if not isinstance(points, list) or not points or len(points) > 64:
+            raise RunRecordError("Generation trail points are invalid.")
+        for point in points:
+            if (
+                not isinstance(point, list)
+                or len(point) != 2
+                or any(
+                    not isinstance(coordinate, (int, float))
+                    or isinstance(coordinate, bool)
+                    or not math.isfinite(float(coordinate))
+                    for coordinate in point
+                )
+            ):
+                raise RunRecordError("Generation trail coordinates are invalid.")
 
 
 def _settings(value: object) -> dict[str, object]:

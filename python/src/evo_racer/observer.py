@@ -7,6 +7,7 @@ import json
 import math
 import statistics
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from threading import RLock, Thread, current_thread
@@ -57,6 +58,8 @@ from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 OBSERVATION_CONTRACT_VERSION: Final = 1
 REPLAY_INTERVAL_STEPS: Final = 6
+GENERATION_TRAIL_LIMIT: Final = 8
+GENERATION_TRAIL_POINT_LIMIT: Final = 64
 type RunStatus = Literal["running", "paused", "stopped", "completed"]
 type GenerationReportValue = GenerationReport | NEATGenerationReport
 type ScoredCandidateValue = ScoredCandidate | NEATScoredCandidate
@@ -91,6 +94,7 @@ class RunSession:
         self.reports: list[GenerationReportValue] = []
         self.current_episode: EpisodeResult | None = None
         self.result: dict[str, object] | None = None
+        self._generation_trails: list[dict[str, object]] = []
         self._best: ScoredCandidateValue | None = None
         self._lock = RLock()
         self._advancing = False
@@ -144,6 +148,15 @@ class RunSession:
             self.reports.append(report)
             champion = _ranked(report.results)[0]
             self.current_episode = episodes[champion.candidate.candidate_id]
+            self._generation_trails.append(
+                {
+                    "runId": self.run_id,
+                    "candidateId": champion.candidate.candidate_id,
+                    "generation": report.generation,
+                    "points": _sample_generation_trail(self.current_episode.telemetry),
+                }
+            )
+            self._generation_trails = self._generation_trails[-GENERATION_TRAIL_LIMIT:]
             if self._best is None or _candidate_sort_key(champion) < _candidate_sort_key(
                 self._best
             ):
@@ -159,7 +172,11 @@ class RunSession:
     def command(self, command: str) -> None:
         """Apply pause, resume, or stop only at deterministic batch boundaries."""
         with self._lock:
-            if self._advancing and command in {"pause", "stop"}:
+            if (
+                command in {"pause", "stop"}
+                and self.status == "running"
+                and (self._advancing or not self.reports)
+            ):
                 self._pending_command = cast(Literal["pause", "stop"], command)
                 return
             self._apply_command(command)
@@ -227,6 +244,15 @@ class RunSession:
                 ],
                 "selectedCar": selected,
                 "result": self.result,
+                "generationTrails": [
+                    {
+                        **trail,
+                        "points": [
+                            list(point) for point in cast(list[list[float]], trail["points"])
+                        ],
+                    }
+                    for trail in self._generation_trails
+                ],
                 "previousRuns": [],
             }
             if include_live:
@@ -292,7 +318,11 @@ class RunSession:
             session.command("stop")
         elif status in {"running", "paused"}:
             session.command("pause")
-        if _resume_projection(session.snapshot()) != _resume_projection(expected_snapshot):
+        actual_projection = _resume_projection(session.snapshot())
+        expected_projection = _resume_projection(expected_snapshot)
+        if "generationTrails" not in expected_projection:
+            actual_projection.pop("generationTrails", None)
+        if actual_projection != expected_projection:
             raise RunRecordError(
                 "Saved checkpoint does not reproduce from its track, settings, and seed."
             )
@@ -723,6 +753,8 @@ class RunManager:
         if snapshot["result"] is not None:
             library = self.library()
             stored_runs = cast(list[dict[str, object]], library["runs"])
+            result = cast(dict[str, object], snapshot["result"])
+            metadata = cast(dict[str, object], result["metadata"])
             snapshot["previousRuns"] = [
                 {
                     "runId": run["runId"],
@@ -730,11 +762,18 @@ class RunManager:
                     "trackId": run["trackId"],
                     "seed": run["seed"],
                     "generationsCompleted": run["generation"],
+                    "populationSize": run["populationSize"],
+                    "episodeSeconds": run["episodeSeconds"],
                     "championFitness": run["championFitness"],
                     "championProgress": run["championProgress"],
                 }
                 for run in stored_runs
                 if run["runId"] != session.run_id
+                and run["trackSha256"] == metadata["trackSha256"]
+                and run["populationSize"] == metadata["populationSize"]
+                and run["totalGenerations"] == metadata["generationsRequested"]
+                and run["generation"] == metadata["generationsCompleted"]
+                and run["episodeSeconds"] == metadata["episodeSeconds"]
                 and isinstance(run["championFitness"], float)
                 and isinstance(run["championProgress"], float)
             ]
@@ -871,6 +910,19 @@ def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
             key: value for key, value in selected.items() if key not in {"x", "y", "heading"}
         }
     return projection
+
+
+def _sample_generation_trail(telemetry: Sequence[TelemetrySnapshot]) -> list[list[float]]:
+    """Keep a bounded deterministic position summary for later presentation."""
+    if len(telemetry) <= GENERATION_TRAIL_POINT_LIMIT:
+        selected = telemetry
+    else:
+        last_index = len(telemetry) - 1
+        selected = [
+            telemetry[round(index * last_index / (GENERATION_TRAIL_POINT_LIMIT - 1))]
+            for index in range(GENERATION_TRAIL_POINT_LIMIT)
+        ]
+    return [[_rounded(frame.state.x), _rounded(frame.state.y)] for frame in selected]
 
 
 def _run_id_from_payload(payload: object) -> str | dict[str, object]:

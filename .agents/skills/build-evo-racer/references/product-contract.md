@@ -7,6 +7,8 @@
 - Permit loopback-only IPC on `127.0.0.1`; forbid every non-loopback runtime connection.
 - Do not include CDN assets, telemetry, analytics, accounts, update checks, remote models, or downloads.
 - Store tracks, settings, runs, checkpoints, and replays locally.
+- Keep the portable application's Python modules and web assets visible under
+  `app/`; do not freeze or archive application code into an EXE.
 
 ## User experience
 
@@ -158,11 +160,12 @@ browser:
   the browser must retain it only for the same run and replace it when Python
   publishes a different candidate. A missing acknowledged replay is a transport
   delta, not an instruction to erase the visible replay.
-- During one active browser session, retain sampled paths from the seven prior
+- Retain sampled paths from the seven prior
   Python generation-champion replays and draw them behind the current replay.
   Fade older paths, label the overlay as presentation history, bound every path
-  to 64 recorded points, and clear the history for a new or restored run. Do not
-  infer motion, persist the trail, or let it affect simulation or evolution.
+  to 64 recorded points, persist at most eight paths in the atomic run document,
+  and restore only paths matching that run. Do not infer motion or let the trail
+  affect simulation or evolution.
 - Poll observations at `250 ms` while the document is visible and at `1000 ms`
   while it is hidden, with an immediate observation when visibility returns.
   Visibility may change presentation traffic only; it may not pause, accelerate,
@@ -181,6 +184,7 @@ Use versioned local files under:
 
 Use atomic writes and isolate corrupt records. Support track JSON import/export and resumable evolutionary checkpoints.
 
-Build the frontend locally, bundle the Python core/launcher and all static assets
-with PyInstaller `onedir`, and distribute `EvoRacer-Windows-x64.zip` plus
-SHA-256 checksum.
+Build the frontend locally and distribute a transparent portable folder with the
+official Python 3.13 embeddable runtime, plain application modules, local static
+assets, `EvoRacer.cmd`, and no frozen application EXE. Publish
+`EvoRacer-Windows-x64.zip` plus its SHA-256 checksum.

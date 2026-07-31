@@ -120,6 +120,26 @@ def test_stop_returns_a_terminal_result_after_a_completed_generation() -> None:
     assert result["metadata"]["generationsCompleted"] == 1
 
 
+@pytest.mark.parametrize("command", ["pause", "stop"])
+def test_first_generation_boundary_command_is_queued_before_worker_start(
+    command: str,
+) -> None:
+    session = _session(generations=3)
+
+    session.command(command)
+    queued = session.snapshot()
+
+    assert queued["status"] == "running"
+    assert queued["generation"] == 0
+    assert queued["pendingCommand"] == command
+    session.advance()
+    finished = session.snapshot()
+    assert finished["generation"] == 1
+    assert finished["status"] == ("paused" if command == "pause" else "stopped")
+    if command == "stop":
+        assert isinstance(finished["result"], dict)
+
+
 def test_manager_streams_live_candidate_position_while_generation_runs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

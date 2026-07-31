@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import signal
 import sys
 import webbrowser
@@ -62,7 +63,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse package and acceptance-test launcher options."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    parser.add_argument("--data-root", type=Path)
+    portable_data_root = os.environ.get("EVORACER_DATA_ROOT")
+    parser.add_argument(
+        "--data-root",
+        type=Path,
+        default=Path(portable_data_root) if portable_data_root else None,
+    )
     parser.add_argument("--static-root", type=Path)
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args(argv)

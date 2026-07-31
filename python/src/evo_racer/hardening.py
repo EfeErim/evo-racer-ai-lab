@@ -23,6 +23,10 @@ SMOKE_ALGORITHMS: Final = ("fixed-ga", "neat")
 SMOKE_POPULATION_SIZE: Final = 10
 SMOKE_GENERATIONS: Final = 1
 SMOKE_EPISODE_SECONDS: Final = 15.0
+THOROUGH_POPULATION_SIZE: Final = 48
+THOROUGH_GENERATIONS: Final = 40
+THOROUGH_EPISODE_SECONDS: Final = 60.0
+THOROUGH_SEED: Final = 42
 
 
 class _TimingEntry(TypedDict):
@@ -76,6 +80,78 @@ def verify_fixture(fixture_path: Path) -> dict[str, object]:
     actual = build_regression_matrix()
     _assert_fixture(actual, fixture_path)
     return actual
+
+
+def build_thorough_acceptance_report() -> dict[str, object]:
+    """Complete the heaviest bundled preset once and retain bounded evidence."""
+    setup = {
+        "contractVersion": 1,
+        "trackPreset": "easy-oval",
+        "settings": {
+            "algorithm": "neat",
+            "populationSize": THOROUGH_POPULATION_SIZE,
+            "generations": THOROUGH_GENERATIONS,
+            "episodeSeconds": int(THOROUGH_EPISODE_SECONDS),
+            "seed": THOROUGH_SEED,
+        },
+    }
+    if validate_setup(setup)["valid"] is not True:
+        raise RuntimeError("The Thorough preset is outside the product setup contract.")
+    session = RunSession(
+        run_id="thorough-acceptance",
+        compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
+        settings=RunSettings(
+            algorithm="neat",
+            population_size=THOROUGH_POPULATION_SIZE,
+            generations=THOROUGH_GENERATIONS,
+            episode_seconds=THOROUGH_EPISODE_SECONDS,
+            seed=THOROUGH_SEED,
+        ),
+    )
+    generation_seconds: list[float] = []
+    started = time.perf_counter()
+    for _ in range(THOROUGH_GENERATIONS):
+        generation_started = time.perf_counter()
+        session.advance()
+        generation_seconds.append(time.perf_counter() - generation_started)
+    elapsed_seconds = time.perf_counter() - started
+    snapshot = session.snapshot()
+    if snapshot["status"] != "completed" or snapshot["generation"] != THOROUGH_GENERATIONS:
+        raise RuntimeError("The Thorough preset did not complete every generation.")
+    trails = cast(list[object], snapshot["generationTrails"])
+    if len(trails) != 8:
+        raise RuntimeError("The Thorough preset did not retain its bounded evolution trail.")
+    result = cast(dict[str, object], snapshot["result"])
+    champion = cast(dict[str, object], result["champion"])
+    document_bytes = len(
+        json.dumps(
+            session.to_run_document(),
+            allow_nan=False,
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    )
+    return {
+        "contractVersion": 1,
+        "kind": "thorough-preset-acceptance",
+        "generatedAtUtc": datetime.now(UTC).isoformat(),
+        "environment": {
+            "platform": platform.platform(),
+            "python": platform.python_version(),
+            "processor": platform.processor() or "unknown",
+        },
+        "configuration": setup,
+        "completedGenerations": snapshot["generation"],
+        "retainedGenerationTrails": len(trails),
+        "checkpointBytes": document_bytes,
+        "elapsedSeconds": round(elapsed_seconds, 6),
+        "medianGenerationSeconds": round(statistics.median(generation_seconds), 6),
+        "slowestGenerationSeconds": round(max(generation_seconds), 6),
+        "championFitness": champion["fitness"],
+        "championProgress": champion["progress"],
+        "resultSha256": _canonical_sha256(result),
+    }
 
 
 def _assert_fixture(actual: dict[str, object], fixture_path: Path) -> None:
@@ -217,6 +293,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--fixture", type=Path, help="Reviewed deterministic fixture to verify.")
     parser.add_argument("--report", type=Path, help="Write a measured JSON performance report.")
     parser.add_argument(
+        "--thorough-report",
+        type=Path,
+        help="Complete the heaviest bundled preset and write its acceptance report.",
+    )
+    parser.add_argument(
         "--print-fixture",
         action="store_true",
         help="Print the current deterministic fixture JSON.",
@@ -227,8 +308,8 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     """Run fixture verification and/or measured reporting from the command line."""
     args = _parser().parse_args()
-    if not args.fixture and not args.report and not args.print_fixture:
-        raise SystemExit("Choose --fixture, --report, or --print-fixture.")
+    if not args.fixture and not args.report and not args.thorough_report and not args.print_fixture:
+        raise SystemExit("Choose --fixture, --report, --thorough-report, or --print-fixture.")
     matrix: dict[str, object] | None = None
     timings: list[_TimingEntry] = []
     total_seconds = 0.0
@@ -256,6 +337,17 @@ def main() -> int:
         print(
             f"Measured {report['caseCount']} cases in "
             f"{report['totalSeconds']} seconds: {args.report}"
+        )
+    if args.thorough_report:
+        thorough_report = build_thorough_acceptance_report()
+        args.thorough_report.parent.mkdir(parents=True, exist_ok=True)
+        args.thorough_report.write_text(
+            json.dumps(thorough_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print(
+            f"Completed Thorough preset in {thorough_report['elapsedSeconds']} seconds: "
+            f"{args.thorough_report}"
         )
     return 0
 

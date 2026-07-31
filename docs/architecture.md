@@ -360,22 +360,25 @@ sends its final JSON response before a separate thread calls
 `server.server_close()` to release the loopback socket. Process signals use the
 same asynchronous shutdown path.
 
-PyInstaller `6.21.0` creates a Windows `onedir` bundle from
-`packaging/EvoRacer.spec`. This follows the official
-[onedir usage contract](https://pyinstaller.org/en/stable/usage.html) and keeps
-the built frontend and NEAT configuration as bundled data located relative to
-the frozen entrypoint, following PyInstaller's
-[runtime data-file guidance](https://pyinstaller.org/en/stable/runtime-information.html).
-The release script adds user-facing notices and complete Python/PyInstaller
-license texts, archives the full `EvoRacer` directory as
-`EvoRacer-Windows-x64.zip`, and writes its SHA-256 checksum separately.
+The release uses the official Python 3.13 Windows embeddable distribution and
+its `._pth` isolation mechanism. The runtime search path is restricted to the
+bundled standard library, bundled `neat-python`, and the adjacent plain
+`app/evo_racer` modules. Built Vite assets remain visible under `app/web`.
+`EvoRacer.cmd` starts `runtime/pythonw.exe`; no EvoRacer application code is
+frozen into an EXE or executable archive. This follows Python's official
+[embeddable package and isolated-path guidance](https://docs.python.org/3.13/using/windows.html#the-embeddable-package).
+The release script pins and verifies the official runtime archive SHA-256,
+adds user-facing notices and complete Python/neat-python licenses, archives the
+full `EvoRacer` directory, and writes the ZIP checksum separately.
 
 Release acceptance extracts the ZIP into a fresh directory, gives the packaged
 process only the Windows system directory on `PATH`, removes Python environment
 variables, and supplies unreachable outbound proxy endpoints while exempting
 loopback. It starts, saves, shuts down, restarts, restores, completes, and
 replays one run. A process connection audit rejects non-loopback sockets and
-rejects any child Node.js or Python process.
+rejects any child Node.js or external Python process. The accepted top-level
+process is the Python interpreter contained inside the extracted portable
+folder.
 
 User-owned data remains under `%LOCALAPPDATA%\EvoRacerAILab` and uses the
 versioned, atomic files defined in Phase 8.

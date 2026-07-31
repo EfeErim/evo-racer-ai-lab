@@ -141,4 +141,26 @@ describe("Phase 7 observation and results contract", () => {
     });
     expect(parsed.generationReplay?.candidateId).toBe("g0000-c0003");
   });
+
+  it("parses bounded persisted generation trails", () => {
+    const value = structuredClone(observationFixture) as Record<
+      string,
+      unknown
+    >;
+    value.generationTrails = [
+      {
+        runId: "run-phase7-fixture",
+        candidateId: "g0000-c0002",
+        generation: 0,
+        points: [
+          [1, 2],
+          [3.5, 4.5],
+        ],
+      },
+    ];
+
+    expect(parseObservationSnapshot(value).generationTrails).toEqual(
+      value.generationTrails,
+    );
+  });
 });
