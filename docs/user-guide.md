@@ -24,14 +24,14 @@ core on the same computer.
 
    The two hashes must match.
 
-3. Extract the entire ZIP. Keep `EvoRacer.cmd`, `app`, and `runtime` together.
-4. Open `EvoRacer\EvoRacer.cmd`.
+3. Extract the entire ZIP; do not run the application from inside the archive.
+4. Open `EvoRacer\EvoRacer.exe`.
 
 Node.js and Python are not required on the target computer. The application
 opens its interface at `http://127.0.0.1:8765`. This address is loopback-only:
 it is reachable from the same computer, not from the local network or internet.
-Application Python modules and web assets remain visible under `app`; they are
-not frozen into an EvoRacer application EXE.
+The EXE and its adjacent bundled files form one application, so keep the
+extracted `EvoRacer` folder together when moving it.
 
 ## Run a first experiment
 
@@ -51,6 +51,18 @@ Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
 
 Opening a screen or validating settings never starts training. Only the Start
 button creates a run.
+
+Validation belongs to the current Review visit. If you choose Edit or otherwise
+leave Review while Python is checking, that request is released from the UI and
+Start remains locked. Returning to Review starts a fresh check; a late response
+from the earlier visit cannot bring Review back, unlock Start, or complete the
+newer check.
+
+If Python rejects Start, Review stays open, shows the exact issue, and requires
+validation again before another attempt. If the Start response is interrupted,
+Review keeps the valid setup but labels the result as unknown. Open **Welcome
+and Saved runs** to check whether the local core created a run before choosing
+**Start training** again.
 
 ## Tracks
 
@@ -74,12 +86,27 @@ focused tabs:
   tracks. Saved tracks can be selected, edited, exported, or deleted after a
   confirmation.
 
+With a keyboard, Left Arrow and Right Arrow move between Builder tabs; Home and
+End move to the first and last tab. Opening the Builder moves focus to its
+heading, and closing it returns focus to **Open Track Builder**.
+
 Builder drafts and generated/imported previews never select themselves. A
 custom track enters the setup only after **Use this track** is pressed.
 
 Every source passes through the same Python compiler and validator before it can
 be selected. An invalid import is rejected with a stable error instead of being
-loaded into a run.
+loaded into a run. Generate, save, and delete failures name the operation that
+failed; a delete is reported as successful only when Python confirms that the
+exact local record was removed.
+
+While an imported JSON file is being read and validated, the picker shows
+**Importing…** and cannot accept a second file. Closing Track Builder or leaving
+the Track screen invalidates that pending presentation. A late Python response
+cannot reopen the Builder or replace the current editor after you leave.
+
+Library refreshes are ordered. A delayed older response cannot close the Track
+Builder, replace current editor/generator work, or hide a track that a newer
+save refresh already confirmed.
 
 ## Training settings
 
@@ -108,7 +135,8 @@ rendering speed.
 
 **Random seed** is under Advanced controls inside **Customize training**.
 Reusing the same supported configuration and seed is intended to reproduce the
-same result sequence.
+same result sequence. Open Customize training and Advanced controls remain open
+while their values are edited.
 
 The bundled presets expose their maximum workload directly:
 
@@ -143,6 +171,10 @@ The same screen shows continuous steering/throttle/brake outputs, progress,
 speed, seven road-edge sensors, and candidate position within the population.
 Best and median fitness update when a complete generation reaches its
 deterministic boundary.
+
+Observation refreshes preserve the currently focused Training control. If a
+temporary local-core error releases a pending Pause, Resume, or Stop command,
+focus returns to that control so keyboard operation can continue.
 
 The overall progress bar combines completed generations with the candidates
 already completed in the active generation. It is evaluation progress, not a
@@ -183,6 +215,14 @@ Fitness values are meaningful only under the recorded track, settings, and
 fitness contract. A short smoke run verifies execution and reproducibility; it
 does not establish that one algorithm generally learns better.
 
+Replay opens on the first recorded Python frame. **Previous**, **Next**, and
+**Restart** stay within the available frame range, including a one-frame
+replay. Empty replays, non-positive sampling intervals, negative times, and
+frames whose simulated times do not increase are treated as corrupt local run
+data instead of being animated. When a Saved results record fails this check,
+its exact replay error is shown while the valid run library remains available
+for another action.
+
 ## Saved runs and local data
 
 Tracks and runs are stored under:
@@ -196,7 +236,25 @@ application never restarts training automatically. Choose Resume on a supported
 interrupted run to reconstruct and verify its checkpoint before continuing.
 
 Use the Welcome library to resume, export, or delete an exact run. Exported
-files are versioned JSON records suitable for backup and inspection.
+files are versioned JSON records suitable for backup and inspection. Library
+actions lock while pending. If one action fails, its exact error is shown while
+the rest of the valid run library remains available.
+
+Saved-run refreshes are ordered as well. A delayed startup list cannot replace
+a newer terminal-run list or make a newly saved run temporarily disappear.
+
+Saved-run actions also belong to the Welcome screen where they were started.
+If you leave Welcome before a response returns, that late response cannot open
+Results, restore Training, or start a download after you come back. Open and
+Export responses are ignored. Because Python may already have completed a
+requested Resume or Delete, EvoRacer refreshes the run library in the
+background instead of claiming that the local operation was canceled.
+
+Interrupted running or paused records provide **Resume**. Completed and safely
+stopped records provide **Open results**, which revalidates the saved RunV1,
+recompiles its Python track geometry, and opens the stored champion comparison
+and replay without restarting training. A stopped record with no completed
+generation correctly shows **No results** instead.
 
 ## Exit and troubleshoot
 
