@@ -169,8 +169,9 @@ M8 gate:
 Deliver:
 
 - Production static frontend, Python local core/launcher, graceful shutdown
-- Transparent portable folder with official embedded Python, plain application
-  files, release ZIP, checksum, and notices
+- PyInstaller `onedir` Windows application retained at
+  `release\EvoRacer\EvoRacer.exe`, bundled runtime, local assets, parallel
+  release ZIP, checksum, and notices
 
 M9 gate:
 
@@ -178,7 +179,8 @@ M9 gate:
 - Works with outbound networking disabled.
 - Makes zero non-loopback requests.
 - Opens, trains, replays, saves, and restores offline.
-- Contains no frozen EvoRacer application executable or executable code archive.
+- The outside-ZIP `release\EvoRacer\EvoRacer.exe` starts directly; no command
+  script, installed Node.js, or installed Python is required.
 
 ## Phase 10 - Hardening and portfolio release
 

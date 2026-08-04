@@ -2,10 +2,253 @@
 
 ## Current position
 
-- Current phase: `Post-release v1.1.0 maintenance`
-- Status: `v1.1.0 published and publicly verified`
+- Current phase: `Post-release v1.1.1 game and interface hardening`
+- Status: `focused source hardening continues beyond the last verified local package; latest game-data, IPC, Saved-runs, reduced-motion, and status-copy fixes are not yet repackaged or published`
 - Active milestone: `None`
-- Last verified: `2026-07-31`
+- Last verified: `2026-08-04`
+
+## Unreleased v1.1.1 game and interface hardening
+
+- The extracted Windows application now starts from the root-level
+  `EvoRacer.exe`; no `EvoRacer.cmd`, installed Python, or installed Node.js is
+  required.
+- Packaging uses exact PyInstaller `6.21.0` in `onedir` mode and includes the
+  Python, neat-python, and PyInstaller license texts.
+- Invalid editor loops now retain Python-derived open-draft geometry instead of
+  blanking the canvas. Assisted closure reserves rollback-only candidates before
+  suffix expansion, so all six advertised trailing-piece rollback depths remain
+  reachable within the same 200-candidate bound.
+- Generator version `2` deterministically varies canonical straights, 45-degree
+  corners, chicanes, and hairpins instead of ranking only a few rectangles.
+  Easy avoids chicanes and hairpins, Technical requires chicanes, and Hard
+  prefers hairpin stadiums; every result still passes the existing Python
+  compiler.
+- Generated previews retain the seed, length, and difficulty Python verified.
+  Later seed and option edits now show `Inputs changed` immediately, preserve
+  input focus, and explain that generation must run again before new inputs
+  apply instead of relabeling the old result.
+- TrackV1 import now exposes an `Importing…` pending state and disables the file
+  picker until Python compilation returns. Import responses own a monotonic
+  request version; closing Track Builder or leaving Track invalidates the
+  response, so a late compile cannot reopen the Builder, replace the current
+  editor, or win an overlapping file-selection race. Reopening a validated
+  Builder also preserves the last truthful notice instead of claiming that a
+  redundant starter validation is running.
+- Assist, Generate, Save, and Delete now belong to the Track route, open Builder,
+  and active tool where they started. Leaving that context invalidates a late
+  presentation response, so generated geometry or repaired editor state cannot
+  appear after the user has moved on. Save/Delete may already have changed the
+  Python-owned library, so their dismissed responses perform a fresh ordered
+  library read. Save also exposes `Saving…` and an explicit live status instead
+  of leaving a static disabled action.
+- Populated saved-run and previous-run comparison tables now contain their own
+  horizontal scroll. At `390 x 844`, the Results and saved-run surfaces no
+  longer expand the complete document beyond its `375 px` client width.
+- Transient observation and command failures now preserve the last
+  Python-verified run snapshot, expose the exact failing operation and HTTP
+  status, and resume observation automatically. Controls lock while a command
+  is pending, and monotonic request ownership prevents older observations from
+  overwriting newer command state.
+- Same-route renders now preserve keyboard focus and disclosure state. Training
+  polling no longer drops a focused control, transient command failures restore
+  focus after re-enabling it, and Advanced settings stays open while values are
+  edited. Track Builder tabs use linked panels, roving focus, and
+  Arrow/Home/End navigation with explicit open/close focus handoff.
+- Preset-track radios now expose concise explicit names without absorbing their
+  decorative SVG preview, Algorithm identifies its plain-language help through
+  `aria-describedby`, and every Track Builder tab keeps a real panel target in
+  the DOM even while that panel is inactive and hidden.
+- Track/run IPC now labels each operation, preserves connection-error causes,
+  validates JSON and versioned response shapes before rendering, and requires
+  exact identity plus `deleted: true` before reporting deletion success. Saved
+  run actions lock while pending and keep the valid library visible after an
+  operation error; corrupt export and custom-track restore errors retain their
+  Python-authored message.
+- Exit now owns an explicit active/shutting-down/stopped browser lifecycle. The
+  controls are replaced immediately by a focused `Shutting down EvoRacer…`
+  status, so a second shutdown cannot be submitted. After success, delayed
+  startup/library/telemetry renders cannot resurrect the application shell. A
+  rejected shutdown restores the usable interface and exposes the exact local
+  HTTP/connection failure instead of a generic alert.
+- Track and Saved runs refreshes now use independent monotonic request ownership.
+  Late startup responses cannot overwrite a newer save/delete/terminal list.
+  Track library data merges only after its response into the current workspace,
+  so stale pre-await state cannot close Track Builder or discard current work.
+- Failed initial preset-geometry and Track Library reads no longer strand Track
+  in permanent `Loading…` presentation. Entering Track automatically retries an
+  unavailable source; repeated failures retain their exact labeled HTTP,
+  connection, or invalid-JSON cause and expose separate **Retry preset
+  previews** / **Retry local library** actions. A valid existing Track Library
+  remains visible if only a later background refresh fails.
+- A failed initial Saved runs read now opens its recovery panel automatically,
+  exposes the exact labeled HTTP, connection, or invalid-JSON cause as an alert,
+  and offers **Retry saved runs**. Entering Welcome retries an unavailable list
+  with a truthful loading state; manual retry locks duplicate submission and
+  restores the versioned local list without reloading the application. If only
+  a later background refresh fails, the last valid run rows remain visible and
+  usable beside the exact error and Retry action.
+- Successful automatic Saved runs recovery now replaces a prior failure with a
+  fresh neutral status instead of resurrecting the stale error. Track Library
+  retry ends with an explicit completion message, generator seed/length/
+  difficulty controls lock while Python is generating, and Track Builder errors
+  use assertive alert semantics instead of being announced as routine status.
+- Saved-run actions now have their own monotonic UI ownership. Leaving Welcome
+  clears the pending presentation, invalidates every late Open/Resume/Export
+  response, and prevents a leave-then-return sequence from unexpectedly opening
+  Results or Training. Delete and Resume may already have changed Python-owned
+  local state, so their dismissed responses refresh the run library instead of
+  claiming that the underlying operation was canceled.
+- Failed Start no longer strands the user in a locked Training error screen.
+  Python rejection returns to Review, exposes the exact issue, locks Start, and
+  requires validation again. An interrupted response preserves the valid setup,
+  labels the outcome as unknown, and links to Saved runs before explicit retry.
+- Entering Welcome now performs an ordered fresh read of the Python-owned run
+  library. The unconfirmed-Start recovery link can therefore reveal a run that
+  was created after the previous list snapshot; refresh failures retain their
+  exact HTTP/connection cause, and a fresh list does not erase a still-relevant
+  dismissed-action notice.
+- Setup validation now belongs to the current Review visit and a monotonic
+  request version. Leaving Review cancels the checking presentation and a late
+  response cannot navigate back, unlock Start, or satisfy a newer validation of
+  the same unchanged draft.
+- Completed and stopped Saved runs now expose **Open results** and restore the
+  Python-validated RunV1, compiled track, comparisons, trail, and replay without
+  advancing training. Zero-generation stopped records show **No results**.
+  Snapshot parsing rejects terminal result identity, status, generation, and
+  champion-replay contradictions before they reach the UI.
+- Results replay navigation now clamps stale, empty, and single-frame indexes,
+  so Previous, Next, and Restart cannot select a negative or out-of-range
+  frame. Observation parsing rejects empty replay payloads, non-positive replay
+  sampling, negative simulated times, and non-increasing frame times before the
+  binary-search animation or Results UI can consume corrupt local data. A
+  rejected Saved replay leaves the valid run library visible and retryable.
+- A second repository-wide line audit now isolates non-finite run checkpoints,
+  rejects ambiguous NEAT input/output keys, rejects non-adjacent centerline
+  touches and overlaps, and fails closed on non-finite controller outputs.
+- The same audit prevents stale setup-validation, closure-assist, observation,
+  and run-command responses from overwriting newer UI state. Track Builder
+  mutations are locked while Python commands are pending, saved-run deletion
+  requires confirmation, and failed release-starter checks cannot leave an
+  orphaned EXE behind.
+- Game-data construction now rejects non-finite or physically impossible
+  vehicle/telemetry values, invalid episode bounds, non-positive road widths,
+  and zero-length simulation centerline segments before they can poison physics
+  or observer state. TypeScript rejects negative speed/time, out-of-range sensor
+  values, invalid preview/result counters, non-positive vehicle performance,
+  foreign terminal results, and contradictory Saved-runs state before rendering.
+- Checksum-valid RunV1 files now validate terminal metadata, fitness history,
+  champion/setup, baselines, and replay before entering Saved runs. A malformed
+  terminal result is isolated without blocking valid records. Champion rows,
+  baseline controller identities, and replay vehicle setup must agree with the
+  result summary for both Fixed GA and NEAT. Track rendering also rejects finite
+  inputs whose combined bounds overflow the SVG view box.
+- Track Library atomic replacement and reads now retry only bounded transient
+  Windows sharing locks. A temporary antivirus/indexer lock no longer fails a
+  save or falsely labels an otherwise valid local track as corrupt. Track
+  filenames and Run directory names must also match their canonical record id,
+  preventing duplicated records that appear valid but cannot be deleted.
+- Setup validation now uses the same labeled, loopback-only JSON transport and
+  versioned shape checks as the other IPC routes. Setup, run, preview, track
+  command, and track-save envelopes reject contradictory success flags and error
+  lists instead of unlocking actions on an impossible response. A syntactically
+  valid JSON `null` POST now reaches the route validator and returns a versioned
+  error instead of silently closing without an HTTP response. Shutdown accepts
+  only the versioned `shutting-down` acknowledgement, so an arbitrary `200` JSON
+  cannot replace the usable shell with a false stopped state. Run export/Open
+  also rejects a success flag paired with a non-empty error list.
+- Pending command copy no longer displays mojibake. Definitive Start rejection
+  and an unconfirmed transport outcome have distinct labels, and champion replay
+  animation plus its visible copy now respect reduced-motion and single-frame
+  states. Runtime reduced-motion changes take effect immediately, and unrelated
+  UI redraws no longer flash an active replay back to its first frame. Track and
+  run exports keep their temporary object URL alive until the browser has
+  accepted the download. The first completed generation now renders visible
+  best/median chart markers instead of an empty-looking one-point polyline, and
+  a stopped run is no longer mislabeled as complete in its control note. A new
+  generation champion replaces the prior replay immediately instead of showing
+  the new candidate label over queued old motion. Windows-reserved names such as
+  `CON` and `LPT1` are made safe for local JSON export.
+- Previous-run rows now require a terminal result and must match its track,
+  population, completed generations, and episode duration; duplicate or
+  self-comparison rows are rejected before Results can present them.
+- Focused verification passed `50` simulation and `17` observer pytest cases;
+  after the latest terminal-result hardening, its `3` shared observer-parser
+  cases were rerun; `5` focused RunV1 library and `3` focused Track Library
+  persistence cases plus `1` focused loopback service case also passed. Focused
+  Vitest evidence is `20` simulation, `11` IPC, `15` onboarding, `5`
+  track-renderer, `6` track-workbench, `14` run-presentation, and `8` live-motion
+  Vitest cases; focused Ruff, mypy,
+  Prettier, and TypeScript checks also passed. Per explicit user direction, the
+  complete Phase 10/package gate was not rerun, so the existing EXE/ZIP evidence
+  below does not claim to contain these newest source changes.
+- `npm run test:phase10` passed `82` Vitest tests, `105` pytest tests, all `11`
+  real Chromium flows, all `18` deterministic matrix cases in `13.612335 s`,
+  the Windows EXE build, and clean-runtime release acceptance.
+- A repository-wide audit corrected the development-only transitive
+  `brace-expansion` advisory by resolving `5.0.9`; the final
+  `npm audit --audit-level=low` reported zero vulnerabilities.
+- The development smoke now rejects occupied ports before startup and requests
+  graceful Python shutdown before PID-scoped cleanup. Two consecutive smoke
+  runs passed and left both `4173` and `8765` free.
+- Read-only browser inspection at `1280 x 720` and `390 x 844` found no
+  page-level horizontal overflow, external resources, or console warnings and
+  errors in Welcome, Track Builder, Training, Results, and the populated saved
+  run library.
+- A final clean-static rebuild and `npm run test:release` passed packaged open
+  preview, repair, generator-v2, direct-EXE, restore, loopback-only, and
+  no-external-runtime checks.
+- The directly runnable `release\EvoRacer` folder contains `71` files totaling
+  `20,202,698` bytes. Its root-level `EvoRacer.exe` is `2,573,165` bytes and no
+  command script exists.
+- The parallel ZIP contains `72` entries. `EvoRacer/EvoRacer.exe` is `2,573,165`
+  bytes, `EvoRacer.cmd` is absent, and the complete ZIP is `9,433,123` bytes.
+- Clean-runtime acceptance started the EXE directly with a system-only `PATH`,
+  verified that it owned the `127.0.0.1:8765` service, used no non-loopback
+  connection, and spawned no external Node.js or Python process. It restored
+  and completed `run-ca17ce5c7be747099d5b645704004eb4`.
+- Final local ZIP SHA-256:
+  `b44510204b76ee551f9004050afef55f41c02907132a3ee01184cc33c1a9bee2`.
+- Detailed evidence is saved in
+  `docs/verification/executable-package-correction.md` and
+  `docs/verification/track-builder-generator-v2.md`; the second audit is
+  recorded in `docs/verification/deep-second-audit.md`, and the responsive UI
+  corrections are recorded in
+  `docs/verification/post-release-ui-hardening.md`. Run recovery is recorded in
+  `docs/verification/post-release-run-recovery.md`, and keyboard/interface state
+  evidence is recorded in
+  `docs/verification/post-release-keyboard-state-hardening.md`; truthful
+  library/IPC error evidence is recorded in
+  `docs/verification/post-release-library-error-hardening.md`, and failed-Start
+  recovery is recorded in
+  `docs/verification/post-release-start-recovery.md`, and terminal Saved results
+  recovery is recorded in
+  `docs/verification/post-release-saved-results-recovery.md`; forced
+  out-of-order library evidence is recorded in
+  `docs/verification/post-release-library-refresh-ownership.md`, and replay
+  integrity evidence is recorded in
+  `docs/verification/post-release-replay-integrity.md`, and Saved-action route
+  ownership evidence is recorded in
+  `docs/verification/post-release-run-action-ownership.md`, and Track import
+  ownership evidence is recorded in
+  `docs/verification/post-release-track-import-ownership.md`, and Review
+  validation ownership evidence is recorded in
+  `docs/verification/post-release-validation-route-ownership.md`, and setup
+  accessibility semantics are recorded in
+  `docs/verification/post-release-accessibility-semantics.md`, and
+  unconfirmed-Start Saved-run recovery is recorded in
+  `docs/verification/post-release-unconfirmed-start-library-refresh.md`, and
+  Track command route/Builder ownership is recorded in
+  `docs/verification/post-release-track-command-ownership.md`, and shutdown
+  lifecycle ownership is recorded in
+  `docs/verification/post-release-shutdown-lifecycle.md`, and recoverable Track
+  startup reads are recorded in
+  `docs/verification/post-release-track-startup-recovery.md`, and recoverable
+  Saved runs startup reads are recorded in
+  `docs/verification/post-release-run-library-startup-recovery.md`, and the
+  batched UI-state correction is recorded in
+  `docs/verification/post-release-batched-ui-state-hardening.md`.
+  Publication, tagging, and replacement of the immutable `v1.1.0` assets were
+  not performed.
 
 ## v1.1.0 personal offline hardening
 
@@ -199,9 +442,9 @@
 - The production launcher serves built frontend assets and versioned Python
   contracts from one `127.0.0.1:8765` origin and supports explicit graceful
   shutdown.
-- The portable release keeps Python modules and Vite assets as visible files,
-  uses a checksum-pinned official Python 3.13 embeddable runtime, and requires
-  no installed Node.js or Python.
+- The Windows release is a PyInstaller `onedir` application with root-level
+  `EvoRacer.exe`, adjacent bundled runtime/assets, and no installed Node.js or
+  Python requirement.
 - The release workflow creates `EvoRacer-Windows-x64.zip`, a separate SHA-256
   checksum, README, third-party notices, and complete Python/neat-python
   licenses.
@@ -571,43 +814,64 @@ Delivered:
 
 - [x] Production static frontend and Python loopback core under one launcher.
 - [x] Browser-open behavior and explicit graceful shutdown.
-- [x] Transparent `app/` plus embedded `runtime/` portable folder with no frozen
-      EvoRacer application EXE.
+- [x] PyInstaller `onedir` application with root-level `EvoRacer.exe` and
+      adjacent bundled runtime/assets.
 - [x] `EvoRacer-Windows-x64.zip` and matching SHA-256 checksum.
 - [x] README, third-party notices, Python license, and neat-python license.
 - [x] Clean-runtime, offline-boundary, persistence, restore, replay, and browser
       acceptance.
 
-Latest verification evidence recorded on `2026-07-31`:
+Latest verification evidence recorded on `2026-08-04` for the unreleased
+`v1.1.1` correction:
 
-- `npm run check` passed Prettier, ESLint, TypeScript type-check, 54 Vitest
-  tests, Ruff format/lint, strict mypy, 96 pytest tests, and the Vite production
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, 82 Vitest
+  tests, Ruff format/lint, strict mypy, 105 pytest tests, and the Vite production
   build.
 - `npm run smoke:m0` passed with the development frontend and Python service on
   loopback.
-- `npm run build:release` verified and extracted official embedded Python
-  `3.13.5`, copied plain application modules/assets, and created the portable
-  release ZIP, checksum, and notices.
+- `npm run build:release` used exact PyInstaller `6.21.0` to create the
+  outside-ZIP `release\EvoRacer\EvoRacer.exe`, adjacent bundled runtime/assets,
+  parallel release ZIP, checksum, notices, and license texts.
 - Final `release\EvoRacer-Windows-x64.zip` SHA-256:
-  `8bb0f1305379aa90b2efb642cf1cc33fcfe6caf7b17ed101c10d401e1f8046e1`.
+  `b44510204b76ee551f9004050afef55f41c02907132a3ee01184cc33c1a9bee2`.
 - `npm run test:release` launched the extracted app with a system-only `PATH`,
   no Python environment, and unreachable outbound proxies. It saved generation
   `1 / 3`, shut down, restored run
-  `run-c0fe1bc150b54b66b9eefc45de0fe7b8`, completed `3 / 3`, and returned replay
+  `run-ca17ce5c7be747099d5b645704004eb4`, completed `3 / 3`, and returned replay
   frames.
 - The packaged process opened only loopback sockets and spawned no Node.js or
   Python child process.
 - Production browser interaction covered Welcome, selection, validation,
-  explicit Start, a Fixed GA generation, telemetry, Stop, Results, a 139-frame
-  replay, saved-run listing, and the Exit action.
+  Track Builder invalid-draft preview and repair, generator v2, explicit Start,
+  a Fixed GA generation, telemetry, Stop, and Results.
 - Browser console warnings/errors and non-local resource references were both
   zero. At `390 x 844`, document `scrollWidth` equaled `clientWidth` (`375`).
-- The extracted bundle contained `EvoRacer.cmd`, visible `app/evo_racer` and
-  `app/web` trees, isolated `runtime`, and no frozen `EvoRacer.exe`.
+- The build retained the complete runnable application at
+  `release\EvoRacer\EvoRacer.exe`. Both that outside-ZIP EXE and a freshly
+  extracted copy started successfully; no `EvoRacer.cmd` exists.
 - Detailed evidence is saved in
   `docs/verification/phase9-windows-offline-package.md` for the original v1.0.0
-  package and `docs/verification/personal-offline-hardening.md` for the current
-  portable package.
+  package, `docs/verification/personal-offline-hardening.md` for published
+  `v1.1.0`, and `docs/verification/executable-package-correction.md` for the
+  current local correction, and `docs/verification/track-builder-generator-v2.md`
+  for the Track Builder hotfix. The latest run-recovery browser and package
+  evidence is in `docs/verification/post-release-run-recovery.md`; the latest
+  keyboard/interface-state evidence is in
+  `docs/verification/post-release-keyboard-state-hardening.md`; the latest
+  library/IPC error evidence is in
+  `docs/verification/post-release-library-error-hardening.md`; the latest
+  Start-recovery evidence is in
+  `docs/verification/post-release-start-recovery.md`; terminal Saved results
+  recovery is in
+  `docs/verification/post-release-saved-results-recovery.md`; ordered-library
+  response evidence is in
+  `docs/verification/post-release-library-refresh-ownership.md`; replay
+  contract and Results navigation evidence is in
+  `docs/verification/post-release-replay-integrity.md`; late Saved-action route
+  ownership evidence is in
+  `docs/verification/post-release-run-action-ownership.md`; Track import
+  concurrency and close/route ownership evidence is in
+  `docs/verification/post-release-track-import-ownership.md`.
 - `git diff --check` passed.
 
 ### M10 - Hardening and Portfolio Release
@@ -693,7 +957,7 @@ Verification evidence recorded on `2026-07-29`:
   `2462e678368f3e142d801d8c29c327602484d5e24c0bd3441efb0a317f1cf732`.
 - `git diff --cached --check` passed for the Phase 11 release commit.
 
-### M12 - Personal Offline v1.1.0
+### M12 - Personal Offline v1.1.0 (published historical package)
 
 Status: `complete`
 
@@ -723,9 +987,18 @@ Verification evidence recorded on `2026-07-31`:
 
 ## Next action
 
-All twelve planned milestones are complete. Future work should begin under a
-new version and milestone definition while preserving the immutable `v1.0.0`
-and `v1.1.0` tags, published assets, saved evidence, and product claim boundary.
+The last local `v1.1.1` executable, recoverable Track and Saved-runs startup reads,
+resilient shutdown lifecycle, route-owned Track commands, unconfirmed-Start
+Saved-run recovery, accessible setup semantics, route-owned Review validation,
+Track Builder, owned Track imports, route-owned Saved actions, replay integrity,
+ordered libraries,
+responsive UI, Start/run recovery, terminal Saved results,
+keyboard/interface-state, and truthful library-error correction remains the last
+package-verified baseline. Continue post-release game/UI hardening through
+reproducible findings with focused tests only; run the complete gate or rebuild
+the package only on explicit request. Commit, tag, and publish only on explicit
+request. Preserve the immutable `v1.0.0` and `v1.1.0` tags, published assets,
+saved evidence, and product claim boundary.
 
 ## State update rule
 

@@ -7,8 +7,9 @@
 - Permit loopback-only IPC on `127.0.0.1`; forbid every non-loopback runtime connection.
 - Do not include CDN assets, telemetry, analytics, accounts, update checks, remote models, or downloads.
 - Store tracks, settings, runs, checkpoints, and replays locally.
-- Keep the portable application's Python modules and web assets visible under
-  `app/`; do not freeze or archive application code into an EXE.
+- Provide `EvoRacer.exe` at the root of the application folder as the primary
+  and sufficient user entry point. Local release builds must keep the complete
+  runnable `release\EvoRacer` folder outside the distribution ZIP.
 
 ## User experience
 
@@ -184,7 +185,9 @@ Use versioned local files under:
 
 Use atomic writes and isolate corrupt records. Support track JSON import/export and resumable evolutionary checkpoints.
 
-Build the frontend locally and distribute a transparent portable folder with the
-official Python 3.13 embeddable runtime, plain application modules, local static
-assets, `EvoRacer.cmd`, and no frozen application EXE. Publish
-`EvoRacer-Windows-x64.zip` plus its SHA-256 checksum.
+Build the frontend locally and distribute a PyInstaller `onedir` Windows x64
+application with local static assets and `EvoRacer.exe` at the application
+folder root. Keep the runnable folder at `release\EvoRacer`; produce
+`EvoRacer-Windows-x64.zip` and its checksum only as parallel distribution
+artifacts. The EXE and its adjacent bundled runtime must require no installed
+Python, Node.js, command script, network download, or non-loopback connection.

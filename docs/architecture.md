@@ -102,10 +102,19 @@ piece list. Add, delete, undo, redo, reset, naming, and road-width controls are
 presentation state. Validation and assisted closure are versioned commands to
 the Python core; the browser never derives closure or geometry.
 
-The version 1 Python generator uses deterministic SHA-256 candidate ranking and
-a bounded constrained search of at most 200 candidates. Length selects exactly
-12, 18, or 24 canonical pieces. Difficulty selects documented corridor widths.
-Every candidate is accepted only by the existing Phase 2 compiler.
+Generator version 2 uses deterministic SHA-256 candidate ranking and a bounded
+constrained search of at most 200 candidates. Length selects exactly 12, 18, or
+24 canonical pieces. Difficulty selects documented corridor widths and distinct
+shape families: Easy layouts avoid chicanes and hairpins while varying straight
+and corner composition, Technical layouts require chicanes, and Hard layouts
+prefer hairpin stadiums. Every candidate is accepted only by the existing Phase
+2 compiler.
+
+Invalid but schema-valid editor drafts use a separate Python-derived open-loop
+preview. That geometry is presentation-only and never satisfies selection,
+save, or export guards. Assisted closure first searches a bounded append-only
+suffix, then may roll back at most six trailing pieces to recover a previously
+valid loop; the response reports both added and removed piece counts.
 
 Track import first parses the JSON document shape in the browser, then requires
 Python validation before selection. Export writes only canonical `TrackV1`
@@ -360,16 +369,20 @@ sends its final JSON response before a separate thread calls
 `server.server_close()` to release the loopback socket. Process signals use the
 same asynchronous shutdown path.
 
-The release uses the official Python 3.13 Windows embeddable distribution and
-its `._pth` isolation mechanism. The runtime search path is restricted to the
-bundled standard library, bundled `neat-python`, and the adjacent plain
-`app/evo_racer` modules. Built Vite assets remain visible under `app/web`.
-`EvoRacer.cmd` starts `runtime/pythonw.exe`; no EvoRacer application code is
-frozen into an EXE or executable archive. This follows Python's official
-[embeddable package and isolated-path guidance](https://docs.python.org/3.13/using/windows.html#the-embeddable-package).
-The release script pins and verifies the official runtime archive SHA-256,
-adds user-facing notices and complete Python/neat-python licenses, archives the
-full `EvoRacer` directory, and writes the ZIP checksum separately.
+Before sending that request, the browser enters an explicit shutting-down
+lifecycle and replaces every interactive control with a focused status screen.
+Rendering and observation scheduling stop outside the active lifecycle, so a
+late library or telemetry response cannot recreate the application after a
+successful shutdown. A failed request restores the active interface and reports
+the precise labeled local IPC error.
+
+The release uses a PyInstaller `onedir` build. `EvoRacer.exe` is the windowed
+bootloader and application entry point; the Python runtime, imported modules,
+and local Vite assets are collected into its adjacent application directory.
+The build retains that complete directory at `release/EvoRacer` for direct
+local use. It uses an exact PyInstaller version, adds user-facing notices and
+the complete Python, neat-python, and PyInstaller licenses, archives the same
+directory for distribution, and writes the ZIP checksum separately.
 
 Release acceptance extracts the ZIP into a fresh directory, gives the packaged
 process only the Windows system directory on `PATH`, removes Python environment
@@ -377,8 +390,7 @@ variables, and supplies unreachable outbound proxy endpoints while exempting
 loopback. It starts, saves, shuts down, restarts, restores, completes, and
 replays one run. A process connection audit rejects non-loopback sockets and
 rejects any child Node.js or external Python process. The accepted top-level
-process is the Python interpreter contained inside the extracted portable
-folder.
+process is the extracted root-level `EvoRacer.exe` itself.
 
 User-owned data remains under `%LOCALAPPDATA%\EvoRacerAILab` and uses the
 versioned, atomic files defined in Phase 8.

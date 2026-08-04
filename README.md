@@ -9,14 +9,15 @@ The user never drives a vehicle.
 
 ## Windows release
 
-Download the current stable
-[Windows x64 release](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip)
-and its
-[SHA-256 checksum](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest/download/EvoRacer-Windows-x64.zip.sha256).
-Extract the full archive and open `EvoRacer\EvoRacer.cmd`; Node.js and Python
-are not required on the target computer. The
-[release page](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest)
-contains the versioned notes and both assets.
+Version `1.1.1` is an executable-package correction currently verified from
+this source checkout but not yet published. Build it with
+`npm run build:release`, then open `release\EvoRacer\EvoRacer.exe` directly;
+Node.js, Python, a command script, and ZIP extraction are not required for the
+local build.
+
+The immutable published `v1.1.0` assets remain available on the
+[release page](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.1.0),
+but that older package used `EvoRacer.cmd` and is superseded by this correction.
 
 Repository contributors can create those artifacts with
 `npm run build:release`. Publish both generated files together when attaching a
@@ -277,22 +278,22 @@ parsed structurally by TypeScript.
 
 ## Windows offline package
 
-Phase 9 ships the production browser UI and Python core as a transparent,
-portable Windows x64 folder:
+Phase 9 ships the production browser UI and Python core as a PyInstaller
+`onedir` Windows x64 application:
 
-- `EvoRacer.cmd` starts the bundled official Python 3.13 embeddable runtime.
-  Plain Python modules live under `app\evo_racer` and built frontend assets live
-  under `app\web`; EvoRacer is not frozen into an application EXE.
+- `EvoRacer.exe` is the root-level user entry point. Opening it starts the
+  complete bundled runtime and local frontend without a command script.
 - The local launcher binds only to `127.0.0.1:8765` and opens the user's default
   browser. Browser and Python contracts remain on the same loopback origin.
 - The application includes an explicit Exit action. It confirms the request,
   finishes the current HTTP response, shuts down the local server, and closes
   the packaged process.
-- The portable folder bundles Python 3.13, neat-python, the NEAT configuration,
-  and every production frontend asset. Node.js and a system Python installation
-  are not required at runtime.
+- The application folder bundles Python 3.13, neat-python, the NEAT
+  configuration, and every production frontend asset. Node.js and a system
+  Python installation are not required at runtime.
 - The release includes the README, third-party notices, complete Python and
-  neat-python license texts, and a separate SHA-256 checksum.
+  neat-python license texts, the PyInstaller license, and a separate SHA-256
+  checksum.
 
 Build and run the Windows release gate:
 
@@ -304,11 +305,16 @@ npm run test:release
 The generated files are:
 
 ```text
+release\EvoRacer\EvoRacer.exe
 release\EvoRacer-Windows-x64.zip
 release\EvoRacer-Windows-x64.zip.sha256
 ```
 
-Users extract the ZIP and open `EvoRacer\EvoRacer.cmd`. All application data
+The complete `release\EvoRacer` folder is the directly runnable local build.
+Keep `_internal` beside `EvoRacer.exe`. The ZIP and checksum are parallel
+distribution artifacts.
+
+Users extract the ZIP and open `EvoRacer\EvoRacer.exe`. All application data
 continues to live under `%LOCALAPPDATA%\EvoRacerAILab`.
 
 ## Hardening and evidence

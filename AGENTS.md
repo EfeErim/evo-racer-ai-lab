@@ -19,9 +19,10 @@
 - The released Windows x64 application must work with Wi-Fi and Ethernet disabled.
 - Never add runtime calls to remote APIs, CDNs, telemetry, analytics, update services, remote fonts, model downloads, or remote assets.
 - Loopback communication on `127.0.0.1` is local-only IPC. Bind no runtime service to a LAN or public interface.
-- Bundle every runtime dependency in a transparent portable folder. The user
-  only extracts the release ZIP and opens `EvoRacer.cmd`; application source and
-  web assets must remain outside executable archives.
+- Bundle every runtime dependency in the Windows x64 release. A local build
+  must leave the runnable application at `release\EvoRacer\EvoRacer.exe`
+  outside the ZIP. No command script, installed Python, or installed Node.js
+  may be required.
 - Never start training automatically. Require the user to review valid settings and press Start.
 - The user observes AI racing and never drives a vehicle. Keyboard and pointer input are UI-only.
 - Keep vehicle physics arcade-style and deterministic; do not introduce simulation-grade tire, suspension, drivetrain, or weight-transfer systems.
