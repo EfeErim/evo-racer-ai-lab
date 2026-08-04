@@ -55,6 +55,43 @@ def test_pinned_feed_forward_config_and_runtime_compiler_match_neat_python() -> 
     assert CompiledNEATNetwork.from_payload(compiled.to_payload()) == compiled
 
 
+def test_runtime_network_rejects_ambiguous_input_and_output_keys() -> None:
+    def payload() -> dict[str, object]:
+        return {
+            "contractVersion": 1,
+            "kind": "feed-forward-dag",
+            "inputKeys": list(range(-10, 0)),
+            "outputKeys": [0, 1, 2],
+            "outputTransforms": ["tanh", "sigmoid", "sigmoid"],
+            "nodes": [
+                {
+                    "key": output_key,
+                    "activation": "identity",
+                    "aggregation": "sum",
+                    "bias": 0.0,
+                    "response": 1.0,
+                    "links": [{"source": -1, "weight": 1.0}],
+                }
+                for output_key in range(3)
+            ],
+        }
+
+    duplicate_inputs = payload()
+    duplicate_inputs["inputKeys"] = [-10, -10, *range(-8, 0)]
+    with pytest.raises(ValueError, match="input keys must be unique"):
+        CompiledNEATNetwork.from_payload(duplicate_inputs)
+
+    duplicate_outputs = payload()
+    duplicate_outputs["outputKeys"] = [0, 0, 2]
+    with pytest.raises(ValueError, match="output keys must be unique"):
+        CompiledNEATNetwork.from_payload(duplicate_outputs)
+
+    overlapping_keys = payload()
+    overlapping_keys["outputKeys"] = [-1, 1, 2]
+    with pytest.raises(ValueError, match="input and output keys must be disjoint"):
+        CompiledNEATNetwork.from_payload(overlapping_keys)
+
+
 def test_multi_generation_neat_run_uses_shared_episode_evaluator() -> None:
     result = run_neat(
         population_size=6,

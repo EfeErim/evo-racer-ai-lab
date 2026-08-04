@@ -183,6 +183,12 @@ class CompiledNEATNetwork:
             raise ValueError(f"NEAT network requires {NETWORK_INPUT_COUNT} inputs.")
         if len(self.output_keys) != NETWORK_OUTPUT_COUNT:
             raise ValueError(f"NEAT network requires {NETWORK_OUTPUT_COUNT} outputs.")
+        if len(set(self.input_keys)) != len(self.input_keys):
+            raise ValueError("NEAT input keys must be unique.")
+        if len(set(self.output_keys)) != len(self.output_keys):
+            raise ValueError("NEAT output keys must be unique.")
+        if set(self.input_keys).intersection(self.output_keys):
+            raise ValueError("NEAT input and output keys must be disjoint.")
         available = set(self.input_keys)
         for node in self.nodes:
             if node.key in available:

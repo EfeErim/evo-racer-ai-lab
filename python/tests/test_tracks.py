@@ -102,6 +102,30 @@ def test_unclosed_track_fails_closed() -> None:
     assert [issue.code for issue in error.value.issues] == ["LOOP_NOT_CLOSED"]
 
 
+def test_non_adjacent_centerline_touch_is_rejected_as_self_intersection() -> None:
+    response = validate_track_payload(
+        {
+            "schemaVersion": 1,
+            "id": "touching-loop",
+            "name": "Touching loop",
+            "roadWidth": 12,
+            "pieces": [
+                {"kind": "start-finish"},
+                {"kind": "hairpin-left"},
+                {"kind": "straight-short"},
+                {"kind": "hairpin-left"},
+                {"kind": "hairpin-left"},
+                {"kind": "hairpin-left"},
+            ],
+        }
+    )
+
+    assert response["valid"] is False
+    errors = response["errors"]
+    assert isinstance(errors, list)
+    assert [error["code"] for error in errors] == ["TRACK_SELF_INTERSECTION"]
+
+
 def test_direct_compiler_input_cannot_bypass_canonical_validation() -> None:
     invalid = TrackV1(
         schema_version=1,

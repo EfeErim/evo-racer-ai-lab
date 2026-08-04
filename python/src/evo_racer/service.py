@@ -22,6 +22,7 @@ from evo_racer.tracks import compiled_presets_payload, validate_track_payload
 LOOPBACK_HOST: Final = "127.0.0.1"
 DEFAULT_PORT: Final = 8765
 MAX_REQUEST_BYTES: Final = 16_384
+INVALID_REQUEST_BODY: Final[object] = object()
 ALLOWED_DEVELOPMENT_ORIGINS: Final = frozenset(
     {
         "http://127.0.0.1:4173",
@@ -138,7 +139,7 @@ class HealthHandler(BaseHTTPRequestHandler):
             return
 
         payload = self._read_json()
-        if payload is None:
+        if payload is INVALID_REQUEST_BODY:
             return
 
         if path == "/v1/setup/validate":
@@ -190,31 +191,31 @@ class HealthHandler(BaseHTTPRequestHandler):
         )
         self._send_json(HTTPStatus.OK, response)
 
-    def _read_json(self) -> object | None:
+    def _read_json(self) -> object:
         content_length = self.headers.get("Content-Length")
         if content_length is None:
             self._send_json(
                 HTTPStatus.BAD_REQUEST,
                 {"error": "CONTENT_LENGTH_REQUIRED"},
             )
-            return None
+            return INVALID_REQUEST_BODY
 
         try:
             request_bytes = int(content_length)
         except ValueError:
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "INVALID_CONTENT_LENGTH"})
-            return None
+            return INVALID_REQUEST_BODY
 
         if request_bytes < 0 or request_bytes > MAX_REQUEST_BYTES:
             self._send_json(HTTPStatus.REQUEST_ENTITY_TOO_LARGE, {"error": "PAYLOAD_TOO_LARGE"})
-            return None
+            return INVALID_REQUEST_BODY
 
         try:
             payload: object = json.loads(self.rfile.read(request_bytes))
             return payload
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": "INVALID_JSON"})
-            return None
+            return INVALID_REQUEST_BODY
 
     def _compile_request(self, payload: object) -> dict[str, object]:
         if not isinstance(payload, dict) or payload.get("contractVersion") != 1:

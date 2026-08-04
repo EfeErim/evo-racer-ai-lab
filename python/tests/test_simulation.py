@@ -72,6 +72,12 @@ def _advance(
     return state
 
 
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_controller_outputs_fail_closed(invalid: float) -> None:
+    with pytest.raises(ValueError, match="Controller outputs must be finite"):
+        Controls(invalid, 0.5, 0.0)
+
+
 def test_fractional_controls_have_measurable_effects() -> None:
     geometry = preset_geometry("easy-oval")
     half_throttle = _advance(
@@ -189,6 +195,30 @@ def test_swept_collision_and_sensors_use_derived_track_corridor() -> None:
     assert collided is True
     assert geometry.on_road((state.x, state.y)) is True
     assert state.forward_speed == 0.0
+
+
+@pytest.mark.parametrize("invalid", [0.0, -1.0, float("nan"), float("inf"), True])
+def test_compiled_geometry_rejects_invalid_road_width(invalid: object) -> None:
+    compiled = compile_track_payload(PRESET_TRACKS[0].to_payload())
+    track = compiled.get("track")
+    assert isinstance(track, dict)
+    track["roadWidth"] = invalid
+
+    with pytest.raises(ValueError):
+        TrackGeometry.from_compiled(compiled)
+
+
+def test_geometry_rejects_zero_length_centerline_segments() -> None:
+    compiled = compile_track_payload(PRESET_TRACKS[0].to_payload())
+    geometry = compiled.get("geometry")
+    assert isinstance(geometry, dict)
+    centerline = geometry.get("centerline")
+    assert isinstance(centerline, list)
+    assert len(centerline) > 2
+    centerline[1] = centerline[0]
+
+    with pytest.raises(ValueError, match="zero-length"):
+        TrackGeometry.from_compiled(compiled)
 
 
 def test_physics_step_reuses_the_swept_safe_projection(
@@ -332,6 +362,54 @@ def test_shared_telemetry_fixture_round_trips_in_python() -> None:
     telemetry = parse_telemetry_payload(fixture)
 
     assert telemetry.to_payload() == fixture
+
+
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [
+        ("selectedCarId", "   "),
+        ("simulatedSeconds", -0.01),
+        ("speed", -0.01),
+        ("steering", 1.01),
+        ("throttle", -0.01),
+        ("brake", 1.01),
+        ("progress", -0.01),
+        ("progress", 1.01),
+        ("sensorDistances", [-0.01, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
+        ("sensorDistances", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, SENSOR_RANGE + 0.01]),
+    ],
+)
+def test_shared_telemetry_parser_rejects_impossible_values(
+    field: str,
+    invalid: object,
+) -> None:
+    fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    assert isinstance(fixture, dict)
+    fixture[field] = invalid
+
+    with pytest.raises(ValueError):
+        parse_telemetry_payload(fixture)
+
+
+@pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -1.0])
+def test_episode_rejects_invalid_duration_before_stepping(invalid: float) -> None:
+    with pytest.raises(ValueError, match="max_seconds"):
+        evaluate_episode(
+            preset_geometry("easy-oval"),
+            PurePursuitBaseline(),
+            max_seconds=invalid,
+        )
+
+
+@pytest.mark.parametrize("invalid", [0, -1, 1.5, True])
+def test_episode_rejects_invalid_telemetry_interval(invalid: object) -> None:
+    with pytest.raises(ValueError, match="positive integer"):
+        evaluate_episode(
+            preset_geometry("easy-oval"),
+            PurePursuitBaseline(),
+            max_seconds=0.5,
+            telemetry_interval_steps=invalid,  # type: ignore[arg-type]
+        )
 
 
 def test_preview_contract_uses_python_track_compiler() -> None:

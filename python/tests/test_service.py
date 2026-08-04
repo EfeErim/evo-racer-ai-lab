@@ -155,6 +155,47 @@ def test_setup_validation_contract_does_not_start_a_run() -> None:
         thread.join(timeout=2)
 
 
+def test_valid_json_null_receives_a_versioned_validation_response() -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(  # noqa: S310
+        f"http://{host}:{port}/v1/setup/validate",
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "Origin": "http://127.0.0.1:4173",
+        },
+        data=b"null",
+    )
+
+    try:
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            payload: dict[str, Any] = json.load(response)
+
+        assert response.status == HTTPStatus.OK
+        assert payload == {
+            "contractVersion": 1,
+            "valid": False,
+            "errors": [
+                {
+                    "code": "INVALID_PAYLOAD",
+                    "field": "request",
+                    "message": "Expected a JSON object.",
+                }
+            ],
+        }
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
 @pytest.mark.parametrize(
     "origin",
     [

@@ -6,12 +6,19 @@ import hashlib
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Final
 
 from evo_racer.tracks import TrackValidationError, compile_track_payload
 
 LIBRARY_CONTRACT_VERSION: Final = 1
+ATOMIC_REPLACE_ATTEMPTS: Final = 5
+ATOMIC_REPLACE_RETRY_SECONDS: Final = 0.01
+
+
+class TrackRecordError(ValueError):
+    """Raised when a local track record violates library identity rules."""
 
 
 def default_data_root() -> Path:
@@ -62,7 +69,7 @@ def save_track_payload(payload: object, data_root: Path | None = None) -> dict[s
             temporary.flush()
             os.fsync(temporary.fileno())
             temporary_name = temporary.name
-        os.replace(temporary_name, destination)
+        _replace_transiently_locked_file(Path(temporary_name), destination)
     finally:
         if temporary_name is not None:
             Path(temporary_name).unlink(missing_ok=True)
@@ -84,9 +91,22 @@ def library_payload(data_root: Path | None = None) -> dict[str, object]:
 
     for record in sorted(tracks_dir.glob("*.json")):
         try:
-            payload: object = json.loads(record.read_text(encoding="utf-8"))
-            tracks.append(compile_track_payload(payload))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError, TrackValidationError):
+            payload: object = json.loads(_read_text_with_retries(record))
+            compiled = compile_track_payload(payload)
+            track = compiled["track"]
+            assert isinstance(track, dict)
+            track_id = track["id"]
+            assert isinstance(track_id, str)
+            if record.name != f"{_record_key(track_id)}.json":
+                raise TrackRecordError("Track record name does not match its track id.")
+            tracks.append(compiled)
+        except (
+            OSError,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+            TrackRecordError,
+            TrackValidationError,
+        ):
             isolated.append(
                 {
                     "record": record.name,
@@ -100,6 +120,30 @@ def library_payload(data_root: Path | None = None) -> dict[str, object]:
         "tracks": tracks,
         "isolated": isolated,
     }
+
+
+def _replace_transiently_locked_file(source: Path, destination: Path) -> None:
+    """Retry a bounded Windows sharing violation without weakening atomic replace."""
+    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError:
+            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
+
+
+def _read_text_with_retries(record: Path) -> str:
+    """Retry a bounded transient read lock before declaring a track corrupt."""
+    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
+        try:
+            return record.read_text(encoding="utf-8")
+        except (FileNotFoundError, PermissionError):
+            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
+                raise
+            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
+    raise AssertionError("Track record read retry loop ended unexpectedly.")
 
 
 def delete_track(track_id: str, data_root: Path | None = None) -> dict[str, object]:

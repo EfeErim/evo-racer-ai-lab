@@ -69,6 +69,10 @@ class Controls:
     throttle: float
     brake: float
 
+    def __post_init__(self) -> None:
+        if any(not math.isfinite(value) for value in (self.steering, self.throttle, self.brake)):
+            raise ValueError("Controller outputs must be finite.")
+
     def clamped(self) -> Controls:
         """Clamp untrusted controller output to the product ranges."""
         return Controls(
@@ -88,6 +92,22 @@ class VehicleState:
     forward_speed: float = 0.0
     lateral_speed: float = 0.0
     steering: float = 0.0
+
+    def __post_init__(self) -> None:
+        values = (
+            self.x,
+            self.y,
+            self.heading,
+            self.forward_speed,
+            self.lateral_speed,
+            self.steering,
+        )
+        if any(not math.isfinite(value) for value in values):
+            raise ValueError("Vehicle state values must be finite.")
+        if self.forward_speed < 0.0:
+            raise ValueError("Vehicle forward speed cannot be negative.")
+        if not -1.0 <= self.steering <= 1.0:
+            raise ValueError("Vehicle steering must stay in [-1,1].")
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +151,25 @@ class TelemetrySnapshot:
     controls: Controls
     progress_fraction: float
     sensor_distances: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if not self.selected_car_id:
+            raise ValueError("Selected car id must be non-empty.")
+        if not math.isfinite(self.simulated_seconds) or self.simulated_seconds < 0.0:
+            raise ValueError("Telemetry time must be finite and non-negative.")
+        if not -1.0 <= self.controls.steering <= 1.0:
+            raise ValueError("Telemetry steering must stay in [-1,1].")
+        if not 0.0 <= self.controls.throttle <= 1.0:
+            raise ValueError("Telemetry throttle must stay in [0,1].")
+        if not 0.0 <= self.controls.brake <= 1.0:
+            raise ValueError("Telemetry brake must stay in [0,1].")
+        if not math.isfinite(self.progress_fraction) or not 0.0 <= self.progress_fraction <= 1.0:
+            raise ValueError("Telemetry progress must stay in [0,1].")
+        if len(self.sensor_distances) != len(SENSOR_ANGLES) or any(
+            not math.isfinite(distance) or not 0.0 <= distance <= SENSOR_RANGE
+            for distance in self.sensor_distances
+        ):
+            raise ValueError("Telemetry sensors must contain seven distances in range.")
 
     def to_payload(self) -> dict[str, object]:
         """Serialize telemetry for the TypeScript observer UI."""
@@ -206,6 +245,15 @@ class TrackGeometry:
     ) -> None:
         if len(centerline) < 3 or centerline[0] != centerline[-1]:
             raise ValueError("Simulation centerline must be a closed loop.")
+        if (
+            not isinstance(road_width, (int, float))
+            or isinstance(road_width, bool)
+            or not math.isfinite(float(road_width))
+            or road_width <= 0.0
+        ):
+            raise ValueError("Simulation road width must be finite and positive.")
+        if any(len(boundary) < 2 for boundary in (left_boundary, right_boundary)):
+            raise ValueError("Simulation boundaries must contain line segments.")
         self.centerline = centerline
         self.boundaries = (left_boundary, right_boundary)
         self.road_width = road_width
@@ -216,6 +264,8 @@ class TrackGeometry:
             segment_x = end[0] - start[0]
             segment_y = end[1] - start[1]
             length_squared = segment_x * segment_x + segment_y * segment_y
+            if length_squared <= 0.0:
+                raise ValueError("Simulation centerline cannot contain zero-length segments.")
             cumulative.append(cumulative[-1] + math.dist(start, end))
             centerline_segments.append(
                 (
@@ -264,6 +314,7 @@ class TrackGeometry:
             or not isinstance(right_boundary_value, list)
             or not isinstance(spawn_value, dict)
             or not isinstance(road_width_value, (int, float))
+            or isinstance(road_width_value, bool)
         ):
             raise ValueError("Compiled track geometry has an invalid shape.")
         centerline = tuple(_parse_point(point) for point in centerline_value)
@@ -586,11 +637,21 @@ def evaluate_episode(
     telemetry_callback: Callable[[TelemetrySnapshot], None] | None = None,
 ) -> EpisodeResult:
     """Run one deterministic episode independently of render cadence."""
+    if (
+        not isinstance(max_seconds, (int, float))
+        or isinstance(max_seconds, bool)
+        or not math.isfinite(float(max_seconds))
+    ):
+        raise ValueError("max_seconds must be a finite number.")
+    if (
+        not isinstance(telemetry_interval_steps, int)
+        or isinstance(telemetry_interval_steps, bool)
+        or telemetry_interval_steps <= 0
+    ):
+        raise ValueError("telemetry_interval_steps must be a positive integer.")
     max_steps = round(max_seconds / FIXED_TIME_STEP)
     if max_steps <= 0:
         raise ValueError("max_seconds must include at least one fixed step.")
-    if telemetry_interval_steps <= 0:
-        raise ValueError("telemetry_interval_steps must be positive.")
     state = geometry.spawn
     projection = geometry.project((state.x, state.y))
     previous_path_distance = projection.path_distance
@@ -850,7 +911,7 @@ def _finite_number(value: object, field: str) -> float:
 
 
 def _required_string(value: object, field: str) -> str:
-    if not isinstance(value, str) or not value:
+    if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{field} must be a non-empty string.")
     return value
 

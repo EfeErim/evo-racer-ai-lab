@@ -10,6 +10,8 @@ import pytest
 
 from evo_racer.observer import RunManager, RunSession, RunSettings
 from evo_racer.run_library import (
+    RunRecordError,
+    checkpoint_sha256,
     delete_run,
     export_run_payload,
     read_run_document,
@@ -261,6 +263,116 @@ def test_tampered_checkpoint_digest_isolated_without_blocking_valid_run(
             "message": "This local run could not be read and was isolated.",
         }
     ]
+
+
+def test_non_finite_checkpoint_isolated_without_blocking_valid_run(tmp_path: Path) -> None:
+    valid = _session(run_id="run-valid")
+    save_run_document(valid.to_run_document(), tmp_path)
+
+    corrupt = _session(run_id="run-non-finite").to_run_document()
+    checkpoint = corrupt["checkpoint"]
+    assert isinstance(checkpoint, dict)
+    snapshot = checkpoint["snapshot"]
+    assert isinstance(snapshot, dict)
+    snapshot["fitnessHistory"] = [{"bestFitness": float("nan")}]
+    record = tmp_path / "runs" / "run-non-finite"
+    record.mkdir(parents=True)
+    (record / "run.json").write_text(json.dumps(corrupt), encoding="utf-8")
+
+    library = run_library_payload(tmp_path)
+    runs = library["runs"]
+    assert isinstance(runs, list)
+    assert [run["runId"] for run in runs if isinstance(run, dict)] == ["run-valid"]
+    assert library["isolated"] == [
+        {
+            "record": "run-non-finite",
+            "code": "CORRUPT_RUN_RECORD",
+            "message": "This local run could not be read and was isolated.",
+        }
+    ]
+
+
+def test_checksum_valid_malformed_terminal_result_isolated_without_blocking_valid_run(
+    tmp_path: Path,
+) -> None:
+    valid = _session(generations=1, run_id="run-valid")
+    valid.advance()
+    save_run_document(valid.to_run_document(), tmp_path)
+
+    corrupt = _session(generations=1, run_id="run-invalid-result")
+    corrupt.advance()
+    document = corrupt.to_run_document()
+    checkpoint = document["checkpoint"]
+    assert isinstance(checkpoint, dict)
+    snapshot = checkpoint["snapshot"]
+    assert isinstance(snapshot, dict)
+    result = snapshot["result"]
+    assert isinstance(result, dict)
+    champion = result["champion"]
+    assert isinstance(champion, dict)
+    champion["progress"] = -0.1
+    checkpoint["sha256"] = checkpoint_sha256(snapshot)
+    record = tmp_path / "runs" / "run-invalid-result"
+    record.mkdir(parents=True)
+    (record / "run.json").write_text(json.dumps(document), encoding="utf-8")
+
+    library = run_library_payload(tmp_path)
+    runs = library["runs"]
+    assert isinstance(runs, list)
+    assert [run["runId"] for run in runs if isinstance(run, dict)] == ["run-valid"]
+    assert library["isolated"] == [
+        {
+            "record": "run-invalid-result",
+            "code": "CORRUPT_RUN_RECORD",
+            "message": "This local run could not be read and was isolated.",
+        }
+    ]
+
+
+def test_misnamed_valid_run_record_is_isolated(tmp_path: Path) -> None:
+    document = _session(run_id="run-canonical").to_run_document()
+    record = tmp_path / "runs" / "wrong-directory"
+    record.mkdir(parents=True)
+    (record / "run.json").write_text(json.dumps(document), encoding="utf-8")
+
+    library = run_library_payload(tmp_path)
+
+    assert library["runs"] == []
+    assert library["isolated"] == [
+        {
+            "record": "wrong-directory",
+            "code": "CORRUPT_RUN_RECORD",
+            "message": "This local run could not be read and was isolated.",
+        }
+    ]
+
+
+@pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
+def test_terminal_result_rejects_a_mismatched_champion_comparison(algorithm: str) -> None:
+    session = _session(
+        algorithm=algorithm,
+        generations=1,
+        run_id=f"run-{algorithm}-comparison-mismatch",
+    )
+    session.advance()
+    document = session.to_run_document()
+    checkpoint = document["checkpoint"]
+    assert isinstance(checkpoint, dict)
+    snapshot = checkpoint["snapshot"]
+    assert isinstance(snapshot, dict)
+    result = snapshot["result"]
+    assert isinstance(result, dict)
+    comparisons = result["baselineComparisons"]
+    assert isinstance(comparisons, list)
+    champion_comparison = comparisons[0]
+    assert isinstance(champion_comparison, dict)
+    champion_fitness = champion_comparison["fitness"]
+    assert isinstance(champion_fitness, float)
+    champion_comparison["fitness"] = champion_fitness + 1
+    checkpoint["sha256"] = checkpoint_sha256(snapshot)
+
+    with pytest.raises(RunRecordError, match="comparisons do not match"):
+        validate_run_document(document)
 
 
 def test_shared_phase8_run_document_validates_in_python() -> None:
