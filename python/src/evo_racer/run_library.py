@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -27,14 +28,17 @@ class RunRecordError(ValueError):
 
 def checkpoint_sha256(snapshot: object) -> str:
     """Return the stable digest stored beside a resumable observation boundary."""
-    import hashlib
-
-    encoded = json.dumps(
-        snapshot,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
+    try:
+        encoded = json.dumps(
+            snapshot,
+            allow_nan=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+    except (TypeError, ValueError) as exc:
+        raise RunRecordError(
+            "Checkpoint snapshot must contain only JSON-safe finite values."
+        ) from exc
     return hashlib.sha256(encoded).hexdigest()
 
 
@@ -119,6 +123,8 @@ def run_library_payload(data_root: Path | None = None) -> dict[str, object]:
                 raise RunRecordError("The run directory has no run.json record.")
             payload: object = json.loads(_read_text_with_retries(record))
             document = validate_run_document(payload)
+            if document["runId"] != run_dir.name:
+                raise RunRecordError("Run directory name does not match its run id.")
             runs.append(run_summary(document))
         except (
             OSError,
@@ -219,8 +225,9 @@ def validate_run_document(payload: object) -> dict[str, object]:
         raise RunRecordError("Checkpoint totalGenerations does not match settings.")
     if generation > cast(int, settings["generations"]):
         raise RunRecordError("Checkpoint generation exceeds the requested generations.")
-    if not isinstance(snapshot.get("fitnessHistory"), list):
-        raise RunRecordError("Checkpoint fitnessHistory must be an array.")
+    _validate_fitness_history(
+        snapshot.get("fitnessHistory"), generation, "checkpoint.fitnessHistory"
+    )
     if not isinstance(snapshot.get("previousRuns"), list):
         raise RunRecordError("Checkpoint previousRuns must be an array.")
     generation_trails = snapshot.get("generationTrails")
@@ -233,6 +240,16 @@ def validate_run_document(payload: object) -> dict[str, object]:
         raise RunRecordError("Completed checkpoints must include every requested generation.")
     if status in {"completed", "stopped"} and generation > 0 and not isinstance(result, dict):
         raise RunRecordError("Terminal checkpoints require a result after one generation.")
+    if isinstance(result, dict):
+        _validate_terminal_result(
+            result,
+            snapshot=snapshot,
+            run_id=run_id,
+            status=status,
+            generation=generation,
+            settings=settings,
+            track=canonical_track,
+        )
 
     return {
         "schemaVersion": RUN_SCHEMA_VERSION,
@@ -322,6 +339,169 @@ def _validate_generation_trails(value: object, run_id: str, generation: int) -> 
                 raise RunRecordError("Generation trail coordinates are invalid.")
 
 
+def _validate_terminal_result(
+    result: dict[str, object],
+    *,
+    snapshot: dict[str, object],
+    run_id: str,
+    status: str,
+    generation: int,
+    settings: dict[str, object],
+    track: dict[str, object],
+) -> None:
+    metadata = _object(result.get("metadata"), "result.metadata")
+    track_json = json.dumps(track, separators=(",", ":"), sort_keys=True)
+    expected_track_sha256 = hashlib.sha256(track_json.encode("utf-8")).hexdigest()
+    expected_metadata = {
+        "contractVersion": 1,
+        "runId": run_id,
+        "status": status,
+        "algorithm": settings["algorithm"],
+        "seed": settings["seed"],
+        "trackId": track["id"],
+        "trackName": track["name"],
+        "trackSha256": expected_track_sha256,
+        "populationSize": settings["populationSize"],
+        "generationsRequested": settings["generations"],
+        "generationsCompleted": generation,
+        "episodeSeconds": settings["episodeSeconds"],
+        "simulationContractVersion": 1,
+        "evolutionContractVersion": 1,
+        "observationContractVersion": 1,
+    }
+    if any(metadata.get(field) != expected for field, expected in expected_metadata.items()):
+        raise RunRecordError("Terminal result metadata does not match its checkpoint.")
+    if _number(metadata.get("fixedTimeStep"), "result.metadata.fixedTimeStep", minimum=0.0) <= 0.0:
+        raise RunRecordError("result.metadata.fixedTimeStep must be positive.")
+
+    history = _validate_fitness_history(
+        snapshot.get("fitnessHistory"), generation, "checkpoint.fitnessHistory"
+    )
+    if (
+        _validate_fitness_history(result.get("fitnessHistory"), generation, "result.fitnessHistory")
+        != history
+    ):
+        raise RunRecordError("Terminal result fitnessHistory does not match its checkpoint.")
+
+    champion = _object(result.get("champion"), "result.champion")
+    champion_id = _nonempty_string(champion.get("candidateId"), "result.champion.candidateId")
+    champion_fitness = _finite_number(champion.get("fitness"), "result.champion.fitness")
+    champion_progress = _bounded_number(
+        champion.get("progress"), "result.champion.progress", 0.0, 1.0
+    )
+    _object(champion.get("genome"), "result.champion.genome")
+    champion_setup = _validate_vehicle_setup(
+        champion.get("vehicleSetup"), "result.champion.vehicleSetup"
+    )
+
+    comparisons = result.get("baselineComparisons")
+    if not isinstance(comparisons, list) or len(comparisons) != 3:
+        raise RunRecordError("Terminal result must contain three baseline comparisons.")
+    validated_comparisons: list[dict[str, object]] = []
+    for index, value in enumerate(comparisons):
+        comparison = _object(value, f"result.baselineComparisons[{index}]")
+        _nonempty_string(comparison.get("label"), f"result.baselineComparisons[{index}].label")
+        _nonempty_string(
+            comparison.get("controller"), f"result.baselineComparisons[{index}].controller"
+        )
+        _finite_number(comparison.get("fitness"), f"result.baselineComparisons[{index}].fitness")
+        _bounded_number(
+            comparison.get("progress"),
+            f"result.baselineComparisons[{index}].progress",
+            0.0,
+            1.0,
+        )
+        if not isinstance(comparison.get("finished"), bool):
+            raise RunRecordError("Baseline comparison finished must be a boolean.")
+        _integer(
+            comparison.get("collisionCount"),
+            f"result.baselineComparisons[{index}].collisionCount",
+            minimum=0,
+        )
+        _integer(comparison.get("steps"), f"result.baselineComparisons[{index}].steps", minimum=0)
+        validated_comparisons.append(comparison)
+
+    champion_comparison, random_comparison, pursuit_comparison = validated_comparisons
+    if (
+        champion_comparison.get("label") != "Champion"
+        or champion_comparison.get("controller") != f"{settings['algorithm']}:{champion_id}"
+        or champion_comparison.get("fitness") != champion_fitness
+        or champion_comparison.get("progress") != champion_progress
+        or random_comparison.get("label") != "Seeded random network"
+        or random_comparison.get("controller") != "random-network"
+        or pursuit_comparison.get("label") != "Pure Pursuit"
+        or pursuit_comparison.get("controller") != "pure-pursuit"
+    ):
+        raise RunRecordError("Terminal result comparisons do not match their controllers.")
+
+    replay = _object(result.get("replay"), "result.replay")
+    if replay.get("contractVersion") != 1 or replay.get("candidateId") != champion_id:
+        raise RunRecordError("Terminal replay identity does not match its champion.")
+    if _validate_vehicle_setup(replay.get("vehicleSetup"), "result.replay.vehicleSetup") != (
+        champion_setup
+    ):
+        raise RunRecordError("Terminal replay vehicle setup does not match its champion.")
+    _integer(replay.get("sampleEverySteps"), "result.replay.sampleEverySteps", minimum=1)
+    _nonempty_string(replay.get("termination"), "result.replay.termination")
+    parameters = replay.get("controllerParameters")
+    if not isinstance(parameters, list):
+        raise RunRecordError("Terminal replay controllerParameters must be an array.")
+    for index, parameter in enumerate(parameters):
+        _finite_number(parameter, f"result.replay.controllerParameters[{index}]")
+    _validate_replay_frames(replay.get("frames"))
+
+
+def _validate_fitness_history(value: object, generation: int, label: str) -> list[object]:
+    if not isinstance(value, list) or len(value) != generation:
+        raise RunRecordError(f"{label} must contain one point per completed generation.")
+    for index, value_point in enumerate(value):
+        point = _object(value_point, f"{label}[{index}]")
+        if point.get("generation") != index:
+            raise RunRecordError(f"{label} generation indexes are inconsistent.")
+        _finite_number(point.get("bestFitness"), f"{label}[{index}].bestFitness")
+        _finite_number(point.get("medianFitness"), f"{label}[{index}].medianFitness")
+    return value
+
+
+def _validate_vehicle_setup(value: object, label: str) -> dict[str, object]:
+    setup = _object(value, label)
+    for field in (
+        "maxSpeed",
+        "acceleration",
+        "brakeStrength",
+        "steeringAgility",
+        "gripRecovery",
+    ):
+        if _finite_number(setup.get(field), f"{label}.{field}") <= 0.0:
+            raise RunRecordError(f"{label}.{field} must be positive.")
+    for field in ("frontBrakeBias", "frontDriveBias"):
+        _bounded_number(setup.get(field), f"{label}.{field}", 0.0, 1.0)
+    return setup
+
+
+def _validate_replay_frames(value: object) -> None:
+    if not isinstance(value, list) or not value:
+        raise RunRecordError("Terminal replay frames must be a non-empty array.")
+    previous_time = -1.0
+    for index, value_frame in enumerate(value):
+        frame = _object(value_frame, f"result.replay.frames[{index}]")
+        simulated_seconds = _bounded_number(
+            frame.get("simulatedSeconds"),
+            f"result.replay.frames[{index}].simulatedSeconds",
+            0.0,
+            math.inf,
+        )
+        if simulated_seconds <= previous_time:
+            raise RunRecordError("Terminal replay frame times must be strictly increasing.")
+        previous_time = simulated_seconds
+        for field in ("x", "y", "heading", "lateralSpeed"):
+            _finite_number(frame.get(field), f"result.replay.frames[{index}].{field}")
+        _bounded_number(frame.get("speed"), f"result.replay.frames[{index}].speed", 0.0, math.inf)
+        _bounded_number(frame.get("steering"), f"result.replay.frames[{index}].steering", -1.0, 1.0)
+        for field in ("throttle", "brake", "progress"):
+            _bounded_number(frame.get(field), f"result.replay.frames[{index}].{field}", 0.0, 1.0)
+
+
 def _settings(value: object) -> dict[str, object]:
     settings = _object(value, "settings")
     algorithm = settings.get("algorithm")
@@ -363,6 +543,25 @@ def _object(value: object, label: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise RunRecordError(f"{label} must be an object.")
     return cast(dict[str, object], value)
+
+
+def _nonempty_string(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise RunRecordError(f"{field} must be a non-empty string.")
+    return value
+
+
+def _finite_number(value: object, field: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool) or not math.isfinite(value):
+        raise RunRecordError(f"{field} must be a finite number.")
+    return float(value)
+
+
+def _bounded_number(value: object, field: str, minimum: float, maximum: float) -> float:
+    number = _finite_number(value, field)
+    if number < minimum or number > maximum:
+        raise RunRecordError(f"{field} is outside its supported range.")
+    return number
 
 
 def _integer(value: object, field: str, *, minimum: int) -> int:

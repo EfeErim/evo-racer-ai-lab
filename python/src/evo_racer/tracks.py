@@ -295,15 +295,63 @@ def compile_track(track: TrackV1) -> dict[str, object]:
     }
 
 
+def preview_track(track: TrackV1) -> dict[str, object]:
+    """Compile a canonical draft without pretending that an open loop is valid."""
+    track = parse_track(track.to_payload())
+    pose = _Pose(0.0, 0.0, 0.0)
+    centerline: list[Point] = [(pose.x, pose.y)]
+    checkpoints: list[_CheckpointPose] = []
+    start_pose: _CheckpointPose | None = None
+
+    for piece in track.pieces:
+        piece_start = _CheckpointPose(pose.x, pose.y, pose.heading)
+        checkpoints.append(piece_start)
+        if piece.kind == "start-finish":
+            start_pose = piece_start
+        _compile_piece(piece.kind, pose, centerline)
+
+    left_boundary, right_boundary = _derive_open_boundaries(centerline, track.road_width)
+    assert start_pose is not None
+    spawn_distance = 5.0
+    spawn_pose = {
+        "x": _rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
+        "y": _rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
+        "heading": _rounded(_normalize_heading(start_pose.heading)),
+    }
+    return {
+        "contractVersion": GEOMETRY_CONTRACT_VERSION,
+        "track": track.to_payload(),
+        "geometry": {
+            "centerline": [_point_payload(point) for point in centerline],
+            "leftBoundary": [_point_payload(point) for point in left_boundary],
+            "rightBoundary": [_point_payload(point) for point in right_boundary],
+            "checkpoints": [
+                _checkpoint_payload(index, checkpoint, track.road_width)
+                for index, checkpoint in enumerate(checkpoints)
+            ],
+            "spawnPose": spawn_pose,
+        },
+    }
+
+
 def validate_track_payload(payload: object) -> dict[str, object]:
     """Return stable validation issues without leaking compiler exceptions."""
     try:
-        compiled = compile_track_payload(payload)
+        track = parse_track(payload)
     except TrackValidationError as error:
         return {
             "contractVersion": GEOMETRY_CONTRACT_VERSION,
             "valid": False,
             "errors": [issue.to_payload() for issue in error.issues],
+        }
+    try:
+        compiled = compile_track(track)
+    except TrackValidationError as error:
+        return {
+            "contractVersion": GEOMETRY_CONTRACT_VERSION,
+            "valid": False,
+            "errors": [issue.to_payload() for issue in error.issues],
+            "preview": preview_track(track),
         }
     return {
         "contractVersion": GEOMETRY_CONTRACT_VERSION,
@@ -428,9 +476,27 @@ def _segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool:
     third = orientation(c, d, a)
     fourth = orientation(c, d, b)
     epsilon = 1e-9
+    if ((first > epsilon and second < -epsilon) or (first < -epsilon and second > epsilon)) and (
+        (third > epsilon and fourth < -epsilon) or (third < -epsilon and fourth > epsilon)
+    ):
+        return True
+
+    def lies_on_segment(start: Point, end: Point, point: Point) -> bool:
+        return (
+            min(start[0], end[0]) - epsilon <= point[0] <= max(start[0], end[0]) + epsilon
+            and min(start[1], end[1]) - epsilon <= point[1] <= max(start[1], end[1]) + epsilon
+        )
+
     return (
-        (first > epsilon and second < -epsilon) or (first < -epsilon and second > epsilon)
-    ) and ((third > epsilon and fourth < -epsilon) or (third < -epsilon and fourth > epsilon))
+        abs(first) <= epsilon
+        and lies_on_segment(a, b, c)
+        or abs(second) <= epsilon
+        and lies_on_segment(a, b, d)
+        or abs(third) <= epsilon
+        and lies_on_segment(c, d, a)
+        or abs(fourth) <= epsilon
+        and lies_on_segment(c, d, b)
+    )
 
 
 def _normalize_closed_loop(points: list[Point]) -> list[Point]:
@@ -463,6 +529,36 @@ def _derive_boundaries(points: list[Point], road_width: float) -> tuple[list[Poi
         )
     left.append(left[0])
     right.append(right[0])
+    return left, right
+
+
+def _derive_open_boundaries(
+    points: list[Point], road_width: float
+) -> tuple[list[Point], list[Point]]:
+    half_width = road_width / 2.0
+    left: list[Point] = []
+    right: list[Point] = []
+    for index, point in enumerate(points):
+        if index == 0:
+            previous = point
+            following = points[index + 1]
+        elif index == len(points) - 1:
+            previous = points[index - 1]
+            following = point
+        else:
+            previous = points[index - 1]
+            following = points[index + 1]
+        tangent_x = following[0] - previous[0]
+        tangent_y = following[1] - previous[1]
+        magnitude = math.hypot(tangent_x, tangent_y)
+        normal_x = -tangent_y / magnitude
+        normal_y = tangent_x / magnitude
+        left.append(
+            (_rounded(point[0] + normal_x * half_width), _rounded(point[1] + normal_y * half_width))
+        )
+        right.append(
+            (_rounded(point[0] - normal_x * half_width), _rounded(point[1] - normal_y * half_width))
+        )
     return left, right
 
 

@@ -796,7 +796,8 @@ def parse_observation_snapshot(payload: object) -> dict[str, object]:
         raise ValueError("Observation snapshot must use contractVersion 1.")
     if not isinstance(payload.get("runId"), str) or not payload["runId"]:
         raise ValueError("Observation snapshot requires a runId.")
-    if payload.get("status") not in {"running", "paused", "stopped", "completed"}:
+    status = payload.get("status")
+    if status not in {"running", "paused", "stopped", "completed"}:
         raise ValueError("Observation snapshot has an invalid status.")
     generation = payload.get("generation")
     total = payload.get("totalGenerations")
@@ -810,9 +811,65 @@ def parse_observation_snapshot(payload: object) -> dict[str, object]:
         or generation > total
     ):
         raise ValueError("Observation snapshot has invalid generation counters.")
+    result = payload.get("result")
+    terminal = status in {"stopped", "completed"}
+    if not terminal and result is not None:
+        raise ValueError("Non-terminal observation snapshots cannot contain a result.")
+    if terminal and generation > 0 and result is None:
+        raise ValueError(
+            "Terminal observation snapshots require a result after one generation."
+        )
+    if status == "completed" and generation != total:
+        raise ValueError(
+            "Completed observation snapshots must include every requested generation."
+        )
+    if result is not None and not isinstance(result, dict):
+        raise ValueError("Observation snapshot result must be an object or null.")
+    if isinstance(result, dict):
+        metadata = result.get("metadata")
+        champion = result.get("champion")
+        replay = result.get("replay")
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("runId") != payload["runId"]
+            or metadata.get("status") != status
+            or metadata.get("generationsCompleted") != generation
+            or metadata.get("generationsRequested") != total
+        ):
+            raise ValueError(
+                "Run result identity does not match its observation snapshot."
+            )
+        if (
+            not isinstance(champion, dict)
+            or not isinstance(replay, dict)
+            or replay.get("candidateId") != champion.get("candidateId")
+        ):
+            raise ValueError("Run replay does not match the result champion.")
     history = payload.get("fitnessHistory")
     if not isinstance(history, list):
         raise ValueError("Observation snapshot requires fitnessHistory.")
+    if len(history) != generation:
+        raise ValueError("Observation snapshot generation history is inconsistent.")
+    for index, point in enumerate(history):
+        if (
+            not isinstance(point, dict)
+            or point.get("generation") != index
+            or any(
+                not isinstance(point.get(field), (int, float))
+                or isinstance(point.get(field), bool)
+                or not math.isfinite(float(cast(float, point[field])))
+                for field in ("bestFitness", "medianFitness")
+            )
+        ):
+            raise ValueError("Observation snapshot generation history is inconsistent.")
+    report = payload.get("generationReport")
+    if (generation == 0):
+        if report is not None:
+            raise ValueError("Observation snapshot generation history is inconsistent.")
+    elif not isinstance(report, dict) or report.get("generation") != generation - 1:
+        raise ValueError("Observation snapshot generation history is inconsistent.")
+    if isinstance(result, dict) and result.get("fitnessHistory") != history:
+        raise ValueError("Run result fitness history does not match its observation.")
     return payload
 
 
