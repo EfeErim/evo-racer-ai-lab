@@ -70,6 +70,16 @@ export function parsePresetTracksResponse(
   return payload as unknown as PresetTracksResponse;
 }
 
+export function parseCompiledTrack(
+  payload: unknown,
+  label = "Compiled track",
+): CompiledTrackV1 {
+  if (!isCompiledTrack(payload)) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return payload as CompiledTrackV1;
+}
+
 export function renderTrackSvg(
   compiled: CompiledTrackV1,
   marker?: TrackMarker,
@@ -82,14 +92,11 @@ export function renderTrackSvg(
   if (points.length === 0) {
     throw new Error("Compiled track geometry has no boundary points.");
   }
-
-  const xValues = points.map(([x]) => x);
-  const yValues = points.map(([, y]) => y);
-  const padding = Math.max(4, compiled.track.roadWidth * 0.5);
-  const minimumX = Math.min(...xValues) - padding;
-  const minimumY = Math.min(...yValues) - padding;
-  const width = Math.max(...xValues) - Math.min(...xValues) + padding * 2;
-  const height = Math.max(...yValues) - Math.min(...yValues) + padding * 2;
+  const viewBox = trackViewBox(compiled);
+  if (viewBox === undefined) {
+    throw new Error("Compiled track geometry has non-renderable bounds.");
+  }
+  const [minimumX, minimumY, width, height] = viewBox;
 
   return `
     <svg
@@ -162,6 +169,37 @@ function formatNumber(value: number): string {
   return Number(value.toFixed(3)).toString();
 }
 
+function trackViewBox(
+  compiled: CompiledTrackV1,
+): readonly [number, number, number, number] | undefined {
+  const points = [
+    ...compiled.geometry.leftBoundary,
+    ...compiled.geometry.rightBoundary,
+  ];
+  const padding = Math.max(4, compiled.track.roadWidth * 0.5);
+  let minimumX = Number.POSITIVE_INFINITY;
+  let minimumY = Number.POSITIVE_INFINITY;
+  let maximumX = Number.NEGATIVE_INFINITY;
+  let maximumY = Number.NEGATIVE_INFINITY;
+  for (const [x, y] of points) {
+    minimumX = Math.min(minimumX, x);
+    minimumY = Math.min(minimumY, y);
+    maximumX = Math.max(maximumX, x);
+    maximumY = Math.max(maximumY, y);
+  }
+  const paddedMinimumX = minimumX - padding;
+  const paddedMinimumY = minimumY - padding;
+  const width = maximumX - minimumX + padding * 2;
+  const height = maximumY - minimumY + padding * 2;
+  return [paddedMinimumX, paddedMinimumY, width, height].every(
+    Number.isFinite,
+  ) &&
+    width > 0 &&
+    height > 0
+    ? [paddedMinimumX, paddedMinimumY, width, height]
+    : undefined;
+}
+
 function escapeAttribute(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -181,24 +219,42 @@ function isCompiledTrack(value: unknown): boolean {
   }
   const track = value.track;
   const geometry = value.geometry;
-  return (
+  const structurallyValid =
     track.schemaVersion === 1 &&
     typeof track.id === "string" &&
+    track.id.trim().length > 0 &&
     typeof track.name === "string" &&
+    track.name.trim().length > 0 &&
     typeof track.roadWidth === "number" &&
+    Number.isFinite(track.roadWidth) &&
+    track.roadWidth > 0 &&
     Array.isArray(track.pieces) &&
+    track.pieces.length > 0 &&
+    track.pieces.every(
+      (piece) => isRecord(piece) && typeof piece.kind === "string",
+    ) &&
     Array.isArray(geometry.centerline) &&
+    geometry.centerline.length >= 3 &&
     geometry.centerline.every(isPoint) &&
     Array.isArray(geometry.leftBoundary) &&
+    geometry.leftBoundary.length >= 2 &&
     geometry.leftBoundary.every(isPoint) &&
     Array.isArray(geometry.rightBoundary) &&
+    geometry.rightBoundary.length >= 2 &&
     geometry.rightBoundary.every(isPoint) &&
     Array.isArray(geometry.checkpoints) &&
+    geometry.checkpoints.length > 0 &&
     geometry.checkpoints.every(isCheckpoint) &&
     isRecord(geometry.spawnPose) &&
     typeof geometry.spawnPose.x === "number" &&
+    Number.isFinite(geometry.spawnPose.x) &&
     typeof geometry.spawnPose.y === "number" &&
-    typeof geometry.spawnPose.heading === "number"
+    Number.isFinite(geometry.spawnPose.y) &&
+    typeof geometry.spawnPose.heading === "number" &&
+    Number.isFinite(geometry.spawnPose.heading);
+  return (
+    structurallyValid &&
+    trackViewBox(value as unknown as CompiledTrackV1) !== undefined
   );
 }
 
@@ -206,6 +262,7 @@ function isCheckpoint(value: unknown): boolean {
   return (
     isRecord(value) &&
     typeof value.index === "number" &&
+    Number.isInteger(value.index) &&
     isPoint(value.left) &&
     isPoint(value.right)
   );

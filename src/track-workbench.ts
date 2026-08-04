@@ -1,4 +1,9 @@
-import type { CompiledTrackV1, TrackPieceV1, TrackV1 } from "./track-renderer";
+import {
+  parseCompiledTrack,
+  type CompiledTrackV1,
+  type TrackPieceV1,
+  type TrackV1,
+} from "./track-renderer";
 
 export const SEGMENT_CATALOGUE = [
   "start-finish",
@@ -307,13 +312,152 @@ export interface TrackCommandResponse {
   valid: boolean;
   errors: { code: string; field: string; message: string }[];
   compiled?: CompiledTrackV1;
+  preview?: CompiledTrackV1;
   addedPieces?: string[];
+  removedPieces?: number;
+  candidateCount?: number;
+  generatorVersion?: number;
 }
 
 export interface TrackLibraryResponse {
   contractVersion: 1;
   tracks: CompiledTrackV1[];
   isolated: { record: string; code: string; message: string }[];
+}
+
+export function parseTrackCommandResponse(
+  value: unknown,
+  label: string,
+): TrackCommandResponse {
+  if (
+    !isRecord(value) ||
+    value.contractVersion !== 1 ||
+    typeof value.valid !== "boolean"
+  ) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  const errors = parseTrackIssues(value.errors, label);
+  if (value.valid !== (errors.length === 0)) {
+    throw new Error(`${label} returned an inconsistent response.`);
+  }
+  const compiled =
+    value.compiled === undefined
+      ? undefined
+      : parseCompiledTrack(value.compiled, label);
+  const preview =
+    value.preview === undefined
+      ? undefined
+      : parseCompiledTrack(value.preview, label);
+  if (value.valid && compiled === undefined) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  const addedPieces = optionalStringArray(value.addedPieces, label);
+  const removedPieces = optionalNonNegativeInteger(value.removedPieces, label);
+  const candidateCount = optionalNonNegativeInteger(
+    value.candidateCount,
+    label,
+  );
+  const generatorVersion = optionalNonNegativeInteger(
+    value.generatorVersion,
+    label,
+  );
+  return {
+    contractVersion: 1,
+    valid: value.valid,
+    errors,
+    ...(compiled === undefined ? {} : { compiled }),
+    ...(preview === undefined ? {} : { preview }),
+    ...(addedPieces === undefined ? {} : { addedPieces }),
+    ...(removedPieces === undefined ? {} : { removedPieces }),
+    ...(candidateCount === undefined ? {} : { candidateCount }),
+    ...(generatorVersion === undefined ? {} : { generatorVersion }),
+  };
+}
+
+export function parseTrackLibraryResponse(
+  value: unknown,
+): TrackLibraryResponse {
+  const label = "Track library";
+  if (
+    !isRecord(value) ||
+    value.contractVersion !== 1 ||
+    !Array.isArray(value.tracks) ||
+    !Array.isArray(value.isolated)
+  ) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return {
+    contractVersion: 1,
+    tracks: value.tracks.map((track) => parseCompiledTrack(track, label)),
+    isolated: value.isolated.map((item) => {
+      if (
+        !isRecord(item) ||
+        typeof item.record !== "string" ||
+        typeof item.code !== "string" ||
+        typeof item.message !== "string"
+      ) {
+        throw new Error(`${label} returned an invalid response.`);
+      }
+      return {
+        record: item.record,
+        code: item.code,
+        message: item.message,
+      };
+    }),
+  };
+}
+
+function parseTrackIssues(
+  value: unknown,
+  label: string,
+): TrackCommandResponse["errors"] {
+  if (!Array.isArray(value)) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return value.map((issue) => {
+    if (
+      !isRecord(issue) ||
+      typeof issue.code !== "string" ||
+      typeof issue.field !== "string" ||
+      typeof issue.message !== "string"
+    ) {
+      throw new Error(`${label} returned an invalid response.`);
+    }
+    return {
+      code: issue.code,
+      field: issue.field,
+      message: issue.message,
+    };
+  });
+}
+
+function optionalStringArray(
+  value: unknown,
+  label: string,
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !Array.isArray(value) ||
+    !value.every((item) => typeof item === "string")
+  ) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return value;
+}
+
+function optionalNonNegativeInteger(
+  value: unknown,
+  label: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return value as number;
 }
 
 function commit(state: EditorState, next: EditorSnapshot): EditorState {

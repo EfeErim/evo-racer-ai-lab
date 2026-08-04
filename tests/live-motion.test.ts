@@ -2,12 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import {
   interpolateTrackMarker,
+  loopingReplayTrackMarker,
   replayTrackMarkerAt,
   sameTrackMarker,
+  shouldAnimateReplay,
   trackMarkerTransform,
 } from "../src/live-motion";
 
 describe("live marker presentation interpolation", () => {
+  it("disables replay animation for reduced motion and non-moving replays", () => {
+    expect(shouldAnimateReplay(false, 2)).toBe(true);
+    expect(shouldAnimateReplay(true, 2)).toBe(false);
+    expect(shouldAnimateReplay(false, 1)).toBe(false);
+    expect(shouldAnimateReplay(false, Number.NaN)).toBe(false);
+  });
+
   it("fills position between authoritative Python snapshots", () => {
     expect(
       interpolateTrackMarker(
@@ -82,5 +91,19 @@ describe("live marker presentation interpolation", () => {
 
     expect(marker).toMatchObject({ x: 1, y: 1 });
     expect(marker?.heading).toBeCloseTo(0.1);
+  });
+
+  it("keeps a looping replay at its current marker across UI redraws", () => {
+    const frames = [
+      { x: 0, y: 0, heading: 0, simulatedSeconds: 2 },
+      { x: 10, y: 4, heading: Math.PI, simulatedSeconds: 4 },
+    ];
+
+    expect(loopingReplayTrackMarker(frames, 1)).toEqual({
+      x: 5,
+      y: 2,
+      heading: -Math.PI / 2,
+    });
+    expect(loopingReplayTrackMarker(frames, 2)).toEqual(frames[0]);
   });
 });

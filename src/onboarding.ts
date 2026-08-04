@@ -62,7 +62,7 @@ export interface SetupValidationResponse {
 
 export type ValidationState =
   | { status: "not-checked" }
-  | { status: "checking" }
+  | { status: "checking"; draft: SetupDraft }
   | { status: "checked"; response: SetupValidationResponse };
 
 export interface AppState {
@@ -70,6 +70,29 @@ export interface AppState {
   draft: SetupDraft;
   validation: ValidationState;
   sessionStarted: boolean;
+  startFailure: StartFailure | null;
+}
+
+export interface StartFailure {
+  kind: "rejected" | "unconfirmed";
+  message: string;
+}
+
+export function startFailurePresentation(failure: StartFailure): {
+  badge: string;
+  guidance: string;
+} {
+  return failure.kind === "unconfirmed"
+    ? {
+        badge: "Start unconfirmed",
+        guidance:
+          "The start result is unknown. Check Saved runs before retrying if the local core may have accepted the request.",
+      }
+    : {
+        badge: "Start rejected",
+        guidance:
+          "The local core rejected the setup and no run was created. Validate again after reviewing the reported issue.",
+      };
 }
 
 export const TRAINING_PRESETS = [
@@ -131,10 +154,17 @@ export type AppAction =
   | { type: "apply-training-preset"; preset: TrainingPresetId }
   | { type: "set-algorithm"; algorithm: AlgorithmId }
   | { type: "set-number"; field: NumericSetting; value: number }
-  | { type: "validation-started" }
-  | { type: "validation-received"; response: SetupValidationResponse }
+  | { type: "validation-started"; draft: SetupDraft }
+  | {
+      type: "validation-received";
+      draft: SetupDraft;
+      response: SetupValidationResponse;
+    }
   | { type: "start-session" }
+  | { type: "start-session-rejected"; response: SetupValidationResponse }
+  | { type: "start-session-unconfirmed"; message: string }
   | { type: "restore-session"; draft: SetupDraft }
+  | { type: "restore-results"; draft: SetupDraft }
   | { type: "view-results" }
   | { type: "new-setup" };
 
@@ -149,6 +179,7 @@ export function createInitialState(): AppState {
     },
     validation: { status: "not-checked" },
     sessionStarted: false,
+    startFailure: null,
   };
 }
 
@@ -217,10 +248,14 @@ export function canStartSession(state: AppState): boolean {
   );
 }
 
-function invalidate(): Pick<AppState, "validation" | "sessionStarted"> {
+function invalidate(): Pick<
+  AppState,
+  "validation" | "sessionStarted" | "startFailure"
+> {
   return {
     validation: { status: "not-checked" },
     sessionStarted: false,
+    startFailure: null,
   };
 }
 
@@ -255,7 +290,14 @@ export function transition(state: AppState, action: AppAction): AppState {
       ) {
         return state;
       }
-      return { ...state, route: action.route };
+      return {
+        ...state,
+        route: action.route,
+        validation:
+          state.validation.status === "checking" && action.route !== "review"
+            ? { status: "not-checked" }
+            : state.validation,
+      };
     case "select-track":
       return {
         ...state,
@@ -304,8 +346,23 @@ export function transition(state: AppState, action: AppAction): AppState {
         ...invalidate(),
       };
     case "validation-started":
-      return { ...state, route: "review", validation: { status: "checking" } };
+      if (action.draft !== state.draft) {
+        return state;
+      }
+      return {
+        ...state,
+        route: "review",
+        validation: { status: "checking", draft: action.draft },
+        startFailure: null,
+      };
     case "validation-received":
+      if (
+        state.validation.status !== "checking" ||
+        state.validation.draft !== action.draft ||
+        state.draft !== action.draft
+      ) {
+        return state;
+      }
       return {
         ...state,
         route: "review",
@@ -315,7 +372,38 @@ export function transition(state: AppState, action: AppAction): AppState {
       if (!canStartSession(state)) {
         return state;
       }
-      return { ...state, route: "training", sessionStarted: true };
+      return {
+        ...state,
+        route: "training",
+        sessionStarted: true,
+        startFailure: null,
+      };
+    case "start-session-rejected":
+      if (!state.sessionStarted || action.response.valid) {
+        return state;
+      }
+      return {
+        ...state,
+        route: "review",
+        validation: { status: "checked", response: action.response },
+        sessionStarted: false,
+        startFailure: {
+          kind: "rejected",
+          message:
+            action.response.errors[0]?.message ??
+            "The local core rejected this reviewed setup.",
+        },
+      };
+    case "start-session-unconfirmed":
+      if (!state.sessionStarted) {
+        return state;
+      }
+      return {
+        ...state,
+        route: "review",
+        sessionStarted: false,
+        startFailure: { kind: "unconfirmed", message: action.message },
+      };
     case "restore-session":
       return {
         route: "training",
@@ -325,6 +413,18 @@ export function transition(state: AppState, action: AppAction): AppState {
           response: { contractVersion: 1, valid: true, errors: [] },
         },
         sessionStarted: true,
+        startFailure: null,
+      };
+    case "restore-results":
+      return {
+        route: "results",
+        draft: action.draft,
+        validation: {
+          status: "checked",
+          response: { contractVersion: 1, valid: true, errors: [] },
+        },
+        sessionStarted: true,
+        startFailure: null,
       };
     case "view-results":
       if (!state.sessionStarted) {

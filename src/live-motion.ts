@@ -6,6 +6,13 @@ export interface TimedTrackMarker extends TrackMarker {
   simulatedSeconds: number;
 }
 
+export function shouldAnimateReplay(
+  reducedMotion: boolean,
+  frameCount: number,
+): boolean {
+  return !reducedMotion && Number.isInteger(frameCount) && frameCount > 1;
+}
+
 export function interpolateTrackMarker(
   from: TrackMarker,
   to: TrackMarker,
@@ -76,6 +83,27 @@ export function replayTrackMarkerAt(
       ? 1
       : (simulatedSeconds - previous.simulatedSeconds) / interval;
   return interpolateTrackMarker(previous, next, amount);
+}
+
+export function loopingReplayTrackMarker(
+  frames: readonly TimedTrackMarker[],
+  elapsedSeconds: number,
+): TrackMarker | undefined {
+  const first = frames[0];
+  const last = frames.at(-1);
+  if (
+    first === undefined ||
+    last === undefined ||
+    !Number.isFinite(elapsedSeconds)
+  ) {
+    return undefined;
+  }
+  const duration = last.simulatedSeconds - first.simulatedSeconds;
+  if (duration <= 0) {
+    return first;
+  }
+  const offset = Math.max(0, elapsedSeconds) % duration;
+  return replayTrackMarkerAt(frames, first.simulatedSeconds + offset);
 }
 
 function formatNumber(value: number): string {

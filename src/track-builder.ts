@@ -9,7 +9,7 @@ import {
 
 export type TrackBuilderTab = "build" | "generate" | "library";
 export type TrackBuilderPending =
-  "validate" | "assist" | "generate" | "save" | "delete" | null;
+  "validate" | "assist" | "generate" | "save" | "delete" | "import" | null;
 
 export interface TrackBuilderIssue {
   code: string;
@@ -37,9 +37,12 @@ export interface TrackGeneratorDraft {
 export interface TrackWorkspaceState {
   editor: EditorState;
   editorPreview?: CompiledTrackV1;
+  generatedInputs?: TrackGeneratorDraft;
   generatedPreview?: CompiledTrackV1;
   selected?: CompiledTrackV1;
   library: TrackLibraryResponse | null;
+  libraryStatus: "loading" | "ready" | "unavailable";
+  libraryMessage?: string;
   toolsOpen: boolean;
   tab: TrackBuilderTab;
   pending: TrackBuilderPending;
@@ -54,6 +57,7 @@ export function createTrackWorkspaceState(
   return {
     editor: createEditorState(trackId),
     library: null,
+    libraryStatus: "loading",
     toolsOpen: false,
     tab: "build",
     pending: null,
@@ -95,7 +99,7 @@ export function renderTrackBuilder(
       <header class="track-builder-header">
         <div>
           <p class="section-kicker">Local design workspace</p>
-          <h2 id="track-builder-title">Track Builder</h2>
+          <h2 id="track-builder-title" tabindex="-1">Track Builder</h2>
           <p>Geometry and safety checks run in the local Python core. The browser edits only canonical pieces.</p>
         </div>
         <button class="icon-button" type="button" data-track-action="close-builder" aria-label="Close Track Builder">×</button>
@@ -108,17 +112,21 @@ export function renderTrackBuilder(
       </div>
 
       <div class="track-builder-body">
-        ${workspace.tab === "build" ? renderBuildTab(workspace) : ""}
-        ${workspace.tab === "generate" ? renderGenerateTab(workspace) : ""}
-        ${workspace.tab === "library" ? renderLibraryTab(workspace) : ""}
+        ${workspace.tab === "build" ? renderBuildTab(workspace) : renderInactiveTabPanel("build")}
+        ${workspace.tab === "generate" ? renderGenerateTab(workspace) : renderInactiveTabPanel("generate")}
+        ${workspace.tab === "library" ? renderLibraryTab(workspace) : renderInactiveTabPanel("library")}
       </div>
 
-      <footer class="track-builder-notice is-${workspace.notice.tone}" role="status" aria-live="polite">
+      <footer class="track-builder-notice is-${workspace.notice.tone}" data-track-builder-notice role="${workspace.notice.tone === "error" ? "alert" : "status"}" aria-live="${workspace.notice.tone === "error" ? "assertive" : "polite"}">
         <span class="notice-dot" aria-hidden="true"></span>
-        <span>${escapeHtml(workspace.notice.message)}</span>
+        <span data-track-builder-notice-message>${escapeHtml(workspace.notice.message)}</span>
       </footer>
     </section>
   `;
+}
+
+function renderInactiveTabPanel(tab: TrackBuilderTab): string {
+  return `<div role="tabpanel" id="track-builder-panel-${tab}" aria-labelledby="track-builder-tab-${tab}" hidden></div>`;
 }
 
 function renderSelectedTrack(
@@ -153,7 +161,10 @@ function renderTabButton(
     <button
       type="button"
       role="tab"
+      id="track-builder-tab-${tab}"
+      aria-controls="track-builder-panel-${tab}"
       aria-selected="${String(selected)}"
+      tabindex="${selected ? "0" : "-1"}"
       class="${selected ? "is-active" : ""}"
       data-track-action="builder-tab"
       data-builder-tab="${tab}"
@@ -178,7 +189,7 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
   const issues = renderIssues(workspace.editorValidation.errors);
   const sequence = editor.pieces
     .map((piece, index) =>
-      renderSequencePiece(piece.kind, index, editor.pieces.length),
+      renderSequencePiece(piece.kind, index, editor.pieces.length, busy),
     )
     .join("");
   const groups = (["Straight", "Corner", "Technical"] as const)
@@ -195,6 +206,7 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
               data-track-action="editor-add"
               data-segment-kind="${definition.kind}"
               title="${escapeHtml(definition.description)}"
+              ${busy ? "disabled" : ""}
             >
               <span aria-hidden="true">${definition.symbol}</span>
               <strong>${definition.label}</strong>
@@ -212,7 +224,7 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
     .join("");
 
   return `
-    <div class="builder-layout builder-layout-editor" role="tabpanel" aria-label="Build track">
+    <div class="builder-layout builder-layout-editor" role="tabpanel" id="track-builder-panel-build" aria-labelledby="track-builder-tab-build">
       <section class="builder-preview-panel" aria-labelledby="builder-preview-title">
         <header class="builder-panel-heading">
           <div>
@@ -238,7 +250,7 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
           <button class="button primary" type="button" data-track-action="use-editor" ${!valid || busy || selectedMatches ? "disabled" : ""}>
             ${selectedMatches ? "Selected for experiment" : "Use this track"}
           </button>
-          <button class="button secondary" type="button" data-track-action="save-editor" ${!valid || busy ? "disabled" : ""}>Save locally</button>
+          <button class="button secondary" type="button" data-track-action="save-editor" ${!valid || busy ? "disabled" : ""}>${workspace.pending === "save" ? "Saving…" : "Save locally"}</button>
           <button class="button ghost" type="button" data-track-action="export-editor" ${!valid || busy ? "disabled" : ""}>Export JSON</button>
         </div>
       </section>
@@ -252,8 +264,8 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
           <span class="piece-count">${String(editor.pieces.length)} pieces</span>
         </header>
         <div class="builder-fields">
-          <label>Track name <input data-editor-name maxlength="80" value="${escapeHtml(editor.name)}" /></label>
-          <label>Road width <span><input data-editor-width type="range" min="8" max="20" step="0.5" value="${String(editor.roadWidth)}" /><output>${formatNumber(editor.roadWidth)} m</output></span></label>
+          <label>Track name <input data-editor-name maxlength="80" value="${escapeHtml(editor.name)}" ${busy ? "disabled" : ""} /></label>
+          <label>Road width <span><input data-editor-width type="range" min="8" max="20" step="0.5" value="${String(editor.roadWidth)}" ${busy ? "disabled" : ""} /><output>${formatNumber(editor.roadWidth)} m</output></span></label>
         </div>
         <div class="editor-toolbar" aria-label="Edit history and closure tools">
           <button type="button" data-track-action="editor-undo" ${workspace.editor.past.length === 0 || busy ? "disabled" : ""}>↶ Undo</button>
@@ -273,6 +285,7 @@ function renderSequencePiece(
   kind: string,
   index: number,
   total: number,
+  busy: boolean,
 ): string {
   const definition = segmentDefinition(kind);
   const label = definition?.label ?? kind;
@@ -284,10 +297,10 @@ function renderSequencePiece(
       <span class="sequence-symbol" aria-hidden="true">${symbol}</span>
       <span class="sequence-copy"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(kind)}</small></span>
       <span class="sequence-actions">
-        <button type="button" data-track-action="editor-move" data-piece-index="${String(index)}" data-direction="-1" aria-label="Move ${escapeHtml(label)} up" ${locked || index <= 1 ? "disabled" : ""}>↑</button>
-        <button type="button" data-track-action="editor-move" data-piece-index="${String(index)}" data-direction="1" aria-label="Move ${escapeHtml(label)} down" ${locked || index === total - 1 ? "disabled" : ""}>↓</button>
-        <button type="button" data-track-action="editor-duplicate" data-piece-index="${String(index)}" aria-label="Duplicate ${escapeHtml(label)}" ${locked ? "disabled" : ""}>＋</button>
-        <button class="danger" type="button" data-track-action="editor-delete" data-piece-index="${String(index)}" aria-label="Delete ${escapeHtml(label)}" ${locked ? "disabled" : ""}>×</button>
+        <button type="button" data-track-action="editor-move" data-piece-index="${String(index)}" data-direction="-1" aria-label="Move ${escapeHtml(label)} up" ${busy || locked || index <= 1 ? "disabled" : ""}>↑</button>
+        <button type="button" data-track-action="editor-move" data-piece-index="${String(index)}" data-direction="1" aria-label="Move ${escapeHtml(label)} down" ${busy || locked || index === total - 1 ? "disabled" : ""}>↓</button>
+        <button type="button" data-track-action="editor-duplicate" data-piece-index="${String(index)}" aria-label="Duplicate ${escapeHtml(label)}" ${busy || locked ? "disabled" : ""}>＋</button>
+        <button class="danger" type="button" data-track-action="editor-delete" data-piece-index="${String(index)}" aria-label="Delete ${escapeHtml(label)}" ${busy || locked ? "disabled" : ""}>×</button>
       </span>
     </li>
   `;
@@ -295,6 +308,8 @@ function renderSequencePiece(
 
 function renderGenerateTab(workspace: TrackWorkspaceState): string {
   const generated = workspace.generatedPreview;
+  const generatedInputs = workspace.generatedInputs ?? workspace.generator;
+  const inputsChanged = generatorInputsChanged(workspace);
   const busy = workspace.pending !== null;
   const selectedMatches =
     generated !== undefined &&
@@ -302,13 +317,13 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
     JSON.stringify(generated.track) ===
       JSON.stringify(workspace.selected.track);
   return `
-    <div class="builder-layout builder-layout-generator" role="tabpanel" aria-label="Generate track">
+    <div class="builder-layout builder-layout-generator" role="tabpanel" id="track-builder-panel-generate" aria-labelledby="track-builder-tab-generate">
       <section class="generator-controls" aria-labelledby="generator-title">
         <p class="section-kicker">Deterministic Python generator</p>
         <h3 id="generator-title">Generate from a seed</h3>
         <p class="builder-panel-copy">The same seed, length, difficulty, and generator version always return the same canonical track.</p>
         <div class="generator-form">
-          <label>Seed <input data-generator-seed type="number" min="0" max="2147483647" step="1" value="${String(workspace.generator.seed)}" /></label>
+          <label>Seed <input data-generator-seed type="number" min="0" max="2147483647" step="1" value="${String(workspace.generator.seed)}" ${busy ? "disabled" : ""} /></label>
           <fieldset>
             <legend>Length</legend>
             ${renderGeneratorChoices(
@@ -319,6 +334,7 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
                 ["long", "Long", "24 pieces"],
               ],
               workspace.generator.length,
+              busy,
             )}
           </fieldset>
           <fieldset>
@@ -331,6 +347,7 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
                 ["hard", "Hard", "8.5 m wide"],
               ],
               workspace.generator.difficulty,
+              busy,
             )}
           </fieldset>
         </div>
@@ -339,7 +356,7 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
       <section class="builder-preview-panel generated-preview" aria-labelledby="generated-preview-title">
         <header class="builder-panel-heading">
           <div><p class="section-kicker">Generated result</p><h3 id="generated-preview-title">${generated === undefined ? "Waiting for inputs" : escapeHtml(generated.track.name)}</h3></div>
-          ${generated === undefined ? "" : '<span class="validation-badge is-success">Python verified</span>'}
+          ${generated === undefined ? "" : inputsChanged ? '<span class="validation-badge is-warning">Inputs changed</span>' : '<span class="validation-badge is-success">Python verified</span>'}
         </header>
         <div class="builder-canvas ${generated === undefined ? "is-empty" : ""}">
           ${generated === undefined ? '<div class="builder-canvas-empty"><span aria-hidden="true">#</span><strong>No generated track yet</strong><p>Choose the inputs and generate a deterministic layout.</p></div>' : renderTrackSvg(generated)}
@@ -347,11 +364,11 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
         ${
           generated === undefined
             ? ""
-            : `<dl class="builder-stats"><div><dt>Pieces</dt><dd>${String(generated.track.pieces.length)}</dd></div><div><dt>Road width</dt><dd>${formatNumber(generated.track.roadWidth)} m</dd></div><div><dt>Seed</dt><dd>${String(workspace.generator.seed)}</dd></div></dl>
+            : `<dl class="builder-stats"><div><dt>Pieces</dt><dd>${String(generated.track.pieces.length)}</dd></div><div><dt>Road width</dt><dd>${formatNumber(generated.track.roadWidth)} m</dd></div><div><dt>Seed</dt><dd>${String(generatedInputs.seed)}</dd></div></dl>
                <div class="builder-primary-actions">
                  <button class="button primary" type="button" data-track-action="use-generated" ${busy || selectedMatches ? "disabled" : ""}>${selectedMatches ? "Selected for experiment" : "Use this track"}</button>
                  <button class="button secondary" type="button" data-track-action="edit-generated" ${busy ? "disabled" : ""}>Edit pieces</button>
-                 <button class="button secondary" type="button" data-track-action="save-generated" ${busy ? "disabled" : ""}>Save locally</button>
+                 <button class="button secondary" type="button" data-track-action="save-generated" ${busy ? "disabled" : ""}>${workspace.pending === "save" ? "Saving…" : "Save locally"}</button>
                  <button class="button ghost" type="button" data-track-action="export-generated" ${busy ? "disabled" : ""}>Export JSON</button>
                </div>`
         }
@@ -360,16 +377,29 @@ function renderGenerateTab(workspace: TrackWorkspaceState): string {
   `;
 }
 
+export function generatorInputsChanged(
+  workspace: TrackWorkspaceState,
+): boolean {
+  return (
+    workspace.generatedPreview !== undefined &&
+    workspace.generatedInputs !== undefined &&
+    (workspace.generator.seed !== workspace.generatedInputs.seed ||
+      workspace.generator.length !== workspace.generatedInputs.length ||
+      workspace.generator.difficulty !== workspace.generatedInputs.difficulty)
+  );
+}
+
 function renderGeneratorChoices(
   name: "length" | "difficulty",
   choices: readonly (readonly [string, string, string])[],
   selected: string,
+  disabled: boolean,
 ): string {
   return `<div class="generator-choice-grid">${choices
     .map(
       ([value, label, detail]) => `
         <label class="generator-choice ${selected === value ? "is-selected" : ""}">
-          <input type="radio" name="generator-${name}" value="${value}" ${selected === value ? "checked" : ""} />
+          <input type="radio" name="generator-${name}" value="${value}" ${selected === value ? "checked" : ""} ${disabled ? "disabled" : ""} />
           <strong>${label}</strong><small>${detail}</small>
         </label>
       `,
@@ -381,18 +411,20 @@ function renderLibraryTab(workspace: TrackWorkspaceState): string {
   const busy = workspace.pending !== null;
   const isolated = workspace.library?.isolated.length ?? 0;
   const cards =
-    workspace.library === null
-      ? '<div class="library-empty"><span class="loading-ring" aria-hidden="true"></span><strong>Loading local library…</strong></div>'
-      : workspace.library.tracks.length === 0
-        ? '<div class="library-empty"><span aria-hidden="true">□</span><strong>No saved tracks yet</strong><p>Save a built or generated track, or import a TrackV1 JSON file.</p></div>'
-        : `<div class="track-library-grid">${workspace.library.tracks
-            .map((compiled) => renderLibraryCard(compiled, workspace, busy))
-            .join("")}</div>`;
+    workspace.libraryStatus === "unavailable"
+      ? `<div class="library-empty" role="alert"><span aria-hidden="true">!</span><strong>Local track library unavailable</strong><p>${escapeHtml(workspace.libraryMessage ?? "The local track library is unavailable.")}</p><button class="button secondary" type="button" data-track-action="refresh-library" ${busy ? "disabled" : ""}>Retry local library</button></div>`
+      : workspace.libraryStatus === "loading" || workspace.library === null
+        ? '<div class="library-empty"><span class="loading-ring" aria-hidden="true"></span><strong>Loading local library…</strong></div>'
+        : workspace.library.tracks.length === 0
+          ? '<div class="library-empty"><span aria-hidden="true">□</span><strong>No saved tracks yet</strong><p>Save a built or generated track, or import a TrackV1 JSON file.</p></div>'
+          : `<div class="track-library-grid">${workspace.library.tracks
+              .map((compiled) => renderLibraryCard(compiled, workspace, busy))
+              .join("")}</div>`;
   return `
-    <div class="builder-library" role="tabpanel" aria-label="Track library">
+    <div class="builder-library" role="tabpanel" id="track-builder-panel-library" aria-labelledby="track-builder-tab-library">
       <section class="track-import-panel" aria-labelledby="track-import-title">
         <div><p class="section-kicker">Versioned local file</p><h3 id="track-import-title">Import TrackV1 JSON</h3><p>The file is parsed in the browser, then compiled and validated by Python before it enters the editor.</p></div>
-        <label class="button secondary file-button">Choose JSON file<input type="file" accept="application/json,.json" data-track-import ${busy ? "disabled" : ""} /></label>
+        <label class="button secondary file-button">${workspace.pending === "import" ? "Importing…" : "Choose JSON file"}<input type="file" accept="application/json,.json" data-track-import ${busy ? "disabled" : ""} /></label>
       </section>
       ${isolated > 0 ? `<p class="library-warning"><strong>${String(isolated)} corrupt record${isolated === 1 ? "" : "s"} isolated.</strong> Valid tracks remain available.</p>` : ""}
       ${cards}

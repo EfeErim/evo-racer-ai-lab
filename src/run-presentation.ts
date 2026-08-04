@@ -20,6 +20,38 @@ export interface RunCompletionPresentation {
   message: string;
 }
 
+export type RunCommand = "pause" | "resume" | "stop";
+export type ReplayNavigationAction = "previous" | "next" | "restart";
+
+export function clampReplayFrameIndex(
+  frameIndex: number,
+  frameCount: number,
+): number {
+  const boundedCount = Number.isFinite(frameCount)
+    ? Math.max(0, Math.floor(frameCount))
+    : 0;
+  if (boundedCount === 0) {
+    return 0;
+  }
+  const integerIndex = Number.isFinite(frameIndex) ? Math.floor(frameIndex) : 0;
+  return Math.min(boundedCount - 1, Math.max(0, integerIndex));
+}
+
+export function replayFrameIndexAfterAction(
+  frameIndex: number,
+  frameCount: number,
+  action: ReplayNavigationAction,
+): number {
+  const current = clampReplayFrameIndex(frameIndex, frameCount);
+  if (action === "restart") {
+    return 0;
+  }
+  if (action === "previous") {
+    return clampReplayFrameIndex(current - 1, frameCount);
+  }
+  return clampReplayFrameIndex(current + 1, frameCount);
+}
+
 export function runProgress(
   snapshot: ObservationSnapshotV1,
 ): RunProgressPresentation {
@@ -58,6 +90,7 @@ export function runProgress(
 
 export function runControls(
   snapshot: ObservationSnapshotV1,
+  requestCommand: RunCommand | null = null,
 ): RunControlPresentation {
   const terminal =
     snapshot.status === "completed" || snapshot.status === "stopped";
@@ -70,7 +103,29 @@ export function runControls(
       pauseLabel: "Pause",
       stopDisabled: true,
       stopLabel: "Stop",
-      note: "This run is complete. Its controls are read-only.",
+      note:
+        snapshot.status === "completed"
+          ? "This run is complete. Its controls are read-only."
+          : "This run was stopped. Its controls are read-only.",
+    };
+  }
+  if (requestCommand !== null) {
+    const pauseAction = snapshot.status === "paused" ? "resume" : "pause";
+    return {
+      pauseAction,
+      pauseDisabled: true,
+      pauseLabel:
+        requestCommand === "pause"
+          ? "Sending pause…"
+          : requestCommand === "resume"
+            ? "Sending resume…"
+            : pauseAction === "resume"
+              ? "Resume"
+              : "Pause after generation",
+      stopDisabled: true,
+      stopLabel:
+        requestCommand === "stop" ? "Sending stop…" : "Stop after generation",
+      note: `Waiting for the local core to acknowledge the ${requestCommand} command.`,
     };
   }
   if (snapshot.status === "paused") {
@@ -117,7 +172,13 @@ export function runCompletion(
   snapshot: ObservationSnapshotV1,
 ): RunCompletionPresentation | null {
   if (snapshot.result === null) {
-    return null;
+    return snapshot.status === "stopped"
+      ? {
+          title: "Run stopped",
+          message:
+            "The run stopped before a generation completed, so no results were created.",
+        }
+      : null;
   }
   if (snapshot.status === "completed") {
     return {

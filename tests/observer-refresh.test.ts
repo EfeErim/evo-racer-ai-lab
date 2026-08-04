@@ -125,6 +125,19 @@ describe("observer replay deltas", () => {
       knownGenerationReplayCandidateId: replay.candidateId,
     });
   });
+
+  it("identifies an observation HTTP failure as a run error", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>(() =>
+        Promise.resolve(new Response(null, { status: 503 })),
+      ),
+    );
+
+    await expect(observeRun("run-observer-refresh")).rejects.toThrow(
+      "Run observation failed with status 503.",
+    );
+  });
 });
 
 describe("adaptive observer cadence", () => {

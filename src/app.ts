@@ -7,6 +7,7 @@ import {
   createInitialState,
   getPresentationIssues,
   maximumCandidateEpisodes,
+  startFailurePresentation,
   transition,
   type AlgorithmId,
   type AppAction,
@@ -27,6 +28,7 @@ import {
   loadRunLibrary,
   loadTrackLibrary,
   observeRun,
+  openRun,
   resumeRun,
   saveTrack,
   serviceUnavailableResponse,
@@ -36,8 +38,9 @@ import {
 } from "./ipc";
 import {
   interpolateTrackMarker,
-  replayTrackMarkerAt,
+  loopingReplayTrackMarker,
   sameTrackMarker,
+  shouldAnimateReplay,
   trackMarkerTransform,
 } from "./live-motion";
 import {
@@ -57,7 +60,14 @@ import type {
   RunLibraryResponseV1,
   SelectedCarTelemetryV1,
 } from "./simulation";
-import { runCompletion, runControls, runProgress } from "./run-presentation";
+import {
+  clampReplayFrameIndex,
+  replayFrameIndexAfterAction,
+  runCompletion,
+  runControls,
+  runProgress,
+  type RunCommand,
+} from "./run-presentation";
 import {
   renderTrackSvg,
   type CompiledTrackV1,
@@ -78,11 +88,14 @@ import {
   updateEditorDetails,
   type EditorState,
   type SegmentKind,
+  type TrackCommandResponse,
 } from "./track-workbench";
 import {
   createTrackWorkspaceState,
+  generatorInputsChanged,
   renderTrackBuilder,
   type TrackBuilderTab,
+  type TrackBuilderPending,
   type TrackWorkspaceState,
 } from "./track-builder";
 
@@ -94,6 +107,10 @@ const MAX_MARKER_TWEEN_MS = 240;
 const MARKER_TWEEN_SCALE = 1.25;
 const CHAMPION_REPLAY_RATE = 2;
 const LIVE_MARKER_SELECTOR = ".live-race-stage .track-replay-marker";
+const TRACK_LIBRARY_REFRESHED_NOTICE: TrackWorkspaceState["notice"] = {
+  tone: "success",
+  message: "Local track library refreshed.",
+};
 
 interface LiveMarkerMotion {
   candidateId: string;
@@ -110,28 +127,257 @@ interface ChampionReplayMotion {
   startedAt: number;
 }
 
+function closureRepairMessage(response: TrackCommandResponse): string {
+  const added = response.addedPieces?.length ?? 0;
+  const removed = response.removedPieces ?? 0;
+  if (removed > 0 && added > 0) {
+    return `Python removed ${String(removed)} trailing piece(s), added ${String(added)}, and verified the repaired loop.`;
+  }
+  if (removed > 0) {
+    return `Python removed ${String(removed)} trailing piece(s) and restored the last valid loop.`;
+  }
+  if (added > 0) {
+    return `Python added ${String(added)} piece(s) and verified the closed loop.`;
+  }
+  return "The loop was already valid; no repair was needed.";
+}
+
+function dismissedTrackResponseMessage(
+  pending: Exclude<TrackBuilderPending, null>,
+  context: "leaving Track" | "Track Builder closed" | "switching tools",
+): string {
+  const operations: Record<Exclude<TrackBuilderPending, null>, string> = {
+    validate: "validation",
+    assist: "closure assistance",
+    generate: "generation",
+    save: "save",
+    delete: "deletion",
+    import: "import",
+  };
+  return `Track ${operations[pending]} response ignored after ${context}.`;
+}
+
 export interface AppController {
   getState(): AppState;
   dispatch(action: AppAction): void;
 }
 
+export function showsBackgroundEvaluation(
+  live: boolean,
+  replay: GenerationReplayV1 | null | undefined,
+): boolean {
+  return (
+    live && replay !== null && replay !== undefined && replay.frames.length > 0
+  );
+}
+
 type PresetGeometryState =
   | { status: "loading" }
   | { status: "ready"; presets: CompiledTrackV1[] }
-  | { status: "unavailable" };
+  | { status: "unavailable"; message: string };
 
 type SimulationState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ready"; snapshot: ObservationSnapshotV1 }
+  | {
+      status: "ready";
+      snapshot: ObservationSnapshotV1;
+      commandRequest?: RunCommand;
+      error?: string;
+    }
   | { status: "unavailable"; message: string };
+
+type ApplicationLifecycle = "active" | "shutting-down" | "stopped";
 
 type RunLibraryState =
   | { status: "loading" }
-  | { status: "ready"; value: RunLibraryResponseV1; message: string }
+  | {
+      status: "ready";
+      value: RunLibraryResponseV1;
+      notice: RunLibraryNotice;
+      pending?: { action: RunLibraryAction; runId: string };
+    }
   | { status: "unavailable"; message: string };
 
+type RunLibraryAction = "resume" | "open" | "delete" | "export";
+
+interface RunLibraryNotice {
+  tone: "neutral" | "info" | "success" | "error";
+  message: string;
+}
+
+interface FocusSnapshot {
+  identity: string;
+  occurrence: number;
+  selectionStart?: number;
+  selectionEnd?: number;
+}
+
+interface DisclosureSnapshot {
+  identity: string;
+  open: boolean;
+}
+
+interface RenderStateSnapshot {
+  focus?: FocusSnapshot;
+  disclosures: DisclosureSnapshot[];
+}
+
+const FOCUSABLE_SELECTOR =
+  "a[href], button, input, select, summary, [tabindex]";
+
+function stableElementIdentity(element: HTMLElement): string | undefined {
+  const focusKey = element.dataset.focusKey;
+  if (focusKey !== undefined) {
+    return `focus:${focusKey}`;
+  }
+  if (element.id !== "") {
+    return `id:${element.id}`;
+  }
+  if (element.tagName === "SUMMARY") {
+    const disclosure = element.closest<HTMLDetailsElement>("details");
+    const disclosureIdentity =
+      disclosure === null ? undefined : stableElementIdentity(disclosure);
+    return disclosureIdentity === undefined
+      ? undefined
+      : `${disclosureIdentity}:summary`;
+  }
+  if (element.tagName === "DETAILS") {
+    const classes = [...element.classList].sort().join(".");
+    return classes === "" ? undefined : `details:${classes}`;
+  }
+
+  const dataAttributes = [...element.attributes]
+    .filter(({ name }) => name.startsWith("data-"))
+    .map(({ name, value }) => `${name}=${value}`)
+    .sort();
+  if (dataAttributes.length > 0) {
+    return `${element.tagName.toLowerCase()}:${dataAttributes.join("|")}`;
+  }
+  const attributes = [...element.attributes]
+    .filter(
+      ({ name }) =>
+        name === "name" ||
+        name === "type" ||
+        name === "value" ||
+        name === "href",
+    )
+    .map(({ name, value }) => `${name}=${value}`)
+    .sort();
+  return attributes.length === 0
+    ? undefined
+    : `${element.tagName.toLowerCase()}:${attributes.join("|")}`;
+}
+
+function captureFocus(root: HTMLElement): FocusSnapshot | undefined {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLElement) || !root.contains(active)) {
+    return undefined;
+  }
+  const identity = stableElementIdentity(active);
+  if (identity === undefined) {
+    return undefined;
+  }
+  const occurrence = [...root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)]
+    .filter((element) => stableElementIdentity(element) === identity)
+    .indexOf(active);
+  if (occurrence < 0) {
+    return undefined;
+  }
+  if (active instanceof HTMLInputElement && active.selectionStart !== null) {
+    return {
+      identity,
+      occurrence,
+      selectionStart: active.selectionStart,
+      selectionEnd: active.selectionEnd ?? active.selectionStart,
+    };
+  }
+  return { identity, occurrence };
+}
+
+function findElementByIdentity(
+  root: HTMLElement,
+  identity: string,
+  selector: string,
+  occurrence = 0,
+): HTMLElement | undefined {
+  return [...root.querySelectorAll<HTMLElement>(selector)].filter(
+    (element) => stableElementIdentity(element) === identity,
+  )[occurrence];
+}
+
+function captureRenderState(root: HTMLElement): RenderStateSnapshot {
+  return {
+    focus: captureFocus(root),
+    disclosures: [...root.querySelectorAll<HTMLDetailsElement>("details")]
+      .map((details) => {
+        const identity = stableElementIdentity(details);
+        return identity === undefined
+          ? undefined
+          : { identity, open: details.open };
+      })
+      .filter(
+        (snapshot): snapshot is DisclosureSnapshot => snapshot !== undefined,
+      ),
+  };
+}
+
+function restoreDisclosures(
+  root: HTMLElement,
+  disclosures: readonly DisclosureSnapshot[],
+): void {
+  const details = [...root.querySelectorAll<HTMLDetailsElement>("details")];
+  disclosures.forEach((snapshot) => {
+    const match = details.find(
+      (candidate) => stableElementIdentity(candidate) === snapshot.identity,
+    );
+    if (match !== undefined && match.dataset.forceOpen === undefined) {
+      match.open = snapshot.open;
+    }
+  });
+}
+
+function restoreFocus(
+  root: HTMLElement,
+  snapshot: FocusSnapshot,
+): "restored" | "disabled" | "missing" {
+  const target = findElementByIdentity(
+    root,
+    snapshot.identity,
+    FOCUSABLE_SELECTOR,
+    snapshot.occurrence,
+  );
+  if (target === undefined) {
+    return "missing";
+  }
+  if (
+    (target instanceof HTMLButtonElement ||
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement) &&
+    target.disabled
+  ) {
+    return "disabled";
+  }
+  target.focus({ preventScroll: true });
+  if (
+    target instanceof HTMLInputElement &&
+    snapshot.selectionStart !== undefined &&
+    snapshot.selectionEnd !== undefined
+  ) {
+    try {
+      target.setSelectionRange(snapshot.selectionStart, snapshot.selectionEnd);
+    } catch {
+      // Number and range inputs do not expose a text selection range.
+    }
+  }
+  return document.activeElement === target ? "restored" : "missing";
+}
+
 export function mountApp(root: HTMLElement): AppController {
+  let applicationLifecycle: ApplicationLifecycle = "active";
+  const reducedMotionQuery = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  );
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
   let simulation: SimulationState = { status: "idle" };
@@ -140,14 +386,31 @@ export function mountApp(root: HTMLElement): AppController {
   let liveMarkerFrame: number | undefined;
   let liveMarkerMotion: LiveMarkerMotion | undefined;
   let championReplayMotion: ChampionReplayMotion | undefined;
-  let queuedChampionReplay: ChampionReplayMotion | undefined;
   let generationTrails: GenerationTrail[] = [];
   let replayFrameIndex = 0;
   let runLibrary: RunLibraryState = { status: "loading" };
   let trackValidationRequest = 0;
+  let presetGeometryRequestVersion = 0;
+  let trackImportRequestVersion = 0;
+  let trackCommandRequestVersion = 0;
+  let setupValidationRequestVersion = 0;
+  let trackLibraryRequestVersion = 0;
+  let runLibraryRequestVersion = 0;
+  let runLibraryActionVersion = 0;
+  let runRequestVersion = 0;
+  let deferredFocus: FocusSnapshot | undefined;
   let trackWorkspace = createTrackWorkspaceState(
     `custom-${Date.now().toString(36)}`,
   );
+
+  const isCurrentTrackCommand = (
+    requestVersion: number,
+    pending: Exclude<TrackBuilderPending, null>,
+  ): boolean =>
+    requestVersion === trackCommandRequestVersion &&
+    state.route === "track" &&
+    trackWorkspace.toolsOpen &&
+    trackWorkspace.pending === pending;
 
   const cancelLiveMarkerFrame = (): void => {
     if (liveMarkerFrame !== undefined) {
@@ -183,7 +446,6 @@ export function mountApp(root: HTMLElement): AppController {
       const lastFrame = championReplayMotion.frames.at(-1);
       if (firstFrame === undefined || lastFrame === undefined) {
         championReplayMotion = undefined;
-        queuedChampionReplay = undefined;
         return;
       }
       const replaySeconds = Math.max(
@@ -193,27 +455,20 @@ export function mountApp(root: HTMLElement): AppController {
       const elapsedSeconds =
         ((now - championReplayMotion.startedAt) / 1000) * CHAMPION_REPLAY_RATE;
       if (elapsedSeconds >= replaySeconds) {
-        championReplayMotion = queuedChampionReplay ?? {
+        championReplayMotion = {
           ...championReplayMotion,
           startedAt: now,
         };
-        championReplayMotion.startedAt = now;
-        queuedChampionReplay = undefined;
       }
       const activeFirst = championReplayMotion.frames[0];
       const activeLast = championReplayMotion.frames.at(-1);
       if (activeFirst !== undefined && activeLast !== undefined) {
-        const activeDuration = Math.max(
-          0.1,
-          activeLast.simulatedSeconds - activeFirst.simulatedSeconds,
-        );
         const activeElapsed =
-          (((now - championReplayMotion.startedAt) / 1000) *
-            CHAMPION_REPLAY_RATE) %
-          activeDuration;
-        const marker = replayTrackMarkerAt(
+          ((now - championReplayMotion.startedAt) / 1000) *
+          CHAMPION_REPLAY_RATE;
+        const marker = loopingReplayTrackMarker(
           championReplayMotion.frames,
-          activeFirst.simulatedSeconds + activeElapsed,
+          activeElapsed,
         );
         if (marker !== undefined) {
           paintLiveMarker(marker);
@@ -246,7 +501,6 @@ export function mountApp(root: HTMLElement): AppController {
     cancelLiveMarkerFrame();
     liveMarkerMotion = undefined;
     championReplayMotion = undefined;
-    queuedChampionReplay = undefined;
   };
 
   const availableChampionReplay = (): {
@@ -281,20 +535,31 @@ export function mountApp(root: HTMLElement): AppController {
       resetLiveMarkerMotion();
       return;
     }
+    const reducedMotion = reducedMotionQuery.matches;
     const replay = availableChampionReplay();
     if (replay !== null) {
+      if (!shouldAnimateReplay(reducedMotion, replay.replay.frames.length)) {
+        cancelLiveMarkerFrame();
+        liveMarkerMotion = undefined;
+        championReplayMotion = undefined;
+        return;
+      }
       const nextReplay = {
         key: replay.key,
         frames: replay.replay.frames,
         startedAt: window.performance.now(),
       };
-      if (championReplayMotion === undefined) {
+      if (championReplayMotion?.key !== replay.key) {
         championReplayMotion = nextReplay;
-      } else if (
-        championReplayMotion.key !== replay.key &&
-        queuedChampionReplay?.key !== replay.key
-      ) {
-        queuedChampionReplay = nextReplay;
+      } else {
+        const marker = loopingReplayTrackMarker(
+          championReplayMotion.frames,
+          ((window.performance.now() - championReplayMotion.startedAt) / 1000) *
+            CHAMPION_REPLAY_RATE,
+        );
+        if (marker !== undefined) {
+          paintLiveMarker(marker);
+        }
       }
       liveMarkerMotion = undefined;
       requestLiveMarkerFrame();
@@ -317,9 +582,6 @@ export function mountApp(root: HTMLElement): AppController {
 
     const now = window.performance.now();
     const candidateId = simulation.snapshot.activeCandidate.candidateId;
-    const reducedMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
     if (reducedMotion || liveMarkerMotion?.candidateId !== candidateId) {
       cancelLiveMarkerFrame();
       liveMarkerMotion = {
@@ -356,8 +618,81 @@ export function mountApp(root: HTMLElement): AppController {
 
   const dispatch = (action: AppAction): void => {
     const previousRoute = state.route;
+    const validationWasChecking = state.validation.status === "checking";
     state = transition(state, action);
+    const routeChanged = state.route !== previousRoute;
+    const enteredWelcome = routeChanged && state.route === "welcome";
+    const enteredTrack = routeChanged && state.route === "track";
+    const retryPresetGeometry =
+      enteredTrack && presetGeometry.status === "unavailable";
+    const retryTrackLibrary =
+      enteredTrack && trackWorkspace.libraryStatus === "unavailable";
+    const welcomeRefreshNotice: RunLibraryNotice =
+      runLibrary.status === "ready" && runLibrary.notice.tone !== "error"
+        ? runLibrary.notice
+        : {
+            tone: "neutral",
+            message: "Saved runs refreshed from local storage.",
+          };
+    if (
+      previousRoute === "review" &&
+      state.route !== "review" &&
+      validationWasChecking
+    ) {
+      setupValidationRequestVersion += 1;
+    }
+    if (
+      previousRoute === "track" &&
+      state.route !== "track" &&
+      trackWorkspace.pending !== null
+    ) {
+      const canceledTrackCommand = trackWorkspace.pending;
+      trackCommandRequestVersion += 1;
+      if (canceledTrackCommand === "import") {
+        trackImportRequestVersion += 1;
+      }
+      if (
+        canceledTrackCommand === "validate" ||
+        canceledTrackCommand === "assist"
+      ) {
+        trackValidationRequest += 1;
+      }
+      trackWorkspace = {
+        ...trackWorkspace,
+        pending: null,
+        notice: {
+          tone: "neutral",
+          message: dismissedTrackResponseMessage(
+            canceledTrackCommand,
+            "leaving Track",
+          ),
+        },
+      };
+    }
+    if (
+      routeChanged &&
+      runLibrary.status === "ready" &&
+      runLibrary.pending !== undefined
+    ) {
+      const canceledAction = runLibrary.pending.action;
+      runLibraryActionVersion += 1;
+      runLibrary = {
+        ...runLibrary,
+        pending: undefined,
+        notice: {
+          tone: "neutral",
+          message: "Saved run response ignored after leaving Welcome.",
+        },
+      };
+      if (
+        (canceledAction === "open" || canceledAction === "resume") &&
+        simulation.status === "loading"
+      ) {
+        simulation = { status: "idle" };
+      }
+    }
     if (action.type === "new-setup") {
+      runRequestVersion += 1;
       if (observationTimer !== undefined) {
         window.clearTimeout(observationTimer);
         observationTimer = undefined;
@@ -367,7 +702,43 @@ export function mountApp(root: HTMLElement): AppController {
       replayFrameIndex = 0;
       trackWorkspace = { ...trackWorkspace, toolsOpen: false };
     }
-    render(state.route !== previousRoute);
+    if (enteredWelcome) {
+      if (runLibrary.status === "ready") {
+        runLibrary = {
+          ...runLibrary,
+          notice: {
+            tone: "info",
+            message: "Refreshing Saved runs from local storage.",
+          },
+        };
+      } else if (runLibrary.status === "unavailable") {
+        runLibrary = { status: "loading" };
+      }
+    }
+    if (retryPresetGeometry) {
+      presetGeometry = { status: "loading" };
+    }
+    if (retryTrackLibrary) {
+      trackWorkspace = {
+        ...trackWorkspace,
+        libraryStatus: "loading",
+        libraryMessage: undefined,
+        notice: {
+          tone: "info",
+          message: "Refreshing the local track library.",
+        },
+      };
+    }
+    render(routeChanged);
+    if (enteredWelcome) {
+      void refreshRuns(welcomeRefreshNotice);
+    }
+    if (retryPresetGeometry) {
+      void refreshPresetGeometry();
+    }
+    if (retryTrackLibrary) {
+      void refreshLibrary(TRACK_LIBRARY_REFRESHED_NOTICE);
+    }
   };
 
   const review = async (): Promise<void> => {
@@ -377,13 +748,26 @@ export function mountApp(root: HTMLElement): AppController {
       return;
     }
 
-    dispatch({ type: "validation-started" });
+    const reviewedDraft = state.draft;
+    const requestVersion = ++setupValidationRequestVersion;
+    dispatch({ type: "validation-started", draft: reviewedDraft });
     try {
-      const response = await validateSetup(state.draft);
-      dispatch({ type: "validation-received", response });
-    } catch (error) {
+      const response = await validateSetup(reviewedDraft);
+      if (requestVersion !== setupValidationRequestVersion) {
+        return;
+      }
       dispatch({
         type: "validation-received",
+        draft: reviewedDraft,
+        response,
+      });
+    } catch (error) {
+      if (requestVersion !== setupValidationRequestVersion) {
+        return;
+      }
+      dispatch({
+        type: "validation-received",
+        draft: reviewedDraft,
         response: serviceUnavailableResponse(error),
       });
     }
@@ -391,8 +775,10 @@ export function mountApp(root: HTMLElement): AppController {
 
   const scheduleObservation = (): void => {
     if (
+      applicationLifecycle !== "active" ||
       simulation.status !== "ready" ||
       simulation.snapshot.status !== "running" ||
+      simulation.commandRequest !== undefined ||
       observationPending ||
       observationTimer !== undefined
     ) {
@@ -403,14 +789,26 @@ export function mountApp(root: HTMLElement): AppController {
     }, observationPollDelay(document.visibilityState));
   };
 
+  const isCurrentRun = (runId: string): boolean =>
+    simulation.status === "ready" && simulation.snapshot.runId === runId;
+
+  const isLatestRunRequest = (runId: string, requestVersion: number): boolean =>
+    requestVersion === runRequestVersion && isCurrentRun(runId);
+
+  const setRunFailure = (message: string): void => {
+    simulation =
+      simulation.status === "ready"
+        ? { status: "ready", snapshot: simulation.snapshot, error: message }
+        : { status: "unavailable", message };
+  };
+
   const applyRunResponse = (
     response: Awaited<ReturnType<typeof startRun>>,
   ): void => {
     if (!response.valid) {
-      simulation = {
-        status: "unavailable",
-        message: response.errors[0]?.message ?? "The run command was rejected.",
-      };
+      setRunFailure(
+        response.errors[0]?.message ?? "The run command was rejected.",
+      );
     } else {
       const previousSnapshot =
         simulation.status === "ready" ? simulation.snapshot : undefined;
@@ -431,7 +829,8 @@ export function mountApp(root: HTMLElement): AppController {
   const observeSession = async (): Promise<void> => {
     if (
       simulation.status !== "ready" ||
-      simulation.snapshot.status !== "running"
+      simulation.snapshot.status !== "running" ||
+      simulation.commandRequest !== undefined
     ) {
       return;
     }
@@ -440,21 +839,25 @@ export function mountApp(root: HTMLElement): AppController {
       return;
     }
     observationPending = true;
+    const runId = simulation.snapshot.runId;
+    const requestVersion = ++runRequestVersion;
+    const knownReplayCandidateId =
+      simulation.snapshot.generationReplay?.candidateId;
     try {
-      applyRunResponse(
-        await observeRun(
-          simulation.snapshot.runId,
-          simulation.snapshot.generationReplay?.candidateId,
-        ),
-      );
+      const response = await observeRun(runId, knownReplayCandidateId);
+      if (!isLatestRunRequest(runId, requestVersion)) {
+        return;
+      }
+      applyRunResponse(response);
     } catch (error) {
-      simulation = {
-        status: "unavailable",
-        message:
-          error instanceof Error
-            ? `Telemetry update failed: ${error.message}`
-            : "The local core could not advance the training run.",
-      };
+      if (!isLatestRunRequest(runId, requestVersion)) {
+        return;
+      }
+      setRunFailure(
+        error instanceof Error
+          ? `Telemetry update failed: ${error.message}`
+          : "The local core could not advance the training run.",
+      );
       render();
     } finally {
       observationPending = false;
@@ -463,6 +866,9 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const handleVisibilityChange = (): void => {
+    if (applicationLifecycle !== "active") {
+      return;
+    }
     if (observationTimer !== undefined) {
       window.clearTimeout(observationTimer);
       observationTimer = undefined;
@@ -474,24 +880,38 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
-  const controlSession = async (
-    command: "pause" | "resume" | "stop",
-  ): Promise<void> => {
-    if (simulation.status !== "ready") {
+  const controlSession = async (command: RunCommand): Promise<void> => {
+    if (
+      simulation.status !== "ready" ||
+      simulation.commandRequest !== undefined
+    ) {
       return;
     }
+    const runId = simulation.snapshot.runId;
+    const requestVersion = ++runRequestVersion;
     if (observationTimer !== undefined) {
       window.clearTimeout(observationTimer);
       observationTimer = undefined;
     }
+    simulation = { ...simulation, commandRequest: command, error: undefined };
+    render();
     try {
-      applyRunResponse(await commandRun(simulation.snapshot.runId, command));
-    } catch {
-      simulation = {
-        status: "unavailable",
-        message: "The local core could not apply the run command.",
-      };
+      const response = await commandRun(runId, command);
+      if (!isLatestRunRequest(runId, requestVersion)) {
+        return;
+      }
+      applyRunResponse(response);
+    } catch (error) {
+      if (!isLatestRunRequest(runId, requestVersion)) {
+        return;
+      }
+      setRunFailure(
+        error instanceof Error
+          ? error.message
+          : "The local core could not apply the run command.",
+      );
       render();
+      scheduleObservation();
     }
   };
 
@@ -499,14 +919,11 @@ export function mountApp(root: HTMLElement): AppController {
     if (simulation.status !== "ready" || simulation.snapshot.result === null) {
       return;
     }
-    const lastIndex = simulation.snapshot.result.replay.frames.length - 1;
-    if (action === "restart") {
-      replayFrameIndex = 0;
-    } else if (action === "previous") {
-      replayFrameIndex = Math.max(0, replayFrameIndex - 1);
-    } else {
-      replayFrameIndex = Math.min(lastIndex, replayFrameIndex + 1);
-    }
+    replayFrameIndex = replayFrameIndexAfterAction(
+      replayFrameIndex,
+      simulation.snapshot.result.replay.frames.length,
+      action,
+    );
     render();
   };
 
@@ -515,94 +932,324 @@ export function mountApp(root: HTMLElement): AppController {
       return;
     }
     const frozenDraft = state.draft;
+    const requestVersion = ++runRequestVersion;
     simulation = { status: "loading" };
     generationTrails = [];
     replayFrameIndex = 0;
     dispatch({ type: "start-session" });
     try {
-      applyRunResponse(await startRun(frozenDraft));
-    } catch {
-      simulation = {
-        status: "unavailable",
-        message: "The local core could not start the reviewed run.",
-      };
-      render();
+      const response = await startRun(frozenDraft);
+      if (requestVersion !== runRequestVersion) {
+        return;
+      }
+      if (!response.valid) {
+        simulation = { status: "idle" };
+        dispatch({
+          type: "start-session-rejected",
+          response: {
+            contractVersion: 1,
+            valid: false,
+            errors: response.errors,
+          },
+        });
+        return;
+      }
+      applyRunResponse(response);
+    } catch (error) {
+      if (requestVersion !== runRequestVersion) {
+        return;
+      }
+      simulation = { status: "idle" };
+      dispatch({
+        type: "start-session-unconfirmed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "The local core could not confirm whether the reviewed run started.",
+      });
     }
   };
 
-  const refreshLibrary = async (): Promise<void> => {
+  async function refreshPresetGeometry(): Promise<void> {
+    const requestVersion = ++presetGeometryRequestVersion;
     try {
-      trackWorkspace = {
-        ...trackWorkspace,
-        library: await loadTrackLibrary(),
+      const response = await loadPresetTracks();
+      if (requestVersion !== presetGeometryRequestVersion) {
+        return;
+      }
+      presetGeometry = { status: "ready", presets: response.presets };
+    } catch (error) {
+      if (requestVersion !== presetGeometryRequestVersion) {
+        return;
+      }
+      presetGeometry = {
+        status: "unavailable",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Preset track geometry is unavailable.",
       };
-    } catch {
+    }
+    render();
+  }
+
+  async function refreshLibrary(
+    successNotice?: TrackWorkspaceState["notice"],
+  ): Promise<void> {
+    const requestVersion = ++trackLibraryRequestVersion;
+    try {
+      const library = await loadTrackLibrary();
+      if (requestVersion !== trackLibraryRequestVersion) {
+        return;
+      }
       trackWorkspace = {
         ...trackWorkspace,
+        library,
+        libraryStatus: "ready",
+        libraryMessage: undefined,
+        notice: successNotice ?? trackWorkspace.notice,
+      };
+    } catch (error) {
+      if (requestVersion !== trackLibraryRequestVersion) {
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The local track library is unavailable.";
+      const hasLibrary = trackWorkspace.library !== null;
+      trackWorkspace = {
+        ...trackWorkspace,
+        libraryStatus: hasLibrary ? "ready" : "unavailable",
+        libraryMessage: hasLibrary ? undefined : message,
         notice: {
           tone: "error",
-          message: "The local track library is unavailable.",
+          message,
         },
       };
     }
     render();
-  };
+  }
 
-  const refreshRuns = async (): Promise<void> => {
+  async function refreshRuns(
+    notice: RunLibraryNotice = {
+      tone: "neutral",
+      message: "Run files are stored atomically by the local Python core.",
+    },
+  ): Promise<void> {
+    const requestVersion = ++runLibraryRequestVersion;
     try {
+      const value = await loadRunLibrary();
+      if (requestVersion !== runLibraryRequestVersion) {
+        return;
+      }
       runLibrary = {
         status: "ready",
-        value: await loadRunLibrary(),
-        message: "Run files are stored atomically by the local Python core.",
+        value,
+        notice,
       };
-    } catch {
-      runLibrary = {
-        status: "unavailable",
-        message: "The local run library is unavailable.",
-      };
+    } catch (error) {
+      if (requestVersion !== runLibraryRequestVersion) {
+        return;
+      }
+      const message =
+        error instanceof Error
+          ? error.message
+          : "The local run library is unavailable.";
+      runLibrary =
+        runLibrary.status === "ready"
+          ? {
+              ...runLibrary,
+              pending: undefined,
+              notice: { tone: "error", message },
+            }
+          : { status: "unavailable", message };
     }
     render();
-  };
+  }
 
   const handleRunAction = async (
-    action: "resume" | "delete" | "export",
+    action: RunLibraryAction,
     runId: string,
   ): Promise<void> => {
+    if (runLibrary.status !== "ready" || runLibrary.pending !== undefined) {
+      return;
+    }
+    if (
+      action === "delete" &&
+      !window.confirm(`Delete local run “${runId}”?`)
+    ) {
+      return;
+    }
+    const actionLabels: Record<RunLibraryAction, string> = {
+      resume: "Restoring the selected local run.",
+      open: "Opening the selected saved results.",
+      delete: "Deleting the selected local run.",
+      export: "Preparing the selected run JSON.",
+    };
+    const actionVersion = ++runLibraryActionVersion;
+    const isCurrentAction = (): boolean =>
+      actionVersion === runLibraryActionVersion &&
+      runLibrary.status === "ready" &&
+      runLibrary.pending?.action === action &&
+      runLibrary.pending.runId === runId;
+    runLibrary = {
+      ...runLibrary,
+      pending: { action, runId },
+      notice: { tone: "info", message: actionLabels[action] },
+    };
+    render();
     try {
       if (action === "delete") {
         await deleteRun(runId);
-        await refreshRuns();
+        if (!isCurrentAction()) {
+          await refreshRuns({
+            tone: "neutral",
+            message:
+              "Run library refreshed after a background delete response.",
+          });
+          return;
+        }
+        await refreshRuns({
+          tone: "success",
+          message: "The selected run was deleted from local storage.",
+        });
         return;
       }
       if (action === "export") {
-        downloadRunDocument(await exportRun(runId));
+        const document = await exportRun(runId);
+        if (!isCurrentAction()) {
+          return;
+        }
+        downloadRunDocument(document);
+        runLibrary = {
+          ...runLibrary,
+          pending: undefined,
+          notice: {
+            tone: "success",
+            message: "The selected run JSON was exported.",
+          },
+        };
+        render();
         return;
       }
+      if (action === "open") {
+        const requestVersion = ++runRequestVersion;
+        simulation = { status: "loading" };
+        const document = await openRun(runId);
+        if (!isCurrentAction() || requestVersion !== runRequestVersion) {
+          return;
+        }
+        const snapshot = document.checkpoint.snapshot;
+        if (
+          snapshot.result === null ||
+          (snapshot.status !== "completed" && snapshot.status !== "stopped")
+        ) {
+          throw new Error(
+            "The selected run does not contain terminal results.",
+          );
+        }
+        const compiled = await compileTrack(document.track);
+        if (!isCurrentAction() || requestVersion !== runRequestVersion) {
+          return;
+        }
+        if (!compiled.valid || compiled.compiled === undefined) {
+          throw new Error(
+            compiled.errors[0]?.message ??
+              "The saved result track could not be compiled.",
+          );
+        }
+        if (state.route !== "welcome") {
+          return;
+        }
+        const restoredDraft = {
+          contractVersion: 1 as const,
+          trackPreset: document.track.id,
+          track: document.track,
+          settings: document.settings,
+        };
+        trackWorkspace = { ...trackWorkspace, selected: compiled.compiled };
+        generationTrails = updateGenerationTrails([], snapshot);
+        replayFrameIndex = 0;
+        simulation = { status: "ready", snapshot };
+        runLibrary = {
+          ...runLibrary,
+          pending: undefined,
+          notice: { tone: "success", message: "Saved results opened." },
+        };
+        dispatch({ type: "restore-results", draft: restoredDraft });
+        return;
+      }
+      const requestVersion = ++runRequestVersion;
       simulation = { status: "loading" };
       const response = await resumeRun(runId);
+      if (!isCurrentAction()) {
+        await refreshRuns({
+          tone: "neutral",
+          message: "Run library refreshed after a dismissed Resume response.",
+        });
+        return;
+      }
+      if (requestVersion !== runRequestVersion) {
+        return;
+      }
       if (!response.valid || response.setup === undefined) {
+        simulation = { status: "idle" };
         runLibrary = {
-          status: "unavailable",
-          message: response.valid
-            ? "The restored run did not include its frozen setup."
-            : (response.errors[0]?.message ?? "The run could not be resumed."),
+          ...runLibrary,
+          pending: undefined,
+          notice: {
+            tone: "error",
+            message: response.valid
+              ? "The restored run did not include its frozen setup."
+              : (response.errors[0]?.message ??
+                "The run could not be resumed."),
+          },
         };
         render();
         return;
       }
       if (response.setup.track !== null) {
         const compiled = await compileTrack(response.setup.track);
-        if (compiled.valid && compiled.compiled !== undefined) {
-          trackWorkspace = { ...trackWorkspace, selected: compiled.compiled };
+        if (!isCurrentAction() || requestVersion !== runRequestVersion) {
+          return;
         }
+        if (!compiled.valid || compiled.compiled === undefined) {
+          throw new Error(
+            compiled.errors[0]?.message ??
+              "The restored custom track could not be compiled.",
+          );
+        }
+        trackWorkspace = { ...trackWorkspace, selected: compiled.compiled };
       }
+      if (state.route !== "welcome") {
+        return;
+      }
+      runLibrary = {
+        ...runLibrary,
+        pending: undefined,
+        notice: { tone: "success", message: "Local run restored." },
+      };
       generationTrails = [];
       dispatch({ type: "restore-session", draft: response.setup });
       applyRunResponse(response);
-    } catch {
+    } catch (error) {
+      if (!isCurrentAction()) {
+        return;
+      }
+      if (simulation.status === "loading") {
+        simulation = { status: "idle" };
+      }
       runLibrary = {
-        status: "unavailable",
-        message: "The local run command could not be completed.",
+        ...runLibrary,
+        pending: undefined,
+        notice: {
+          tone: "error",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The local run command could not be completed.",
+        },
       };
       render();
     }
@@ -658,7 +1305,7 @@ export function mountApp(root: HTMLElement): AppController {
         trackWorkspace = {
           ...trackWorkspace,
           pending: null,
-          editorPreview: undefined,
+          editorPreview: response.preview,
           editorValidation: {
             status: "invalid",
             errors: response.errors,
@@ -671,7 +1318,7 @@ export function mountApp(root: HTMLElement): AppController {
           },
         };
       }
-    } catch {
+    } catch (error) {
       if (requestId !== trackValidationRequest) {
         return;
       }
@@ -682,7 +1329,10 @@ export function mountApp(root: HTMLElement): AppController {
         editorValidation: { status: "invalid", errors: [] },
         notice: {
           tone: "error",
-          message: "The local Python core could not validate this draft.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The local Python core could not validate this draft.",
         },
       };
     }
@@ -691,10 +1341,22 @@ export function mountApp(root: HTMLElement): AppController {
 
   const saveCompiledTrack = async (
     compiled: CompiledTrackV1,
+    requestVersion: number,
   ): Promise<void> => {
-    trackWorkspace = { ...trackWorkspace, pending: "save" };
+    trackWorkspace = {
+      ...trackWorkspace,
+      pending: "save",
+      notice: {
+        tone: "info",
+        message: "Saving the selected track to local storage.",
+      },
+    };
     render();
     const result = await saveTrack(compiled.track);
+    if (!isCurrentTrackCommand(requestVersion, "save")) {
+      await refreshLibrary();
+      return;
+    }
     trackWorkspace = {
       ...trackWorkspace,
       pending: null,
@@ -719,23 +1381,51 @@ export function mountApp(root: HTMLElement): AppController {
     action: string,
     element: HTMLElement,
   ): Promise<void> => {
+    const repeatsActiveTab =
+      action === "builder-tab" &&
+      element.dataset.builderTab === trackWorkspace.tab;
+    const requestVersion = repeatsActiveTab
+      ? trackCommandRequestVersion
+      : ++trackCommandRequestVersion;
     try {
       switch (action) {
-        case "open-builder":
+        case "refresh-library":
+          trackWorkspace = {
+            ...trackWorkspace,
+            libraryStatus: "loading",
+            libraryMessage: undefined,
+            notice: {
+              tone: "info",
+              message: "Refreshing the local track library.",
+            },
+          };
+          render();
+          await refreshLibrary(TRACK_LIBRARY_REFRESHED_NOTICE);
+          return;
+        case "open-builder": {
+          const shouldValidate =
+            trackWorkspace.editorValidation.status === "unchecked";
           trackWorkspace = {
             ...trackWorkspace,
             toolsOpen: true,
             tab: "build",
-            notice: {
-              tone: "info",
-              message: "Checking the starter draft with the local Python core.",
-            },
+            notice: shouldValidate
+              ? {
+                  tone: "info",
+                  message:
+                    "Checking the starter draft with the local Python core.",
+                }
+              : trackWorkspace.notice,
           };
           render();
-          if (trackWorkspace.editorValidation.status === "unchecked") {
+          root
+            .querySelector<HTMLElement>("#track-builder-title")
+            ?.focus({ preventScroll: true });
+          if (shouldValidate) {
             void validateEditorDraft();
           }
           return;
+        }
         case "open-selected-builder":
           if (trackWorkspace.selected !== undefined) {
             trackWorkspace = {
@@ -754,17 +1444,88 @@ export function mountApp(root: HTMLElement): AppController {
               },
             };
             render();
+            root
+              .querySelector<HTMLElement>("#track-builder-title")
+              ?.focus({ preventScroll: true });
           }
           return;
-        case "close-builder":
-          trackWorkspace = { ...trackWorkspace, toolsOpen: false };
+        case "close-builder": {
+          const canceledTrackCommand = trackWorkspace.pending;
+          if (canceledTrackCommand === "import") {
+            trackImportRequestVersion += 1;
+          }
+          if (
+            canceledTrackCommand === "validate" ||
+            canceledTrackCommand === "assist"
+          ) {
+            trackValidationRequest += 1;
+          }
+          trackWorkspace = {
+            ...trackWorkspace,
+            toolsOpen: false,
+            pending: null,
+            notice:
+              canceledTrackCommand === null
+                ? trackWorkspace.notice
+                : {
+                    tone: "neutral",
+                    message: dismissedTrackResponseMessage(
+                      canceledTrackCommand,
+                      "Track Builder closed",
+                    ),
+                  },
+          };
           render();
+          root
+            .querySelector<HTMLElement>('[data-track-action="open-builder"]')
+            ?.focus({ preventScroll: true });
           return;
+        }
         case "builder-tab": {
           const tab = element.dataset.builderTab as TrackBuilderTab | undefined;
           if (tab === "build" || tab === "generate" || tab === "library") {
-            trackWorkspace = { ...trackWorkspace, tab };
+            const canceledTrackCommand =
+              tab === trackWorkspace.tab ? null : trackWorkspace.pending;
+            if (
+              canceledTrackCommand === "validate" ||
+              canceledTrackCommand === "assist"
+            ) {
+              ++trackValidationRequest;
+            }
+            if (canceledTrackCommand === "import") {
+              ++trackImportRequestVersion;
+            }
+            const messages: Record<TrackBuilderTab, string> = {
+              build:
+                "Edit canonical pieces; Python previews and validates every draft.",
+              generate:
+                "Choose a seed, length, and difficulty to create a verified layout.",
+              library: "Saved and imported tracks stay on this computer.",
+            };
+            trackWorkspace = {
+              ...trackWorkspace,
+              tab,
+              pending:
+                canceledTrackCommand === null ? trackWorkspace.pending : null,
+              editorValidation:
+                canceledTrackCommand === "validate"
+                  ? { status: "unchecked", errors: [] }
+                  : trackWorkspace.editorValidation,
+              notice: {
+                tone: "neutral",
+                message:
+                  canceledTrackCommand === null
+                    ? messages[tab]
+                    : `${dismissedTrackResponseMessage(canceledTrackCommand, "switching tools")} ${messages[tab]}`,
+              },
+            };
             render();
+            if (
+              tab === "build" &&
+              trackWorkspace.editorValidation.status === "unchecked"
+            ) {
+              void validateEditorDraft();
+            }
           }
           return;
         }
@@ -822,7 +1583,8 @@ export function mountApp(root: HTMLElement): AppController {
           );
           return;
         case "editor-assist": {
-          ++trackValidationRequest;
+          const requestId = ++trackValidationRequest;
+          const draft = editorTrack(trackWorkspace.editor);
           trackWorkspace = {
             ...trackWorkspace,
             pending: "assist",
@@ -832,9 +1594,24 @@ export function mountApp(root: HTMLElement): AppController {
             },
           };
           render();
-          const response = await assistTrackClosure(
-            editorTrack(trackWorkspace.editor),
-          );
+          let response: TrackCommandResponse;
+          try {
+            response = await assistTrackClosure(draft);
+          } catch (error) {
+            if (
+              requestId !== trackValidationRequest ||
+              !isCurrentTrackCommand(requestVersion, "assist")
+            ) {
+              return;
+            }
+            throw error;
+          }
+          if (
+            requestId !== trackValidationRequest ||
+            !isCurrentTrackCommand(requestVersion, "assist")
+          ) {
+            return;
+          }
           if (response.valid && response.compiled !== undefined) {
             trackWorkspace = {
               ...trackWorkspace,
@@ -847,7 +1624,7 @@ export function mountApp(root: HTMLElement): AppController {
               editorValidation: { status: "valid", errors: [] },
               notice: {
                 tone: "success",
-                message: `Python added ${String(response.addedPieces?.length ?? 0)} piece(s) and verified the closed loop.`,
+                message: closureRepairMessage(response),
               },
             };
           } else {
@@ -871,7 +1648,10 @@ export function mountApp(root: HTMLElement): AppController {
           return;
         }
         case "use-editor":
-          if (trackWorkspace.editorPreview !== undefined) {
+          if (
+            trackWorkspace.editorValidation.status === "valid" &&
+            trackWorkspace.editorPreview !== undefined
+          ) {
             useCompiled(
               trackWorkspace.editorPreview,
               "Custom track selected for this experiment.",
@@ -893,6 +1673,17 @@ export function mountApp(root: HTMLElement): AppController {
             length: length ?? trackWorkspace.generator.length,
             difficulty: difficulty ?? trackWorkspace.generator.difficulty,
           };
+          if (!Number.isInteger(seed) || seed < 0 || seed > 2_147_483_647) {
+            trackWorkspace = {
+              ...trackWorkspace,
+              notice: {
+                tone: "error",
+                message: "Seed must be a whole number from 0 to 2147483647.",
+              },
+            };
+            render();
+            return;
+          }
           trackWorkspace = {
             ...trackWorkspace,
             generator,
@@ -906,20 +1697,25 @@ export function mountApp(root: HTMLElement): AppController {
           const response = await generateTrack({
             ...generator,
           });
+          if (!isCurrentTrackCommand(requestVersion, "generate")) {
+            return;
+          }
           if (response.valid && response.compiled !== undefined) {
             trackWorkspace = {
               ...trackWorkspace,
               pending: null,
+              generatedInputs: generator,
               generatedPreview: response.compiled,
               notice: {
                 tone: "success",
-                message: `Generated and verified ${String(response.compiled.track.pieces.length)} canonical pieces.`,
+                message: `Generated and verified ${String(response.compiled.track.pieces.length)} canonical pieces with generator v${String(response.generatorVersion ?? "?")} after ${String(response.candidateCount ?? 1)} candidate(s).`,
               },
             };
           } else {
             trackWorkspace = {
               ...trackWorkspace,
               pending: null,
+              generatedInputs: undefined,
               generatedPreview: undefined,
               notice: {
                 tone: "error",
@@ -956,20 +1752,35 @@ export function mountApp(root: HTMLElement): AppController {
               },
             };
             render();
+            root
+              .querySelector<HTMLElement>('[data-builder-tab="build"]')
+              ?.focus({ preventScroll: true });
           }
           return;
         case "save-editor":
-          if (trackWorkspace.editorPreview !== undefined) {
-            await saveCompiledTrack(trackWorkspace.editorPreview);
+          if (
+            trackWorkspace.editorValidation.status === "valid" &&
+            trackWorkspace.editorPreview !== undefined
+          ) {
+            await saveCompiledTrack(
+              trackWorkspace.editorPreview,
+              requestVersion,
+            );
           }
           return;
         case "save-generated":
           if (trackWorkspace.generatedPreview !== undefined) {
-            await saveCompiledTrack(trackWorkspace.generatedPreview);
+            await saveCompiledTrack(
+              trackWorkspace.generatedPreview,
+              requestVersion,
+            );
           }
           return;
         case "export-editor":
-          if (trackWorkspace.editorPreview !== undefined) {
+          if (
+            trackWorkspace.editorValidation.status === "valid" &&
+            trackWorkspace.editorPreview !== undefined
+          ) {
             downloadTrack(trackWorkspace.editorPreview);
           }
           return;
@@ -1000,6 +1811,9 @@ export function mountApp(root: HTMLElement): AppController {
               },
             };
             render();
+            root
+              .querySelector<HTMLElement>('[data-builder-tab="build"]')
+              ?.focus({ preventScroll: true });
           }
           return;
         }
@@ -1020,9 +1834,20 @@ export function mountApp(root: HTMLElement): AppController {
               `Delete “${compiled.track.name}” from the local track library?`,
             )
           ) {
-            trackWorkspace = { ...trackWorkspace, pending: "delete" };
+            trackWorkspace = {
+              ...trackWorkspace,
+              pending: "delete",
+              notice: {
+                tone: "info",
+                message: `Deleting ${compiled.track.name} from the local track library.`,
+              },
+            };
             render();
             await deleteTrack(trackId);
+            if (!isCurrentTrackCommand(requestVersion, "delete")) {
+              await refreshLibrary();
+              return;
+            }
             trackWorkspace = {
               ...trackWorkspace,
               pending: null,
@@ -1036,13 +1861,30 @@ export function mountApp(root: HTMLElement): AppController {
           return;
         }
       }
-    } catch {
+    } catch (error) {
+      if (
+        requestVersion !== trackCommandRequestVersion ||
+        state.route !== "track" ||
+        !trackWorkspace.toolsOpen
+      ) {
+        if (
+          action === "save-editor" ||
+          action === "save-generated" ||
+          action === "delete-library"
+        ) {
+          await refreshLibrary();
+        }
+        return;
+      }
       trackWorkspace = {
         ...trackWorkspace,
         pending: null,
         notice: {
           tone: "error",
-          message: "The local Python track command could not be completed.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "The local Python track command could not be completed.",
         },
       };
       render();
@@ -1050,12 +1892,30 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const importTrack = async (file: File): Promise<void> => {
+    const requestId = ++trackImportRequestVersion;
+    trackWorkspace = {
+      ...trackWorkspace,
+      pending: "import",
+      notice: {
+        tone: "info",
+        message: "Reading TrackV1 and waiting for Python validation.",
+      },
+    };
+    render();
     try {
-      const track = parseTrackDocument(await file.text());
+      const content = await file.text();
+      if (requestId !== trackImportRequestVersion) {
+        return;
+      }
+      const track = parseTrackDocument(content);
       const response = await compileTrack(track);
+      if (requestId !== trackImportRequestVersion) {
+        return;
+      }
       if (!response.valid || response.compiled === undefined) {
         trackWorkspace = {
           ...trackWorkspace,
+          pending: null,
           notice: {
             tone: "error",
             message:
@@ -1067,6 +1927,7 @@ export function mountApp(root: HTMLElement): AppController {
       }
       trackWorkspace = {
         ...trackWorkspace,
+        pending: null,
         toolsOpen: true,
         tab: "build",
         editor: replaceEditorTrack(
@@ -1083,8 +1944,12 @@ export function mountApp(root: HTMLElement): AppController {
       };
       render();
     } catch (error) {
+      if (requestId !== trackImportRequestVersion) {
+        return;
+      }
       trackWorkspace = {
         ...trackWorkspace,
+        pending: null,
         notice: {
           tone: "error",
           message:
@@ -1095,7 +1960,96 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
+  const showShutdownScreen = (
+    lifecycle: Exclude<ApplicationLifecycle, "active">,
+  ): void => {
+    root.innerHTML =
+      lifecycle === "shutting-down"
+        ? `
+            <main class="shutdown-screen" aria-labelledby="shutdown-title">
+              <p class="eyebrow">Local shutdown</p>
+              <h1 id="shutdown-title" tabindex="-1">Shutting down EvoRacer…</h1>
+              <p role="status">Stopping the loopback core and finishing this local session.</p>
+            </main>
+          `
+        : `
+            <main class="shutdown-screen" aria-labelledby="shutdown-title">
+              <p class="eyebrow">Local session ended</p>
+              <h1 id="shutdown-title" tabindex="-1">EvoRacer has shut down.</h1>
+              <p>You can close this browser tab. Run EvoRacer.exe to start a new session.</p>
+            </main>
+          `;
+    root.querySelector<HTMLElement>("#shutdown-title")?.focus();
+  };
+
+  const retryPresetTracks = (): void => {
+    if (presetGeometry.status === "loading") {
+      return;
+    }
+    presetGeometry = { status: "loading" };
+    render();
+    void refreshPresetGeometry();
+  };
+
+  const retryRunLibrary = (): void => {
+    if (runLibrary.status === "loading") {
+      return;
+    }
+    const notice: RunLibraryNotice =
+      runLibrary.status === "ready" && runLibrary.notice.tone !== "error"
+        ? runLibrary.notice
+        : {
+            tone: "neutral",
+            message: "Saved runs refreshed from local storage.",
+          };
+    runLibrary = { status: "loading" };
+    render();
+    void refreshRuns(notice);
+  };
+
+  const exitApplication = async (): Promise<void> => {
+    if (
+      applicationLifecycle !== "active" ||
+      !window.confirm("Exit EvoRacer and stop the local core?")
+    ) {
+      return;
+    }
+
+    applicationLifecycle = "shutting-down";
+    if (observationTimer !== undefined) {
+      window.clearTimeout(observationTimer);
+      observationTimer = undefined;
+    }
+    resetLiveMarkerMotion();
+    showShutdownScreen("shutting-down");
+
+    try {
+      await shutdownApplication();
+      applicationLifecycle = "stopped";
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      reducedMotionQuery.removeEventListener(
+        "change",
+        handleReducedMotionChange,
+      );
+      showShutdownScreen("stopped");
+    } catch (error) {
+      applicationLifecycle = "active";
+      render(true);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "The local application shutdown could not be completed.",
+      );
+      scheduleObservation();
+    }
+  };
+
   const render = (focusHeading = false): void => {
+    if (applicationLifecycle !== "active") {
+      return;
+    }
+    const renderState = focusHeading ? undefined : captureRenderState(root);
+    const focusSnapshot = renderState?.focus ?? deferredFocus;
     root.innerHTML = renderShell(
       state,
       presetGeometry,
@@ -1117,23 +2071,9 @@ export function mountApp(root: HTMLElement): AppController {
       handleRunAction,
       handleTrackAction,
       importTrack,
-      async () => {
-        if (!window.confirm("Exit EvoRacer and stop the local core?")) {
-          return;
-        }
-        try {
-          await shutdownApplication();
-          root.innerHTML = `
-            <main class="shutdown-screen">
-              <p class="eyebrow">Local session ended</p>
-              <h1>EvoRacer has shut down.</h1>
-              <p>You can close this browser tab. Run EvoRacer.exe to start a new session.</p>
-            </main>
-          `;
-        } catch {
-          window.alert("EvoRacer could not stop the local core.");
-        }
-      },
+      retryPresetTracks,
+      retryRunLibrary,
+      exitApplication,
       (name, roadWidth) => {
         setEditorDraft(
           updateEditorDetails(trackWorkspace.editor, name, roadWidth),
@@ -1145,8 +2085,13 @@ export function mountApp(root: HTMLElement): AppController {
           ...trackWorkspace,
           generator: { seed, length, difficulty },
         };
+        syncGeneratorDraftPresentation(root, trackWorkspace);
       },
     );
+
+    if (renderState !== undefined) {
+      restoreDisclosures(root, renderState.disclosures);
+    }
 
     const progressRail = root.querySelector<HTMLElement>(".sidebar");
     const activeProgress = root.querySelector<HTMLElement>(
@@ -1161,22 +2106,23 @@ export function mountApp(root: HTMLElement): AppController {
     }
 
     if (focusHeading) {
+      deferredFocus = undefined;
       const pageTitle = root.querySelector<HTMLElement>("#page-title");
       pageTitle?.focus();
+    } else if (focusSnapshot !== undefined) {
+      const result = restoreFocus(root, focusSnapshot);
+      deferredFocus = result === "disabled" ? focusSnapshot : undefined;
     }
+  };
+
+  const handleReducedMotionChange = (): void => {
+    render();
   };
 
   render(true);
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  void loadPresetTracks()
-    .then((response) => {
-      presetGeometry = { status: "ready", presets: response.presets };
-      render();
-    })
-    .catch(() => {
-      presetGeometry = { status: "unavailable" };
-      render();
-    });
+  reducedMotionQuery.addEventListener("change", handleReducedMotionChange);
+  void refreshPresetGeometry();
   void refreshLibrary();
   void refreshRuns();
 
@@ -1325,15 +2271,38 @@ function pageHeader(
 }
 
 function renderWelcome(runLibrary: RunLibraryState): string {
+  const pending =
+    runLibrary.status === "ready" ? runLibrary.pending : undefined;
+  const libraryNotice =
+    runLibrary.status === "ready"
+      ? runLibrary.notice.tone === "error"
+        ? `
+            <div class="run-library-notice is-error" role="alert">
+              <p>${escapeHtml(runLibrary.notice.message)}</p>
+              <button class="button secondary" type="button" data-action="retry-run-library">Retry saved runs</button>
+            </div>
+          `
+        : `<p class="run-library-notice is-${runLibrary.notice.tone}" role="status">${escapeHtml(runLibrary.notice.message)}</p>`
+      : "";
+  const forceSavedRunsOpen =
+    runLibrary.status === "unavailable" ||
+    (runLibrary.status === "ready" && runLibrary.notice.tone === "error");
   const savedRuns =
     runLibrary.status === "loading"
       ? "<p>Loading local run files…</p>"
       : runLibrary.status === "unavailable"
-        ? `<p>${escapeHtml(runLibrary.message)}</p>`
+        ? `
+            <div class="run-library-notice is-error" role="alert">
+              <p>${escapeHtml(runLibrary.message)}</p>
+              <button class="button secondary" type="button" data-action="retry-run-library">Retry saved runs</button>
+            </div>
+          `
         : runLibrary.value.runs.length === 0
-          ? "<p>No saved runs yet. Every started run will appear here.</p>"
+          ? `${libraryNotice}<p>No saved runs yet. Every started run will appear here.</p>`
           : `
-            <table>
+            ${libraryNotice}
+            <div class="table-scroll">
+              <table>
               <thead><tr><th>Run</th><th>Track</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
                 ${runLibrary.value.runs
@@ -1346,9 +2315,15 @@ function renderWelcome(runLibrary: RunLibraryState): string {
                         <td>${escapeHtml(run.status)}</td>
                         <td>
                           <div class="library-actions">
-                            <button class="button secondary" type="button" data-run-action="resume" data-run-id="${escapeHtml(run.runId)}" ${run.resumable ? "" : "disabled"}>Resume</button>
-                            <button class="button secondary" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}">Export</button>
-                            <button class="button secondary" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}">Delete</button>
+                            ${
+                              run.resumable
+                                ? `<button class="button secondary" type="button" data-run-action="resume" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "resume" && pending.runId === run.runId ? "Restoring…" : "Resume"}</button>`
+                                : run.championFitness !== null
+                                  ? `<button class="button secondary" type="button" data-run-action="open" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "open" && pending.runId === run.runId ? "Opening…" : "Open results"}</button>`
+                                  : `<button class="button secondary" type="button" disabled>No results</button>`
+                            }
+                            <button class="button secondary" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "export" && pending.runId === run.runId ? "Exporting…" : "Export"}</button>
+                            <button class="button secondary" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "delete" && pending.runId === run.runId ? "Deleting…" : "Delete"}</button>
                           </div>
                         </td>
                       </tr>
@@ -1356,7 +2331,8 @@ function renderWelcome(runLibrary: RunLibraryState): string {
                   )
                   .join("")}
               </tbody>
-            </table>
+              </table>
+            </div>
             ${
               runLibrary.value.isolated.length === 0
                 ? ""
@@ -1390,16 +2366,16 @@ function renderWelcome(runLibrary: RunLibraryState): string {
           <span class="data-chip">Local only</span>
           <p>No account, cloud connection, telemetry, or automatic training.</p>
           <div class="welcome-actions">
-            <button class="button primary" type="button" data-action="review">
+            <button class="button primary" type="button" data-action="review" ${pending?.action === "resume" ? "disabled" : ""}>
               Review recommended setup
             </button>
-            <button class="button secondary" type="button" data-action="begin-setup">
+            <button class="button secondary" type="button" data-action="begin-setup" ${pending?.action === "resume" ? "disabled" : ""}>
               Customize setup
             </button>
           </div>
         </div>
       </div>
-      <details class="comparison-panel saved-runs-panel">
+      <details class="comparison-panel saved-runs-panel" ${forceSavedRunsOpen ? 'open data-force-open="true"' : ""}>
         <summary class="chart-heading">
           <div>
             <p class="section-kicker">Versioned local recovery</p>
@@ -1440,9 +2416,10 @@ function renderTrack(
           type="radio"
           name="trackPreset"
           value="${track.id}"
+          aria-label="${escapeHtml(`${track.name}. ${track.difficulty}. ${track.description}`)}"
           ${selected ? "checked" : ""}
         />
-        <span class="track-preview">
+        <span class="track-preview" aria-hidden="true">
           ${preview}
         </span>
         <span class="choice-copy">
@@ -1454,6 +2431,10 @@ function renderTrack(
       </label>
     `;
   }).join("");
+  const presetStatus =
+    presetGeometry.status === "unavailable"
+      ? `<div class="library-warning" role="alert"><strong>Preset previews unavailable.</strong><p>${escapeHtml(presetGeometry.message)}</p><button class="button secondary" type="button" data-action="retry-preset-tracks">Retry preset previews</button></div>`
+      : "";
 
   return `
     <section class="page" aria-labelledby="page-title">
@@ -1462,6 +2443,7 @@ function renderTrack(
         "Choose a track.",
         "Start from a verified preset or open Track Builder for a custom circuit.",
       )}
+      ${presetStatus}
       <fieldset class="choice-grid">
         <legend class="sr-only">Track preset</legend>
         ${cards}
@@ -1620,7 +2602,7 @@ function renderSelectField(
         <label for="${id}">${label}</label>
         <span class="help-marker" aria-hidden="true">?</span>
       </div>
-      <select id="${id}" name="${id}" data-algorithm>
+      <select id="${id}" name="${id}" data-algorithm aria-describedby="${id}-help">
         <option value="fixed-ga" ${value === "fixed-ga" ? "selected" : ""}>Fixed GA</option>
         <option value="neat" ${value === "neat" ? "selected" : ""}>NEAT</option>
       </select>
@@ -1716,6 +2698,7 @@ function renderReview(state: AppState): string {
       </div>
 
       ${status}
+      ${renderStartFailure(state)}
 
       <div class="start-panel">
         <div>
@@ -1745,6 +2728,26 @@ function renderReview(state: AppState): string {
         </button>
         <button class="button text-button" type="button" data-action="review">
           Validate again
+        </button>
+      </div>
+    </section>
+  `;
+}
+
+function renderStartFailure(state: AppState): string {
+  if (state.startFailure === null) {
+    return "";
+  }
+  const presentation = startFailurePresentation(state.startFailure);
+  return `
+    <section class="start-failure-notice" role="alert" aria-labelledby="start-failure-title">
+      <span class="data-chip">${presentation.badge}</span>
+      <div>
+        <h2 id="start-failure-title">Training did not open</h2>
+        <p>${escapeHtml(state.startFailure.message)}</p>
+        <p>${presentation.guidance}</p>
+        <button class="button secondary" type="button" data-route="welcome">
+          Open Welcome and Saved runs
         </button>
       </div>
     </section>
@@ -1815,13 +2818,11 @@ function renderTraining(
       activeCandidate !== null &&
       activeCandidate !== undefined;
     const replay = snapshot.result?.replay ?? snapshot.generationReplay;
-    const replaying =
-      replay !== null && replay !== undefined && replay.frames.length > 1;
     const priorTrails = priorGenerationTrails(
       generationTrails,
       replay?.candidateId,
     );
-    const backgroundEvaluation = replaying && live;
+    const backgroundEvaluation = showsBackgroundEvaluation(live, replay);
     const algorithm =
       state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT";
     const telemetry =
@@ -1857,6 +2858,7 @@ function renderTraining(
           )}
         `;
     observerContent = `
+      ${renderRunRecoveryNotice(simulation.error)}
       ${renderRunOverview(snapshot)}
       ${renderTrainingCompletion(snapshot)}
       ${telemetry}
@@ -1893,6 +2895,22 @@ function renderTraining(
   `;
 }
 
+function renderRunRecoveryNotice(message: string | undefined): string {
+  if (message === undefined) {
+    return "";
+  }
+  return `
+    <section class="training-recovery-notice" role="alert" aria-labelledby="training-recovery-title">
+      <span class="data-chip">Update delayed</span>
+      <div>
+        <h2 id="training-recovery-title">Keeping the last verified run state</h2>
+        <p>${escapeHtml(message)}</p>
+        <p>EvoRacer will retry telemetry automatically. Run controls remain available after the current request finishes.</p>
+      </div>
+    </section>
+  `;
+}
+
 function renderLiveRace(
   telemetry: SelectedCarTelemetryV1,
   activeCandidate: ObservationSnapshotV1["activeCandidate"],
@@ -1911,8 +2929,17 @@ function renderLiveRace(
           heading: firstReplayFrame.heading,
         };
   const replaying = replay !== null && replay !== undefined;
+  const reducedMotion = window.matchMedia(
+    "(prefers-reduced-motion: reduce)",
+  ).matches;
+  const animatedReplay =
+    replaying && shouldAnimateReplay(reducedMotion, replay.frames.length);
   const candidateLabel = replaying
-    ? `Champion replay · ${String(CHAMPION_REPLAY_RATE)}×`
+    ? animatedReplay
+      ? `Champion replay · ${String(CHAMPION_REPLAY_RATE)}×`
+      : reducedMotion
+        ? "Champion replay · reduced motion"
+        : "Champion replay · single frame"
     : live && activeCandidate !== null && activeCandidate !== undefined
       ? `Candidate ${String(activeCandidate.index)} / ${String(activeCandidate.total)}`
       : "Latest generation champion";
@@ -1921,7 +2948,7 @@ function renderLiveRace(
     <section class="live-race-panel" aria-labelledby="live-race-title">
       <div class="chart-heading">
         <div>
-          <p class="section-kicker">${replaying ? "Smooth Python champion replay" : live ? "Live Python simulation" : "Latest Python telemetry"}</p>
+          <p class="section-kicker">${animatedReplay ? "Smooth Python champion replay" : replaying ? "Static Python champion frame" : live ? "Live Python simulation" : "Latest Python telemetry"}</p>
           <h2 id="live-race-title">${escapeHtml(displayId)}</h2>
         </div>
         <span class="data-chip ${live ? "is-live" : ""}">${candidateLabel}</span>
@@ -1929,7 +2956,7 @@ function renderLiveRace(
       <div
         class="live-race-stage"
         role="img"
-        aria-label="${replaying ? "Smooth champion replay" : live ? "Live" : "Latest"} car position${priorTrails.length === 0 ? "" : ` with ${String(priorTrails.length)} previous generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
+        aria-label="${animatedReplay ? "Smooth champion replay" : replaying ? "Static champion replay" : live ? "Live" : "Latest"} car position${priorTrails.length === 0 ? "" : ` with ${String(priorTrails.length)} previous generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
       >
         ${
           activeTrack === undefined
@@ -1941,7 +2968,7 @@ function renderLiveRace(
       </div>
       ${renderGenerationTrailSummary(priorTrails.length)}
       <div class="live-race-footer">
-        <span>${replaying ? "Buffered authoritative frames at 60 FPS" : live ? "Accelerated live evaluation" : "Generation boundary"}</span>
+        <span>${animatedReplay ? "Buffered authoritative frames at 60 FPS" : replaying ? (reducedMotion ? "Authoritative replay held still for reduced motion" : "Single authoritative replay frame") : live ? "Accelerated live evaluation" : "Generation boundary"}</span>
         <strong>${replaying ? `${String(replay.frames.length)} Python frames` : `${telemetry.simulatedSeconds.toFixed(2)} simulated seconds · ${(telemetry.progress * 100).toFixed(1)}%`}</strong>
       </div>
     </section>
@@ -2054,18 +3081,21 @@ function renderRunOverview(snapshot: ObservationSnapshotV1): string {
   `;
 }
 
-function renderTrainingCompletion(snapshot: ObservationSnapshotV1): string {
+export function renderTrainingCompletion(
+  snapshot: ObservationSnapshotV1,
+): string {
   const completion = runCompletion(snapshot);
   if (completion === null) {
     return "";
   }
+  const resultsAvailable = snapshot.result !== null;
   return `
     <section class="training-completion" role="status" aria-labelledby="training-completion-title">
-      <p class="section-kicker">Results ready</p>
+      <p class="section-kicker">${resultsAvailable ? "Results ready" : "No results"}</p>
       <div class="training-completion-heading">
         <h2 id="training-completion-title">${completion.title}</h2>
-        <button class="button primary" type="button" data-action="view-results">
-          Open results
+        <button class="button primary" type="button" data-action="${resultsAvailable ? "view-results" : "new-setup"}">
+          ${resultsAvailable ? "Open results" : "Create another setup"}
           <span aria-hidden="true">→</span>
         </button>
       </div>
@@ -2078,7 +3108,10 @@ function renderRunControls(simulation: SimulationState): string {
   if (simulation.status !== "ready") {
     return "";
   }
-  const controls = runControls(simulation.snapshot);
+  const controls = runControls(
+    simulation.snapshot,
+    simulation.commandRequest ?? null,
+  );
   if (
     simulation.snapshot.status === "completed" ||
     simulation.snapshot.status === "stopped"
@@ -2088,7 +3121,7 @@ function renderRunControls(simulation: SimulationState): string {
   return `
     <div class="page-actions run-controls" aria-label="Run controls">
       <div>
-        <button class="button secondary" type="button" data-action="${controls.pauseAction === "resume" ? "resume-run" : "pause-run"}" ${controls.pauseDisabled ? "disabled" : ""}>
+        <button class="button secondary" type="button" data-focus-key="run-pause-toggle" data-action="${controls.pauseAction === "resume" ? "resume-run" : "pause-run"}" ${controls.pauseDisabled ? "disabled" : ""}>
           ${controls.pauseLabel}
         </button>
         <button class="button secondary" type="button" data-action="stop-run" ${controls.stopDisabled ? "disabled" : ""}>
@@ -2104,7 +3137,7 @@ function renderRunControls(simulation: SimulationState): string {
   `;
 }
 
-function renderFitnessChart(
+export function renderFitnessChart(
   history: ObservationSnapshotV1["fitnessHistory"],
 ): string {
   if (history.length === 0) {
@@ -2137,6 +3170,13 @@ function renderFitnessChart(
         `${x(index).toFixed(2)},${y(point.medianFitness).toFixed(2)}`,
     )
     .join(" ");
+  const singlePointMarkers =
+    history.length === 1 && history[0] !== undefined
+      ? `
+        <circle class="chart-point median-point" cx="${x(0).toFixed(2)}" cy="${y(history[0].medianFitness).toFixed(2)}" r="2"></circle>
+        <circle class="chart-point best-point" cx="${x(0).toFixed(2)}" cy="${y(history[0].bestFitness).toFixed(2)}" r="2"></circle>
+      `
+      : "";
   return `
     <section class="fitness-chart" aria-labelledby="fitness-chart-title">
       <div class="chart-heading">
@@ -2146,6 +3186,7 @@ function renderFitnessChart(
       <svg viewBox="0 0 100 100" role="img" aria-label="Best and median fitness by generation" preserveAspectRatio="none">
         <polyline class="chart-line median-line" points="${median}"></polyline>
         <polyline class="chart-line best-line" points="${best}"></polyline>
+        ${singlePointMarkers}
       </svg>
       <p>Generation ${String(history[0]?.generation ?? 0)} to ${String(history.at(-1)?.generation ?? 0)} · range ${minimum.toFixed(2)} to ${maximum.toFixed(2)}</p>
     </section>
@@ -2188,14 +3229,15 @@ function renderResults(
     return "";
   }
   const snapshot = simulation.snapshot;
+  const normalizedReplayFrameIndex = clampReplayFrameIndex(
+    replayFrameIndex,
+    result.replay.frames.length,
+  );
   const priorTrails = priorGenerationTrails(
     generationTrails,
     result.replay.candidateId,
   );
-  const frame =
-    result.replay.frames[
-      Math.min(replayFrameIndex, result.replay.frames.length - 1)
-    ];
+  const frame = result.replay.frames[normalizedReplayFrameIndex];
   const comparisons = result.baselineComparisons
     .map(
       (item) => `
@@ -2213,7 +3255,8 @@ function renderResults(
       ? "<p>No earlier run has the same track and evaluation budget.</p>"
       : `
         <p class="comparison-note">Only runs with the same track, population, generation count, and episode duration are shown.</p>
-        <table>
+        <div class="table-scroll">
+          <table>
           <thead><tr><th>Run</th><th>Algorithm</th><th>Seed</th><th>Generations</th><th>Champion</th><th>Progress</th></tr></thead>
           <tbody>
             ${snapshot.previousRuns
@@ -2231,7 +3274,8 @@ function renderResults(
               )
               .join("")}
           </tbody>
-        </table>
+          </table>
+        </div>
       `;
   return `
     <section class="page" aria-labelledby="page-title">
@@ -2256,15 +3300,17 @@ function renderResults(
       ${renderFitnessChart(result.fitnessHistory)}
       <section class="comparison-panel" aria-labelledby="baseline-title">
         <h2 id="baseline-title">Champion and baselines</h2>
-        <table>
-          <thead><tr><th>Controller</th><th>Fitness</th><th>Progress</th><th>Outcome</th></tr></thead>
-          <tbody>${comparisons}</tbody>
-        </table>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Controller</th><th>Fitness</th><th>Progress</th><th>Outcome</th></tr></thead>
+            <tbody>${comparisons}</tbody>
+          </table>
+        </div>
       </section>
       ${renderReplay(
         result.replay.frames,
         frame,
-        replayFrameIndex,
+        normalizedReplayFrameIndex,
         result.replay.vehicleSetup.frontDriveBias,
         result.replay.vehicleSetup.frontBrakeBias,
         replayTrack,
@@ -2367,11 +3413,13 @@ function bindActions(
   controlSession: (command: "pause" | "resume" | "stop") => Promise<void>,
   moveReplay: (action: "previous" | "next" | "restart") => void,
   handleRunAction: (
-    action: "resume" | "delete" | "export",
+    action: "resume" | "open" | "delete" | "export",
     runId: string,
   ) => Promise<void>,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
   importTrack: (file: File) => Promise<void>,
+  retryPresetTracks: () => void,
+  retryRunLibrary: () => void,
   exitApplication: () => Promise<void>,
   updateEditor: (name: string, roadWidth: number) => void,
   updateGenerator: (
@@ -2429,6 +3477,12 @@ function bindActions(
         case "exit-application":
           void exitApplication();
           break;
+        case "retry-preset-tracks":
+          retryPresetTracks();
+          break;
+        case "retry-run-library":
+          retryRunLibrary();
+          break;
       }
     });
   });
@@ -2449,7 +3503,10 @@ function bindActions(
       const action = element.dataset.runAction;
       const runId = element.dataset.runId;
       if (
-        (action === "resume" || action === "delete" || action === "export") &&
+        (action === "resume" ||
+          action === "open" ||
+          action === "delete" ||
+          action === "export") &&
         runId !== undefined
       ) {
         void handleRunAction(action, runId);
@@ -2465,6 +3522,41 @@ function bindActions(
         if (action !== undefined) {
           void handleTrackAction(action, element);
         }
+      });
+    });
+
+  root
+    .querySelectorAll<HTMLButtonElement>(
+      '[role="tab"][data-track-action="builder-tab"]',
+    )
+    .forEach((tab) => {
+      tab.addEventListener("keydown", (event) => {
+        const tabs = [
+          ...root.querySelectorAll<HTMLButtonElement>(
+            '[role="tab"][data-track-action="builder-tab"]',
+          ),
+        ];
+        const currentIndex = tabs.indexOf(tab);
+        if (currentIndex < 0 || tabs.length === 0) {
+          return;
+        }
+        let nextIndex: number | undefined;
+        if (event.key === "ArrowRight") {
+          nextIndex = (currentIndex + 1) % tabs.length;
+        } else if (event.key === "ArrowLeft") {
+          nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+        } else if (event.key === "Home") {
+          nextIndex = 0;
+        } else if (event.key === "End") {
+          nextIndex = tabs.length - 1;
+        }
+        if (nextIndex === undefined) {
+          return;
+        }
+        event.preventDefault();
+        const nextTab = tabs[nextIndex];
+        nextTab?.focus();
+        nextTab?.click();
       });
     });
 
@@ -2511,8 +3603,11 @@ function bindActions(
     }
   };
   root
+    .querySelector<HTMLInputElement>("[data-generator-seed]")
+    ?.addEventListener("input", updateGeneratorDraft);
+  root
     .querySelectorAll<HTMLInputElement>(
-      '[data-generator-seed], input[name="generator-length"], input[name="generator-difficulty"]',
+      'input[name="generator-length"], input[name="generator-difficulty"]',
     )
     .forEach((input) => {
       input.addEventListener("change", updateGeneratorDraft);
@@ -2556,37 +3651,82 @@ function bindActions(
   }
 }
 
+function syncGeneratorDraftPresentation(
+  root: HTMLElement,
+  workspace: TrackWorkspaceState,
+): void {
+  root
+    .querySelectorAll<HTMLInputElement>(".generator-choice input")
+    .forEach((input) => {
+      input
+        .closest<HTMLElement>(".generator-choice")
+        ?.classList.toggle("is-selected", input.checked);
+    });
+
+  const badge = root.querySelector<HTMLElement>(
+    ".generated-preview .validation-badge",
+  );
+  if (badge === null) {
+    return;
+  }
+
+  const inputsChanged = generatorInputsChanged(workspace);
+  badge.classList.toggle("is-warning", inputsChanged);
+  badge.classList.toggle("is-success", !inputsChanged);
+  badge.textContent = inputsChanged ? "Inputs changed" : "Python verified";
+
+  const notice = root.querySelector<HTMLElement>("[data-track-builder-notice]");
+  const noticeMessage = root.querySelector<HTMLElement>(
+    "[data-track-builder-notice-message]",
+  );
+  if (notice === null || noticeMessage === null) {
+    return;
+  }
+  notice.className = `track-builder-notice is-${inputsChanged ? "warning" : workspace.notice.tone}`;
+  noticeMessage.textContent = inputsChanged
+    ? "Generator inputs changed. Generate again to apply them; the preview still shows the last Python-verified result."
+    : workspace.notice.message;
+}
+
 function downloadTrack(compiled: CompiledTrackV1): void {
-  const blob = new Blob([serializeTrackDocument(compiled.track)], {
-    type: "application/json",
-  });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${safeFileName(compiled.track.name)}.track.json`;
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadJson(
+    serializeTrackDocument(compiled.track),
+    `${safeFileName(compiled.track.name)}.track.json`,
+  );
 }
 
 function downloadRunDocument(run: RunDocumentV1): void {
-  const blob = new Blob([`${JSON.stringify(run, null, 2)}\n`], {
-    type: "application/json",
-  });
+  downloadJson(
+    `${JSON.stringify(run, null, 2)}\n`,
+    `${safeFileName(run.runId)}.run.json`,
+  );
+}
+
+function downloadJson(contents: string, fileName: string): void {
+  const blob = new Blob([contents], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${safeFileName(run.runId)}.run.json`;
+  anchor.download = fileName;
+  anchor.hidden = true;
+  document.body.append(anchor);
   anchor.click();
-  URL.revokeObjectURL(url);
+  anchor.remove();
+  window.setTimeout(() => {
+    URL.revokeObjectURL(url);
+  }, 0);
 }
 
-function safeFileName(value: string): string {
+export function safeFileName(value: string): string {
   const normalized = value
     .trim()
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-|-$/g, "");
-  return normalized || "track";
+  const candidate = normalized || "local-export";
+  return /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(candidate)
+    ? `${candidate}-export`
+    : candidate;
 }
 
 function escapeHtml(value: string): string {
