@@ -7,6 +7,7 @@ import {
   duplicateEditorPiece,
   editorTrack,
   moveEditorPiece,
+  parseTrackCommandResponse,
   parseTrackDocument,
   redoEditor,
   resetEditor,
@@ -68,6 +69,22 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
     );
     const source = readFileSync(fixturePath, "utf8");
     expect(parseTrackDocument(source).id).toBe("phase3-shared-oval");
+  });
+
+  it("rejects contradictory Python command validity and errors", () => {
+    const issue = { code: "FAILED", field: "track", message: "Invalid." };
+    expect(() =>
+      parseTrackCommandResponse(
+        { contractVersion: 1, valid: true, errors: [issue] },
+        "Track command",
+      ),
+    ).toThrow("inconsistent response");
+    expect(() =>
+      parseTrackCommandResponse(
+        { contractVersion: 1, valid: false, errors: [] },
+        "Track command",
+      ),
+    ).toThrow("inconsistent response");
   });
 });
 import { readFileSync } from "node:fs";

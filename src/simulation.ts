@@ -13,6 +13,8 @@ export interface SelectedCarTelemetryV1 {
   sensorDistances: [number, number, number, number, number, number, number];
 }
 
+const SELECTED_CAR_SENSOR_RANGE_METERS = 36;
+
 export interface VehicleSetupV1 {
   maxSpeed: number;
   acceleration: number;
@@ -261,7 +263,10 @@ export function parseSelectedCarTelemetry(
 
   return {
     selectedCarId: requiredString(record.selectedCarId, "selectedCarId"),
-    simulatedSeconds: finiteNumber(record.simulatedSeconds, "simulatedSeconds"),
+    simulatedSeconds: nonNegativeNumber(
+      record.simulatedSeconds,
+      "simulatedSeconds",
+    ),
     ...(hasPosition
       ? {
           x: finiteNumber(record.x, "x"),
@@ -269,14 +274,19 @@ export function parseSelectedCarTelemetry(
           heading: finiteNumber(record.heading, "heading"),
         }
       : {}),
-    speed: finiteNumber(record.speed, "speed"),
+    speed: nonNegativeNumber(record.speed, "speed"),
     lateralSpeed: finiteNumber(record.lateralSpeed, "lateralSpeed"),
     steering: boundedNumber(record.steering, "steering", -1, 1),
     throttle: boundedNumber(record.throttle, "throttle", 0, 1),
     brake: boundedNumber(record.brake, "brake", 0, 1),
     progress: boundedNumber(record.progress, "progress", 0, 1),
     sensorDistances: sensors.map((distance, index) =>
-      finiteNumber(distance, `sensorDistances[${String(index)}]`),
+      boundedNumber(
+        distance,
+        `sensorDistances[${String(index)}]`,
+        0,
+        SELECTED_CAR_SENSOR_RANGE_METERS,
+      ),
     ) as SelectedCarTelemetryV1["sensorDistances"],
   };
 }
@@ -289,6 +299,7 @@ export function parseSimulationPreviewResponse(
     throw new Error("Simulation response is not contract version 1.");
   }
   const errors = parseErrors(response.errors);
+  assertValidityConsistency(response.valid, errors, "Simulation response");
   if (!response.valid) {
     return { contractVersion: 1, valid: false, errors };
   }
@@ -307,19 +318,25 @@ export function parseSimulationPreviewResponse(
       controller,
       termination: requiredString(episode.termination, "termination"),
       finished: requiredBoolean(episode.finished, "finished"),
-      steps: finiteNumber(episode.steps, "steps"),
-      simulatedSeconds: finiteNumber(
+      steps: nonNegativeInteger(episode.steps, "steps"),
+      simulatedSeconds: nonNegativeNumber(
         episode.simulatedSeconds,
         "simulatedSeconds",
       ),
       progress: boundedNumber(episode.progress, "progress", 0, 1),
-      collisionCount: finiteNumber(episode.collisionCount, "collisionCount"),
+      collisionCount: nonNegativeInteger(
+        episode.collisionCount,
+        "collisionCount",
+      ),
       vehicleSetup: {
-        maxSpeed: finiteNumber(setup.maxSpeed, "maxSpeed"),
-        acceleration: finiteNumber(setup.acceleration, "acceleration"),
-        brakeStrength: finiteNumber(setup.brakeStrength, "brakeStrength"),
-        steeringAgility: finiteNumber(setup.steeringAgility, "steeringAgility"),
-        gripRecovery: finiteNumber(setup.gripRecovery, "gripRecovery"),
+        maxSpeed: positiveNumber(setup.maxSpeed, "maxSpeed"),
+        acceleration: positiveNumber(setup.acceleration, "acceleration"),
+        brakeStrength: positiveNumber(setup.brakeStrength, "brakeStrength"),
+        steeringAgility: positiveNumber(
+          setup.steeringAgility,
+          "steeringAgility",
+        ),
+        gripRecovery: positiveNumber(setup.gripRecovery, "gripRecovery"),
         frontBrakeBias: boundedNumber(
           setup.frontBrakeBias,
           "frontBrakeBias",
@@ -344,6 +361,7 @@ export function parseRunResponse(value: unknown): RunResponseV1 {
     throw new Error("Run response is not contract version 1.");
   }
   const errors = parseErrors(response.errors);
+  assertValidityConsistency(response.valid, errors, "Run response");
   if (!response.valid) {
     return { contractVersion: 1, valid: false, errors };
   }
@@ -376,6 +394,35 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
     runs: response.runs.map((value, index) => {
       const run = asRecord(value, `runs[${String(index)}]`);
       const status = parseRunStatus(run.status);
+      const generation = nonNegativeInteger(run.generation, "generation");
+      const totalGenerations = positiveInteger(
+        run.totalGenerations,
+        "totalGenerations",
+      );
+      const resumable = requiredBoolean(run.resumable, "resumable");
+      const championFitness = nullableFiniteNumber(
+        run.championFitness,
+        "championFitness",
+      );
+      const championProgress = nullableBoundedNumber(
+        run.championProgress,
+        "championProgress",
+        0,
+        1,
+      );
+      const expectedResumable = status === "running" || status === "paused";
+      const hasResult = championFitness !== null && championProgress !== null;
+      if (
+        generation > totalGenerations ||
+        (status === "completed" && generation !== totalGenerations) ||
+        (expectedResumable && generation >= totalGenerations) ||
+        resumable !== expectedResumable ||
+        (championFitness === null) !== (championProgress === null) ||
+        (expectedResumable && hasResult) ||
+        (!expectedResumable && generation > 0 && !hasResult)
+      ) {
+        throw new Error("Run library entry has inconsistent state.");
+      }
       return {
         runId: requiredString(run.runId, "runId"),
         status,
@@ -383,22 +430,11 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         trackId: requiredString(run.trackId, "trackId"),
         trackName: requiredString(run.trackName, "trackName"),
         seed: integerNumber(run.seed, "seed"),
-        generation: integerNumber(run.generation, "generation"),
-        totalGenerations: integerNumber(
-          run.totalGenerations,
-          "totalGenerations",
-        ),
-        resumable: requiredBoolean(run.resumable, "resumable"),
-        championFitness: nullableFiniteNumber(
-          run.championFitness,
-          "championFitness",
-        ),
-        championProgress: nullableBoundedNumber(
-          run.championProgress,
-          "championProgress",
-          0,
-          1,
-        ),
+        generation,
+        totalGenerations,
+        resumable,
+        championFitness,
+        championProgress,
       };
     }),
     isolated: response.isolated.map((value, index) => {
@@ -429,7 +465,7 @@ export function parseRunDocument(value: unknown): RunDocumentV1 {
   const checkpoint = asRecord(document.checkpoint, "checkpoint");
   const snapshot = parseObservationSnapshot(checkpoint.snapshot);
   const status = parseRunStatus(checkpoint.status);
-  const generation = integerNumber(checkpoint.generation, "generation");
+  const generation = nonNegativeInteger(checkpoint.generation, "generation");
   if (
     snapshot.runId !== runId ||
     snapshot.status !== status ||
@@ -535,7 +571,7 @@ export function parseObservationSnapshot(
           replay.candidateId,
           "generationReplay.candidateId",
         ),
-        frames: replay.frames.map(parseReplayFrame),
+        frames: parseReplayFrames(replay.frames, "Generation replay"),
       };
     }
   }
@@ -543,9 +579,34 @@ export function parseObservationSnapshot(
     snapshot.generationTrails === undefined
       ? undefined
       : parseGenerationTrails(snapshot.generationTrails);
+  const runId = requiredString(snapshot.runId, "runId");
+  const fitnessHistory = parseFitnessHistory(snapshot.fitnessHistory);
+  const result =
+    snapshot.result === null ? null : parseRunResult(snapshot.result);
+  const previousRuns = parsePreviousRuns(snapshot.previousRuns);
+  validateObservationResultConsistency({
+    runId,
+    status,
+    generation,
+    totalGenerations,
+    result,
+  });
+  validateObservationHistory({
+    generation,
+    generationReport,
+    fitnessHistory,
+    result,
+  });
+  validateObservationLiveState({
+    status,
+    generationInProgress,
+    activeCandidate,
+    pendingCommand,
+  });
+  validatePreviousRunConsistency(runId, result, previousRuns);
   return {
     contractVersion: 1,
-    runId: requiredString(snapshot.runId, "runId"),
+    runId,
     status,
     generation,
     totalGenerations,
@@ -555,11 +616,170 @@ export function parseObservationSnapshot(
     ...(generationReplay === undefined ? {} : { generationReplay }),
     ...(generationTrails === undefined ? {} : { generationTrails }),
     generationReport,
-    fitnessHistory: parseFitnessHistory(snapshot.fitnessHistory),
+    fitnessHistory,
     selectedCar,
-    result: snapshot.result === null ? null : parseRunResult(snapshot.result),
-    previousRuns: parsePreviousRuns(snapshot.previousRuns),
+    result,
+    previousRuns,
   };
+}
+
+function validateObservationLiveState(value: {
+  status: RunStatusV1;
+  generationInProgress: boolean | undefined;
+  activeCandidate: ObservationSnapshotV1["activeCandidate"] | undefined;
+  pendingCommand: ObservationSnapshotV1["pendingCommand"] | undefined;
+}): void {
+  if (
+    (value.generationInProgress === true && value.status !== "running") ||
+    (value.activeCandidate !== null &&
+      value.activeCandidate !== undefined &&
+      (value.generationInProgress !== true || value.status !== "running")) ||
+    (value.pendingCommand !== null &&
+      value.pendingCommand !== undefined &&
+      value.status !== "running")
+  ) {
+    throw new Error("Observation live state contradicts its run status.");
+  }
+}
+
+function validatePreviousRunConsistency(
+  runId: string,
+  result: RunResultV1 | null,
+  previousRuns: readonly PreviousRunSummaryV1[],
+): void {
+  if (result === null) {
+    if (previousRuns.length > 0) {
+      throw new Error(
+        "Non-terminal observations cannot compare previous runs.",
+      );
+    }
+    return;
+  }
+  const metadata = result.metadata;
+  const seenRunIds = new Set<string>();
+  if (
+    previousRuns.some((run) => {
+      const duplicate = seenRunIds.has(run.runId);
+      seenRunIds.add(run.runId);
+      return (
+        duplicate ||
+        run.runId === runId ||
+        run.trackId !== metadata.trackId ||
+        run.populationSize !== metadata.populationSize ||
+        run.generationsCompleted !== metadata.generationsCompleted ||
+        run.episodeSeconds !== metadata.episodeSeconds
+      );
+    })
+  ) {
+    throw new Error(
+      "Previous run comparison does not match the current evaluation budget.",
+    );
+  }
+}
+
+function validateObservationResultConsistency(value: {
+  runId: string;
+  status: RunStatusV1;
+  generation: number;
+  totalGenerations: number;
+  result: RunResultV1 | null;
+}): void {
+  const terminal = value.status === "completed" || value.status === "stopped";
+  if (!terminal && value.result !== null) {
+    throw new Error(
+      "Non-terminal observation snapshots cannot contain a result.",
+    );
+  }
+  if (terminal && value.generation > 0 && value.result === null) {
+    throw new Error(
+      "Terminal observation snapshots require a result after one generation.",
+    );
+  }
+  if (
+    value.status === "completed" &&
+    value.generation !== value.totalGenerations
+  ) {
+    throw new Error(
+      "Completed observation snapshots must include every requested generation.",
+    );
+  }
+  if (value.result === null) {
+    return;
+  }
+  const metadata = value.result.metadata;
+  if (
+    metadata.runId !== value.runId ||
+    metadata.status !== value.status ||
+    metadata.generationsCompleted !== value.generation ||
+    metadata.generationsRequested !== value.totalGenerations
+  ) {
+    throw new Error(
+      "Run result identity does not match its observation snapshot.",
+    );
+  }
+  if (value.result.replay.candidateId !== value.result.champion.candidateId) {
+    throw new Error("Run replay does not match the result champion.");
+  }
+  const [championComparison, randomComparison, pursuitComparison] =
+    value.result.baselineComparisons;
+  if (
+    value.result.baselineComparisons.length !== 3 ||
+    championComparison?.label !== "Champion" ||
+    championComparison.controller !==
+      `${metadata.algorithm}:${value.result.champion.candidateId}` ||
+    championComparison.fitness !== value.result.champion.fitness ||
+    championComparison.progress !== value.result.champion.progress ||
+    randomComparison?.label !== "Seeded random network" ||
+    randomComparison.controller !== "random-network" ||
+    pursuitComparison?.label !== "Pure Pursuit" ||
+    pursuitComparison.controller !== "pure-pursuit"
+  ) {
+    throw new Error("Run comparisons do not match their result controllers.");
+  }
+  if (
+    JSON.stringify(value.result.replay.vehicleSetup) !==
+    JSON.stringify(value.result.champion.vehicleSetup)
+  ) {
+    throw new Error("Run replay vehicle setup does not match its champion.");
+  }
+}
+
+function validateObservationHistory(value: {
+  generation: number;
+  generationReport: GenerationReportV1 | null;
+  fitnessHistory: FitnessPointV1[];
+  result: RunResultV1 | null;
+}): void {
+  if (
+    value.fitnessHistory.length !== value.generation ||
+    value.fitnessHistory.some((point, index) => point.generation !== index) ||
+    (value.generation === 0) !== (value.generationReport === null) ||
+    (value.generationReport !== null &&
+      value.generationReport.generation !== value.generation - 1)
+  ) {
+    throw new Error("Observation generation history is inconsistent.");
+  }
+  if (value.result === null) {
+    return;
+  }
+  if (
+    value.result.fitnessHistory.length !== value.fitnessHistory.length ||
+    value.result.fitnessHistory.some((point, index) => {
+      const snapshotPoint = value.fitnessHistory[index];
+      if (snapshotPoint === undefined) {
+        return true;
+      }
+      return (
+        point.generation !== snapshotPoint.generation ||
+        point.bestFitness !== snapshotPoint.bestFitness ||
+        point.medianFitness !== snapshotPoint.medianFitness
+      );
+    })
+  ) {
+    throw new Error(
+      "Run result fitness history does not match its observation.",
+    );
+  }
 }
 
 function parseGenerationReport(value: unknown): GenerationReportV1 {
@@ -574,7 +794,7 @@ function parseGenerationReport(value: unknown): GenerationReportV1 {
   return {
     contractVersion: 1,
     algorithm,
-    generation: integerNumber(report.generation, "generation"),
+    generation: nonNegativeInteger(report.generation, "generation"),
     championId: requiredString(report.championId, "championId"),
     bestFitness: finiteNumber(report.bestFitness, "bestFitness"),
     medianFitness: finiteNumber(report.medianFitness, "medianFitness"),
@@ -582,7 +802,10 @@ function parseGenerationReport(value: unknown): GenerationReportV1 {
       ? {
           meanFitness: finiteNumber(report.meanFitness, "meanFitness"),
           worstFitness: finiteNumber(report.worstFitness, "worstFitness"),
-          finishedCount: integerNumber(report.finishedCount, "finishedCount"),
+          finishedCount: nonNegativeInteger(
+            report.finishedCount,
+            "finishedCount",
+          ),
         }
       : {}),
     results: report.results.map((value, index) => {
@@ -592,8 +815,11 @@ function parseGenerationReport(value: unknown): GenerationReportV1 {
         fitness: finiteNumber(item.fitness, "fitness"),
         progress: boundedNumber(item.progress, "progress", 0, 1),
         finished: requiredBoolean(item.finished, "finished"),
-        collisionCount: integerNumber(item.collisionCount, "collisionCount"),
-        steps: integerNumber(item.steps, "steps"),
+        collisionCount: nonNegativeInteger(
+          item.collisionCount,
+          "collisionCount",
+        ),
+        steps: nonNegativeInteger(item.steps, "steps"),
       };
     }),
   };
@@ -606,7 +832,7 @@ function parseFitnessHistory(value: unknown): FitnessPointV1[] {
   return value.map((point, index) => {
     const record = asRecord(point, `fitnessHistory[${String(index)}]`);
     return {
-      generation: integerNumber(record.generation, "generation"),
+      generation: nonNegativeInteger(record.generation, "generation"),
       bestFitness: finiteNumber(record.bestFitness, "bestFitness"),
       medianFitness: finiteNumber(record.medianFitness, "medianFitness"),
     };
@@ -629,6 +855,14 @@ function parseRunResult(value: unknown): RunResultV1 {
   ) {
     throw new Error("Run result arrays are missing.");
   }
+  const sampleEverySteps = integerNumber(
+    replay.sampleEverySteps,
+    "sampleEverySteps",
+  );
+  if (sampleEverySteps < 1) {
+    throw new Error("Replay sampleEverySteps must be a positive integer.");
+  }
+  const replayFrames = parseReplayFrames(replay.frames, "Run replay");
   const genome = asRecord(champion.genome, "Champion genome");
   return {
     metadata: {
@@ -640,28 +874,31 @@ function parseRunResult(value: unknown): RunResultV1 {
       trackId: requiredString(metadata.trackId, "trackId"),
       trackName: requiredString(metadata.trackName, "trackName"),
       trackSha256: requiredString(metadata.trackSha256, "trackSha256"),
-      populationSize: integerNumber(metadata.populationSize, "populationSize"),
-      generationsRequested: integerNumber(
+      populationSize: positiveInteger(
+        metadata.populationSize,
+        "populationSize",
+      ),
+      generationsRequested: positiveInteger(
         metadata.generationsRequested,
         "generationsRequested",
       ),
-      generationsCompleted: integerNumber(
+      generationsCompleted: nonNegativeInteger(
         metadata.generationsCompleted,
         "generationsCompleted",
       ),
-      episodeSeconds: finiteNumber(metadata.episodeSeconds, "episodeSeconds"),
-      fixedTimeStep: finiteNumber(metadata.fixedTimeStep, "fixedTimeStep"),
-      simulationContractVersion: integerNumber(
+      episodeSeconds: positiveNumber(metadata.episodeSeconds, "episodeSeconds"),
+      fixedTimeStep: positiveNumber(metadata.fixedTimeStep, "fixedTimeStep"),
+      simulationContractVersion: requiredVersion(
         metadata.simulationContractVersion,
-        "simulationContractVersion",
+        "simulation contract",
       ),
-      evolutionContractVersion: integerNumber(
+      evolutionContractVersion: requiredVersion(
         metadata.evolutionContractVersion,
-        "evolutionContractVersion",
+        "evolution contract",
       ),
-      observationContractVersion: integerNumber(
+      observationContractVersion: requiredVersion(
         metadata.observationContractVersion,
-        "observationContractVersion",
+        "observation contract",
       ),
     },
     fitnessHistory: parseFitnessHistory(result.fitnessHistory),
@@ -680,23 +917,23 @@ function parseRunResult(value: unknown): RunResultV1 {
         fitness: finiteNumber(item.fitness, "fitness"),
         progress: boundedNumber(item.progress, "progress", 0, 1),
         finished: requiredBoolean(item.finished, "finished"),
-        collisionCount: integerNumber(item.collisionCount, "collisionCount"),
-        steps: integerNumber(item.steps, "steps"),
+        collisionCount: nonNegativeInteger(
+          item.collisionCount,
+          "collisionCount",
+        ),
+        steps: nonNegativeInteger(item.steps, "steps"),
       };
     }),
     replay: {
       contractVersion: requiredVersion(replay.contractVersion, "replay"),
       candidateId: requiredString(replay.candidateId, "candidateId"),
-      sampleEverySteps: integerNumber(
-        replay.sampleEverySteps,
-        "sampleEverySteps",
-      ),
+      sampleEverySteps,
       vehicleSetup: parseVehicleSetup(replay.vehicleSetup),
       controllerParameters: replay.controllerParameters.map((parameter) =>
         finiteNumber(parameter, "controllerParameters"),
       ),
       termination: requiredString(replay.termination, "termination"),
-      frames: replay.frames.map(parseReplayFrame),
+      frames: replayFrames,
     },
   };
 }
@@ -716,7 +953,10 @@ function parseGenerationTrails(value: unknown): GenerationTrailV1[] {
         trail.candidateId,
         "generationTrail.candidateId",
       ),
-      generation: integerNumber(trail.generation, "generationTrail.generation"),
+      generation: nonNegativeInteger(
+        trail.generation,
+        "generationTrail.generation",
+      ),
       points: trail.points.map((point) => {
         if (!Array.isArray(point) || point.length !== 2) {
           throw new Error("Generation trail point must contain x and y.");
@@ -737,13 +977,40 @@ function parseReplayFrame(value: unknown): ReplayFrameV1 {
     x: finiteNumber(frame.x, "x"),
     y: finiteNumber(frame.y, "y"),
     heading: finiteNumber(frame.heading, "heading"),
-    speed: finiteNumber(frame.speed, "speed"),
+    speed: nonNegativeNumber(frame.speed, "speed"),
     lateralSpeed: finiteNumber(frame.lateralSpeed, "lateralSpeed"),
     steering: boundedNumber(frame.steering, "steering", -1, 1),
     throttle: boundedNumber(frame.throttle, "throttle", 0, 1),
     brake: boundedNumber(frame.brake, "brake", 0, 1),
     progress: boundedNumber(frame.progress, "progress", 0, 1),
   };
+}
+
+function parseReplayFrames(
+  values: unknown[],
+  label: "Generation replay" | "Run replay",
+): ReplayFrameV1[] {
+  if (values.length === 0) {
+    throw new Error(`${label} must contain at least one frame.`);
+  }
+  const frames = values.map(parseReplayFrame);
+  for (let index = 0; index < frames.length; index += 1) {
+    const frame = frames[index];
+    if (frame === undefined) {
+      continue;
+    }
+    if (frame.simulatedSeconds < 0) {
+      throw new Error(`${label} frame times cannot be negative.`);
+    }
+    const previous = frames[index - 1];
+    if (
+      previous !== undefined &&
+      frame.simulatedSeconds <= previous.simulatedSeconds
+    ) {
+      throw new Error(`${label} frame times must be strictly increasing.`);
+    }
+  }
+  return frames;
 }
 
 function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
@@ -757,12 +1024,12 @@ function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
       algorithm: parseAlgorithm(run.algorithm),
       trackId: requiredString(run.trackId, "trackId"),
       seed: integerNumber(run.seed, "seed"),
-      generationsCompleted: integerNumber(
+      generationsCompleted: nonNegativeInteger(
         run.generationsCompleted,
         "generationsCompleted",
       ),
-      populationSize: integerNumber(run.populationSize, "populationSize"),
-      episodeSeconds: finiteNumber(run.episodeSeconds, "episodeSeconds"),
+      populationSize: positiveInteger(run.populationSize, "populationSize"),
+      episodeSeconds: positiveNumber(run.episodeSeconds, "episodeSeconds"),
       championFitness: finiteNumber(run.championFitness, "championFitness"),
       championProgress: boundedNumber(
         run.championProgress,
@@ -777,11 +1044,11 @@ function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
 function parseVehicleSetup(value: unknown): VehicleSetupV1 {
   const setup = asRecord(value, "Vehicle setup");
   return {
-    maxSpeed: finiteNumber(setup.maxSpeed, "maxSpeed"),
-    acceleration: finiteNumber(setup.acceleration, "acceleration"),
-    brakeStrength: finiteNumber(setup.brakeStrength, "brakeStrength"),
-    steeringAgility: finiteNumber(setup.steeringAgility, "steeringAgility"),
-    gripRecovery: finiteNumber(setup.gripRecovery, "gripRecovery"),
+    maxSpeed: positiveNumber(setup.maxSpeed, "maxSpeed"),
+    acceleration: positiveNumber(setup.acceleration, "acceleration"),
+    brakeStrength: positiveNumber(setup.brakeStrength, "brakeStrength"),
+    steeringAgility: positiveNumber(setup.steeringAgility, "steeringAgility"),
+    gripRecovery: positiveNumber(setup.gripRecovery, "gripRecovery"),
     frontBrakeBias: boundedNumber(setup.frontBrakeBias, "frontBrakeBias", 0, 1),
     frontDriveBias: boundedNumber(setup.frontDriveBias, "frontDriveBias", 0, 1),
   };
@@ -813,9 +1080,9 @@ function parseRunSettings(value: unknown): RunSetupV1["settings"] {
   const settings = asRecord(value, "Run settings");
   return {
     algorithm: parseAlgorithm(settings.algorithm),
-    populationSize: integerNumber(settings.populationSize, "populationSize"),
-    generations: integerNumber(settings.generations, "generations"),
-    episodeSeconds: finiteNumber(settings.episodeSeconds, "episodeSeconds"),
+    populationSize: positiveInteger(settings.populationSize, "populationSize"),
+    generations: positiveInteger(settings.generations, "generations"),
+    episodeSeconds: positiveNumber(settings.episodeSeconds, "episodeSeconds"),
     seed: integerNumber(settings.seed, "seed"),
   };
 }
@@ -862,6 +1129,16 @@ function parseErrors(
   });
 }
 
+function assertValidityConsistency(
+  valid: boolean,
+  errors: readonly unknown[],
+  label: string,
+): void {
+  if (valid !== (errors.length === 0)) {
+    throw new Error(`${label} has inconsistent validity and errors.`);
+  }
+}
+
 function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error(`${label} must be an object.`);
@@ -870,7 +1147,7 @@ function asRecord(value: unknown, label: string): Record<string, unknown> {
 }
 
 function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || value.length === 0) {
+  if (typeof value !== "string" || value.trim().length === 0) {
     throw new Error(`${field} must be a non-empty string.`);
   }
   return value;
@@ -898,6 +1175,38 @@ function integerNumber(value: unknown, field: string): number {
   const number = finiteNumber(value, field);
   if (!Number.isInteger(number)) {
     throw new Error(`${field} must be an integer.`);
+  }
+  return number;
+}
+
+function nonNegativeNumber(value: unknown, field: string): number {
+  const number = finiteNumber(value, field);
+  if (number < 0) {
+    throw new Error(`${field} cannot be negative.`);
+  }
+  return number;
+}
+
+function positiveNumber(value: unknown, field: string): number {
+  const number = finiteNumber(value, field);
+  if (number <= 0) {
+    throw new Error(`${field} must be positive.`);
+  }
+  return number;
+}
+
+function nonNegativeInteger(value: unknown, field: string): number {
+  const number = integerNumber(value, field);
+  if (number < 0) {
+    throw new Error(`${field} cannot be negative.`);
+  }
+  return number;
+}
+
+function positiveInteger(value: unknown, field: string): number {
+  const number = integerNumber(value, field);
+  if (number < 1) {
+    throw new Error(`${field} must be a positive integer.`);
   }
   return number;
 }

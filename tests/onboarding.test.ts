@@ -9,6 +9,7 @@ import {
   createInitialState,
   getPresentationIssues,
   maximumCandidateEpisodes,
+  startFailurePresentation,
   transition,
   type SetupValidationResponse,
 } from "../src/onboarding";
@@ -55,11 +56,16 @@ describe("Phase 1 onboarding contract", () => {
     expect(canRequestReview(state)).toBe(true);
     expect(canStartSession(state)).toBe(false);
 
-    state = transition(state, { type: "validation-started" });
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
     expect(canStartSession(state)).toBe(false);
 
     state = transition(state, {
       type: "validation-received",
+      draft: reviewedDraft,
       response: fixture.response,
     });
     expect(canStartSession(state)).toBe(true);
@@ -71,8 +77,14 @@ describe("Phase 1 onboarding contract", () => {
       type: "select-track",
       trackPreset: "easy-oval",
     });
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
     state = transition(state, {
       type: "validation-received",
+      draft: reviewedDraft,
       response: fixture.response,
     });
 
@@ -90,8 +102,14 @@ describe("Phase 1 onboarding contract", () => {
       type: "select-track",
       trackPreset: "easy-oval",
     });
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
     state = transition(state, {
       type: "validation-received",
+      draft: reviewedDraft,
       response: fixture.response,
     });
     state = transition(state, { type: "start-session" });
@@ -108,6 +126,70 @@ describe("Phase 1 onboarding contract", () => {
     );
   });
 
+  it("returns a rejected Start to Review and requires fresh validation", () => {
+    let state = createInitialState();
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
+    state = transition(state, {
+      type: "validation-received",
+      draft: reviewedDraft,
+      response: fixture.response,
+    });
+    state = transition(state, { type: "start-session" });
+    state = transition(state, {
+      type: "start-session-rejected",
+      response: {
+        contractVersion: 1,
+        valid: false,
+        errors: [
+          {
+            code: "START_REJECTED",
+            field: "settings",
+            message: "The local core rejected this reviewed setup.",
+          },
+        ],
+      },
+    });
+
+    expect(state.route).toBe("review");
+    expect(state.sessionStarted).toBe(false);
+    expect(state.startFailure).toEqual({
+      kind: "rejected",
+      message: "The local core rejected this reviewed setup.",
+    });
+    expect(canStartSession(state)).toBe(false);
+  });
+
+  it("returns an unconfirmed Start to Review without discarding valid setup", () => {
+    let state = createInitialState();
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
+    state = transition(state, {
+      type: "validation-received",
+      draft: reviewedDraft,
+      response: fixture.response,
+    });
+    state = transition(state, { type: "start-session" });
+    state = transition(state, {
+      type: "start-session-unconfirmed",
+      message: "Run start failed with status 503.",
+    });
+
+    expect(state.route).toBe("review");
+    expect(state.sessionStarted).toBe(false);
+    expect(state.startFailure).toEqual({
+      kind: "unconfirmed",
+      message: "Run start failed with status 503.",
+    });
+    expect(canStartSession(state)).toBe(true);
+  });
+
   it("rejects invalid numeric settings before authoritative validation", () => {
     let state = createInitialState();
     state = transition(state, {
@@ -122,6 +204,55 @@ describe("Phase 1 onboarding contract", () => {
       message: "populationSize must be a whole number from 10 to 500.",
     });
     expect(canRequestReview(state)).toBe(false);
+  });
+
+  it("ignores a validation response after the reviewed setup changes", () => {
+    let state = createInitialState();
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
+    state = transition(state, {
+      type: "set-number",
+      field: "populationSize",
+      value: 24,
+    });
+
+    const changed = state;
+    state = transition(state, {
+      type: "validation-received",
+      draft: reviewedDraft,
+      response: fixture.response,
+    });
+
+    expect(state).toBe(changed);
+    expect(state.validation.status).toBe("not-checked");
+    expect(canStartSession(state)).toBe(false);
+  });
+
+  it("cancels an in-flight validation when the user leaves Review", () => {
+    let state = createInitialState();
+    const reviewedDraft = state.draft;
+    state = transition(state, {
+      type: "validation-started",
+      draft: reviewedDraft,
+    });
+
+    state = transition(state, { type: "navigate", route: "track" });
+    expect(state.route).toBe("track");
+    expect(state.validation.status).toBe("not-checked");
+
+    const leftReview = state;
+    state = transition(state, {
+      type: "validation-received",
+      draft: reviewedDraft,
+      response: fixture.response,
+    });
+
+    expect(state).toBe(leftReview);
+    expect(state.route).toBe("track");
+    expect(canStartSession(state)).toBe(false);
   });
 
   it("does not expose Training or Results before a session starts", () => {
@@ -147,6 +278,22 @@ describe("Phase 1 onboarding contract", () => {
     expect(restored.sessionStarted).toBe(true);
     expect(restored.draft).toEqual(fixture.request);
   });
+
+  it("opens a terminal saved run directly on Results", () => {
+    const initial = createInitialState();
+    const restored = transition(initial, {
+      type: "restore-results",
+      draft: fixture.request,
+    });
+
+    expect(restored.route).toBe("results");
+    expect(restored.sessionStarted).toBe(true);
+    expect(restored.draft).toEqual(fixture.request);
+    expect(restored.validation).toEqual({
+      status: "checked",
+      response: { contractVersion: 1, valid: true, errors: [] },
+    });
+  });
 });
 
 describe("setup validation transport errors", () => {
@@ -171,5 +318,48 @@ describe("setup validation transport errors", () => {
     expect(serviceUnavailableResponse().errors[0]?.code).toBe(
       "SERVICE_UNAVAILABLE",
     );
+  });
+
+  it("preserves invalid-response and connection details", () => {
+    expect(
+      serviceUnavailableResponse(
+        new Error("Local validation returned invalid JSON."),
+      ).errors[0],
+    ).toEqual({
+      code: "LOCAL_VALIDATION_RESPONSE_INVALID",
+      field: "service",
+      message: "Local validation returned invalid JSON.",
+    });
+    expect(
+      serviceUnavailableResponse(
+        new Error("Local validation returned an inconsistent response."),
+      ).errors[0]?.code,
+    ).toBe("LOCAL_VALIDATION_RESPONSE_INVALID");
+    expect(
+      serviceUnavailableResponse(
+        new Error(
+          "Local validation could not reach the local service. fetch failed",
+        ),
+      ).errors[0],
+    ).toEqual({
+      code: "SERVICE_UNAVAILABLE",
+      field: "service",
+      message:
+        "Local validation could not reach the local service. fetch failed",
+    });
+  });
+});
+
+describe("start failure presentation", () => {
+  it("distinguishes a definitive rejection from an unknown transport outcome", () => {
+    expect(
+      startFailurePresentation({ kind: "rejected", message: "Rejected." }),
+    ).toMatchObject({ badge: "Start rejected" });
+    expect(
+      startFailurePresentation({
+        kind: "unconfirmed",
+        message: "Connection closed.",
+      }),
+    ).toMatchObject({ badge: "Start unconfirmed" });
   });
 });

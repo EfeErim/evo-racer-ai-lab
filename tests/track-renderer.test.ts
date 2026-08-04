@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import {
+  parseCompiledTrack,
   parsePresetTracksResponse,
   renderTrackSvg,
   type CompiledTrackV1,
@@ -86,5 +87,49 @@ describe("Phase 2 Python geometry renderer", () => {
     expect(() =>
       parsePresetTracksResponse({ contractVersion: 2, presets: [] }),
     ).toThrow("invalid track geometry contract");
+
+    for (const geometryPatch of [
+      { centerline: [] },
+      { leftBoundary: [] },
+      { rightBoundary: [] },
+      { checkpoints: [] },
+    ]) {
+      expect(() =>
+        parseCompiledTrack({
+          ...fixture.compiled,
+          geometry: { ...fixture.compiled.geometry, ...geometryPatch },
+        }),
+      ).toThrow("invalid response");
+    }
+
+    expect(() =>
+      parseCompiledTrack({
+        ...fixture.compiled,
+        track: { ...fixture.compiled.track, roadWidth: 0 },
+      }),
+    ).toThrow("invalid response");
+    expect(() =>
+      parseCompiledTrack({
+        ...fixture.compiled,
+        track: { ...fixture.compiled.track, name: "   " },
+      }),
+    ).toThrow("invalid response");
+
+    expect(() =>
+      parseCompiledTrack({
+        ...fixture.compiled,
+        geometry: {
+          ...fixture.compiled.geometry,
+          leftBoundary: [
+            [-1e308, 0],
+            [-1e308, 1],
+          ],
+          rightBoundary: [
+            [1e308, 0],
+            [1e308, 1],
+          ],
+        },
+      }),
+    ).toThrow("invalid response");
   });
 });
