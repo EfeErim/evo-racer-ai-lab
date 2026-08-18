@@ -1,5 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const e2ePort = process.env.EVORACER_E2E_PORT ?? "8765";
+const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -7,7 +10,7 @@ export default defineConfig({
   expect: { timeout: 15_000 },
   reporter: "line",
   use: {
-    baseURL: "http://127.0.0.1:8765",
+    baseURL: e2eBaseUrl,
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -20,7 +23,7 @@ export default defineConfig({
   webServer: {
     command:
       "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-e2e.ps1",
-    url: "http://127.0.0.1:8765/health",
+    url: `${e2eBaseUrl}/health`,
     reuseExistingServer: false,
     timeout: 30_000,
   },

@@ -42,6 +42,10 @@ For the simplest first run:
 2. Wait for **Configuration valid** on Review.
 3. Read the frozen track and settings, then choose **Start training**.
 
+Welcome also summarizes the complete player loop before any setup choice:
+choose a track, watch evolution, and compare the champion. This introduction is
+only guidance; it does not create or start a run.
+
 Choose **Customize setup** instead when you want a different track or training
 plan. That path is:
 
@@ -76,22 +80,34 @@ Select **Open Track Builder** on the Track screen. The workspace has three
 focused tabs:
 
 - **Build** provides a large Python-compiled preview, track name and road-width
-  controls, a readable piece palette, reorder/duplicate/delete actions,
-  undo/redo/reset, and Python-assisted closure. Python revalidates the canonical
-  draft after each edit and shows stable issue codes when the loop is invalid.
-- **Generate** creates a deterministic track from seed, length, and difficulty.
-  Generation produces a verified preview; choose **Use this track** explicitly
-  to apply it to the experiment or **Edit pieces** to continue in Build.
+  controls, and a compact piece tray beside the connected circuit. Drag a tray
+  piece onto any glowing connector to snap it into that position; drag a placed
+  piece to another connector to reorder it. Clicking a tray piece still adds it
+  at the end, and move/duplicate/delete plus undo/redo/reset remain available for
+  keyboard and precise editing. Python revalidates the canonical draft after
+  every snap or edit and shows stable issue codes when the loop is invalid.
+- **Generate** creates and immediately selects a deterministic track from seed,
+  length, and difficulty. Generator v4 pairs two different compatible half laps
+  instead of repeating one half twice, producing asymmetric closed circuits.
+  Easy mixes flowing 45-degree and 90-degree corners, Technical includes
+  direction changes and chicanes, and Hard includes both chicanes and hairpins.
+  The result shows its seed, layout, straight/corner counts, special features,
+  and an **Active for Review and Start** confirmation. Choose **Edit pieces** to
+  continue in Build.
 - **Library** imports versioned TrackV1 JSON and manages atomically saved local
   tracks. Saved tracks can be selected, edited, exported, or deleted after a
   confirmation.
 
 With a keyboard, Left Arrow and Right Arrow move between Builder tabs; Home and
 End move to the first and last tab. Opening the Builder moves focus to its
-heading, and closing it returns focus to **Open Track Builder**.
+heading, closing it returns focus to **Open Track Builder**, and reopening it
+returns to the last-used tool instead of replacing a generated result with the
+starter Build draft.
 
-Builder drafts and generated/imported previews never select themselves. A
-custom track enters the setup only after **Use this track** is pressed.
+Builder drafts and imported previews never select themselves. A successful
+**Generate & use track** result is the exception: it becomes the active setup
+track immediately and is identified by **Active experiment track** and
+**Active for Review and Start**.
 
 Every source passes through the same Python compiler and validator before it can
 be selected. An invalid import is rejected with a stable error instead of being
@@ -159,11 +175,26 @@ moving from live Python snapshots. After that generation completes, the panel
 continuously plays the latest Python generation champion at `2x` simulated
 speed. The browser fills only the visual frames between recorded Python
 positions, so motion stays smooth while training continues at full speed.
-As new generations finish, the track keeps up to seven earlier champion paths
-as an **Evolution trail**. Older paths are fainter, so the newest route is easy
-to compare with earlier attempts. Up to eight sampled paths are saved with the
-run, so reopening that same run restores its own trail without inheriting paths
-from another experiment.
+The displayed champion's complete Python-recorded route is the solid green
+**Displayed champion** path. As new generations finish, the track keeps up to
+seven earlier champion paths as faint dashed context below the road markings.
+Off-road sections remain visible instead of being snapped back onto the track.
+Up to eight sampled paths are saved with the run, so reopening that same run
+restores its own comparison without inheriting paths from another experiment.
+
+Detailed speed, controller-output, and road-edge sensor telemetry is collapsed
+under the selected-car summary by default. Open that summary whenever you want
+the full six-metric and seven-sensor inspection view; closing it keeps the race
+and generation progress as the primary workspace.
+
+Use **Reduce motion** in the top bar to hold replay and interpolated car motion
+still without pausing or changing Python evaluation. If Windows Reduce Motion is
+already enabled, EvoRacer applies it automatically and labels the control
+**Motion reduced by Windows**. This setting changes presentation only; it cannot
+alter a candidate, physics step, fitness value, or deterministic result. The
+static marker uses the replay's final recorded frame, while the complete path
+remains visible.
+
 If the EvoRacer tab is in the background, training still runs at full speed but
 the interface checks for new observations less often. Returning to the tab
 triggers an immediate refresh; no manual catch-up or resume action is needed.
@@ -202,26 +233,37 @@ manage the experiment only; they do not drive the vehicle.
 
 Results contain:
 
-- run identity, algorithm, seed, track hash, and completed generation count;
-- best and median fitness history;
-- the champion compared with a seeded random network and Pure Pursuit using the
-  champion's vehicle setup; and
+- a first-screen verdict answering whether fitness improved, whether the
+  champion finished, and whether it matched the geometric ideal-line benchmark;
+- a solid green recorded champion path overlaid with a dashed cyan
+  minimum-curvature reference calculated by Python;
+- best and median fitness history plus the champion compared with a seeded
+  random network and Pure Pursuit using the champion's vehicle setup;
+- run identity, algorithm, seed, track hash, and completed generation count
+  under **Run details**; and
 - earlier saved champions only when their track, population, generation budget,
-  completed generations, and episode duration match; and
-- a Python-recorded replay with motion, controller outputs, and fixed vehicle
-  values.
+  completed generations, and episode duration match.
+
+The **Ideal-line match** is intentionally strict. Python reports the mean and
+95th-percentile distance between the recorded champion and its deterministic
+minimum-curvature reference. A match requires the champion to finish the lap
+and stay within both displayed tolerances. This geometric reference is useful
+for comparison, but it is not proof of the globally fastest possible lap; a
+true minimum-time solution would also optimize the speed profile and vehicle
+dynamics.
 
 Fitness values are meaningful only under the recorded track, settings, and
 fitness contract. A short smoke run verifies execution and reproducibility; it
 does not establish that one algorithm generally learns better.
 
-Replay opens on the first recorded Python frame. **Previous**, **Next**, and
-**Restart** stay within the available frame range, including a one-frame
-replay. Empty replays, non-positive sampling intervals, negative times, and
-frames whose simulated times do not increase are treated as corrupt local run
-data instead of being animated. When a Saved results record fails this check,
-its exact replay error is shown while the valid run library remains available
-for another action.
+Results plays the Python-recorded champion automatically at `1x` simulated
+speed and fills visual positions between its timestamped frames. **Reduce
+motion** in the top bar holds the final frame without hiding either route.
+Empty replays, non-positive sampling intervals, negative times, and frames whose
+simulated times do not increase are treated as corrupt local run data instead
+of being animated. When a Saved results record fails this check, its exact
+replay error is shown while the valid run library remains available for another
+action.
 
 ## Saved runs and local data
 

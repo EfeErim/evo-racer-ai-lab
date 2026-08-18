@@ -9,6 +9,10 @@
 ## Required workflow
 
 - Use `.agents/skills/build-evo-racer/SKILL.md` for planning, implementation, review, testing, packaging, or phase-completion work in this repository.
+- Use `.agents/skills/improve-evo-racer-ux/SKILL.md` together with the build
+  skill for UI/UX audits, player-facing research, interaction redesign,
+  accessibility work, browser verification, or any claim that the application
+  is easy to understand or use.
 - Read `PROJECT_STATE.md` before changing code or declaring a milestone complete.
 - Complete the current phase and its gate before starting a later phase.
 - Update `PROJECT_STATE.md` only after recording concrete verification evidence.

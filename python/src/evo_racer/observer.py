@@ -32,6 +32,7 @@ from evo_racer.neat_evolution import (
     create_neat_population,
 )
 from evo_racer.onboarding import validate_setup
+from evo_racer.racing_line import compare_with_reference, minimum_curvature_reference
 from evo_racer.run_library import (
     RUN_DOCUMENT_KIND,
     RUN_SCHEMA_VERSION,
@@ -493,6 +494,16 @@ class RunSession:
         )
         self.status = status
         max_steps = round(self.settings.episode_seconds / FIXED_TIME_STEP)
+        racing_line_reference = minimum_curvature_reference(
+            self.geometry.centerline,
+            self.geometry.road_width,
+        )
+        racing_line_comparison = compare_with_reference(
+            racing_line_reference,
+            tuple((frame.state.x, frame.state.y) for frame in replay_episode.telemetry),
+            road_width=self.geometry.road_width,
+            champion_finished=replay_episode.finished,
+        )
         self.result = {
             "metadata": {
                 "contractVersion": OBSERVATION_CONTRACT_VERSION,
@@ -532,6 +543,7 @@ class RunSession:
                 _comparison_payload("Seeded random network", random_episode, max_steps),
                 _comparison_payload("Pure Pursuit", pursuit_episode, max_steps),
             ],
+            "racingLineComparison": racing_line_comparison,
             "replay": {
                 "contractVersion": OBSERVATION_CONTRACT_VERSION,
                 "candidateId": candidate.candidate_id,
@@ -816,13 +828,9 @@ def parse_observation_snapshot(payload: object) -> dict[str, object]:
     if not terminal and result is not None:
         raise ValueError("Non-terminal observation snapshots cannot contain a result.")
     if terminal and generation > 0 and result is None:
-        raise ValueError(
-            "Terminal observation snapshots require a result after one generation."
-        )
+        raise ValueError("Terminal observation snapshots require a result after one generation.")
     if status == "completed" and generation != total:
-        raise ValueError(
-            "Completed observation snapshots must include every requested generation."
-        )
+        raise ValueError("Completed observation snapshots must include every requested generation.")
     if result is not None and not isinstance(result, dict):
         raise ValueError("Observation snapshot result must be an object or null.")
     if isinstance(result, dict):
@@ -836,9 +844,7 @@ def parse_observation_snapshot(payload: object) -> dict[str, object]:
             or metadata.get("generationsCompleted") != generation
             or metadata.get("generationsRequested") != total
         ):
-            raise ValueError(
-                "Run result identity does not match its observation snapshot."
-            )
+            raise ValueError("Run result identity does not match its observation snapshot.")
         if (
             not isinstance(champion, dict)
             or not isinstance(replay, dict)
@@ -863,7 +869,7 @@ def parse_observation_snapshot(payload: object) -> dict[str, object]:
         ):
             raise ValueError("Observation snapshot generation history is inconsistent.")
     report = payload.get("generationReport")
-    if (generation == 0):
+    if generation == 0:
         if report is not None:
             raise ValueError("Observation snapshot generation history is inconsistent.")
     elif not isinstance(report, dict) or report.get("generation") != generation - 1:
@@ -961,6 +967,11 @@ def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
         "generationReplay",
     }
     projection = {key: value for key, value in snapshot.items() if key not in transient}
+    result = projection.get("result")
+    if isinstance(result, dict):
+        projection["result"] = {
+            key: value for key, value in result.items() if key != "racingLineComparison"
+        }
     selected = projection.get("selectedCar")
     if isinstance(selected, dict):
         projection["selectedCar"] = {

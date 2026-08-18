@@ -84,6 +84,8 @@ export function renderTrackSvg(
   compiled: CompiledTrackV1,
   marker?: TrackMarker,
   trails: readonly TrackTrail[] = [],
+  currentTrail?: TrackTrail,
+  referenceLine?: TrackTrail,
 ): string {
   const points = [
     ...compiled.geometry.leftBoundary,
@@ -107,9 +109,6 @@ export function renderTrackSvg(
       preserveAspectRatio="xMidYMid meet"
     >
       <path class="track-road" d="${pathData(compiled.geometry.centerline)}" pathLength="100" />
-      <path class="track-centerline" d="${pathData(compiled.geometry.centerline)}" pathLength="100" />
-      <path class="track-boundary" d="${pathData(compiled.geometry.leftBoundary)}" />
-      <path class="track-boundary" d="${pathData(compiled.geometry.rightBoundary)}" />
       <g class="generation-trails" aria-hidden="true">
         ${trails
           .filter((trail) => trail.points.length > 1)
@@ -125,6 +124,31 @@ export function renderTrackSvg(
           )
           .join("")}
       </g>
+      <path class="track-centerline" d="${pathData(compiled.geometry.centerline)}" pathLength="100" />
+      <path class="track-boundary" d="${pathData(compiled.geometry.leftBoundary)}" />
+      <path class="track-boundary" d="${pathData(compiled.geometry.rightBoundary)}" />
+      ${
+        referenceLine === undefined || referenceLine.points.length <= 1
+          ? ""
+          : `
+            <path
+              class="ideal-racing-line"
+              data-reference-method="${escapeAttribute(referenceLine.candidateId)}"
+              d="${pathData(referenceLine.points)}"
+            />
+          `
+      }
+      ${
+        currentTrail === undefined || currentTrail.points.length <= 1
+          ? ""
+          : `
+            <path
+              class="current-generation-path"
+              data-current-candidate="${escapeAttribute(currentTrail.candidateId)}"
+              d="${pathData(currentTrail.points)}"
+            />
+          `
+      }
       <line
         class="track-start-line"
         x1="${formatNumber(compiled.geometry.checkpoints[0]?.left[0] ?? 0)}"
@@ -151,9 +175,9 @@ export function renderTrackSvg(
 
 function trailOpacity(index: number, total: number): string {
   if (total <= 1) {
-    return "0.62";
+    return "0.28";
   }
-  return formatNumber(0.16 + (index / (total - 1)) * 0.46);
+  return formatNumber(0.08 + (index / (total - 1)) * 0.2);
 }
 
 function pathData(points: readonly TrackPoint[]): string {

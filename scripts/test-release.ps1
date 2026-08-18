@@ -345,13 +345,28 @@ try {
         -TimeoutSec 15
     $generatedKinds = @($generated.compiled.track.pieces | ForEach-Object { $_.kind })
     $generatedHairpins = @($generatedKinds | Where-Object { $_ -like "hairpin-*" })
-    if ($generated.valid -ne $true -or
-        $generated.generatorVersion -ne 2 -or
-        @($generated.compiled.track.pieces).Count -ne 24 -or
-        $generatedHairpins.Count -eq 0) {
-        throw "The packaged generator v2 did not produce the expected verified hard layout."
+    $generatedChicanes = @($generatedKinds | Where-Object { $_ -like "chicane-*" })
+    $halfLength = [int] ($generatedKinds.Count / 2)
+    $generatedFirstHalf = @($generatedKinds[0..($halfLength - 1)] | ForEach-Object {
+        if ($_ -eq "start-finish") { "straight-short" } else { $_ }
+    })
+    $generatedSecondHalf = @($generatedKinds[$halfLength..($generatedKinds.Count - 1)])
+    $halfDifferences = 0
+    for ($pieceIndex = 0; $pieceIndex -lt $halfLength; $pieceIndex += 1) {
+        if ($generatedFirstHalf[$pieceIndex] -ne $generatedSecondHalf[$pieceIndex]) {
+            $halfDifferences += 1
+        }
     }
-    Write-Host "Packaged Track Builder: open preview, repair, and generator v2 verified."
+    if ($generated.valid -ne $true -or
+        $generated.generatorVersion -ne 4 -or
+        @($generated.compiled.track.pieces).Count -ne 24 -or
+        $generatedHairpins.Count -eq 0 -or
+        $generatedChicanes.Count -eq 0 -or
+        $generated.features.layout -ne "asymmetric" -or
+        $halfDifferences -lt 2) {
+        throw "The packaged generator v4 did not produce the expected asymmetric hard layout."
+    }
+    Write-Host "Packaged Track Builder: open preview, repair, and generator v4 verified."
 
     $startPayload = @{
         contractVersion = 1
@@ -429,9 +444,17 @@ try {
         -RunId $runId `
         -TargetGeneration 3 `
         -ExpectedStatus "completed"
+    $racingLineComparison = $completed.snapshot.result.racingLineComparison
+    $referenceLine = @($racingLineComparison.referenceLine)
     if (-not $completed.valid -or
         $completed.snapshot.status -ne "completed" -or
-        $completed.snapshot.result.replay.frames.Count -eq 0) {
+        $completed.snapshot.result.replay.frames.Count -eq 0 -or
+        $racingLineComparison.contractVersion -ne 1 -or
+        $racingLineComparison.method -ne "minimum-curvature-v1" -or
+        $referenceLine.Count -lt 3 -or
+        $referenceLine.Count -gt 64 -or
+        $referenceLine[0][0] -ne $referenceLine[-1][0] -or
+        $referenceLine[0][1] -ne $referenceLine[-1][1]) {
         throw "The packaged app did not complete training and retain replay frames."
     }
     Assert-LoopbackOnly -AppProcess $secondProcess
@@ -441,6 +464,7 @@ try {
     Write-Host "Phase 9 release acceptance passed."
     Write-Host "Archive SHA-256: $actualHash"
     Write-Host "Run restored and completed: $runId"
+    Write-Host "Packaged minimum-curvature result contract verified."
     Write-Host "Outside-ZIP executable started successfully: $directExecutable"
     Write-Host "EvoRacer.exe started directly and owned the loopback service."
     Write-Host "Packaged runtime used loopback only and spawned no external Node.js or Python process."

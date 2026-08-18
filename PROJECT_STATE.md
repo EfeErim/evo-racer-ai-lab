@@ -3,9 +3,9 @@
 ## Current position
 
 - Current phase: `Post-release v1.1.1 game and interface hardening`
-- Status: `focused source hardening continues beyond the last verified local package; latest game-data, IPC, Saved-runs, reduced-motion, and status-copy fixes are not yet repackaged or published`
+- Status: `Generator v4 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
 - Active milestone: `None`
-- Last verified: `2026-08-04`
+- Last verified: `2026-08-10`
 
 ## Unreleased v1.1.1 game and interface hardening
 
@@ -18,11 +18,23 @@
   blanking the canvas. Assisted closure reserves rollback-only candidates before
   suffix expansion, so all six advertised trailing-piece rollback depths remain
   reachable within the same 200-candidate bound.
-- Generator version `2` deterministically varies canonical straights, 45-degree
-  corners, chicanes, and hairpins instead of ranking only a few rectangles.
-  Easy avoids chicanes and hairpins, Technical requires chicanes, and Hard
-  prefers hairpin stadiums; every result still passes the existing Python
-  compiler.
+- Track Builder Build now presents a compact piece tray beside the connected
+  circuit. Pieces can be dragged from the tray into any connector or dragged
+  again to reorder; click-to-append and the existing keyboard-accessible move,
+  duplicate, delete, and history controls remain available. Every snap still
+  submits the ordered canonical draft to Python validation.
+- Generator version `4` replaces the repeated rotational half-lap with a
+  bounded pairing of different half laps that share a Python-derived endpoint.
+  Easy requires both 45-degree and 90-degree corners, Technical adds opposing
+  turns and a chicane, and Hard adds a hairpin; every asymmetric result still
+  passes the existing Python compiler.
+- A successful **Generate & use track** action now selects the compiled result
+  immediately. Review and Start therefore use the same Python-verified TrackV1
+  without requiring the user to find a second selection action.
+- Generated results expose Python-owned layout and feature evidence plus an
+  explicit **Active for Review and Start** state. Closing and reopening Track
+  Builder retains the Generate tool and active result instead of returning to
+  the unrelated starter draft.
 - Generated previews retain the seed, length, and difficulty Python verified.
   Later seed and option edits now show `Inputs changed` immediately, preserve
   input focus, and explain that generation must run again before new inputs
@@ -58,6 +70,28 @@
   decorative SVG preview, Algorithm identifies its plain-language help through
   `aria-describedby`, and every Track Builder tab keeps a real panel target in
   the DOM even while that panel is inactive and hidden.
+- The player-facing visual system now uses readable default text, stronger
+  selection and keyboard-focus states, and primary actions at least `44 px`
+  tall. Welcome explains the complete loop as **Choose a track**, **Watch
+  evolution**, and **Compare champion**, while responsive racing-lab surfaces
+  preserve the compact desktop-tool character.
+- The authoritative race remains the Training visual priority. Detailed
+  selected-car telemetry is now a collapsed disclosure, and a visible **Reduce
+  motion** control stops browser-only replay/interpolation motion without
+  changing Python evaluation or deterministic outcomes. The Windows reduced
+  motion preference remains authoritative and cannot be overridden in-app.
+- Training and Results now make the displayed champion's complete
+  Python-recorded path visually primary. Up to seven earlier generation paths
+  remain as thin, faded context below the road markings, and actual off-road
+  motion is never clipped or projected back onto the track. Reduced motion
+  holds the car at the final authoritative replay frame instead of the start.
+- Results now replays the timestamped champion telemetry automatically at `1x`
+  with presentation-only interpolation instead of exposing frame-step controls.
+  The page leads with a plain-language verdict and four outcome cards, then
+  overlays the solid green champion path with a dashed cyan Python-owned
+  minimum-curvature geometric reference. The recorded bidirectional deviation
+  verdict requires a finished lap and does not claim a globally minimum-time
+  trajectory.
 - Track/run IPC now labels each operation, preserves connection-error causes,
   validates JSON and versioned response shapes before rendering, and requires
   exact identity plus `deleted: true` before reporting deletion success. Saved
@@ -116,12 +150,12 @@
   advancing training. Zero-generation stopped records show **No results**.
   Snapshot parsing rejects terminal result identity, status, generation, and
   champion-replay contradictions before they reach the UI.
-- Results replay navigation now clamps stale, empty, and single-frame indexes,
-  so Previous, Next, and Restart cannot select a negative or out-of-range
-  frame. Observation parsing rejects empty replay payloads, non-positive replay
+- Observation parsing rejects empty replay payloads, non-positive replay
   sampling, negative simulated times, and non-increasing frame times before the
-  binary-search animation or Results UI can consume corrupt local data. A
-  rejected Saved replay leaves the valid run library visible and retryable.
+  binary-search animation or Results UI can consume corrupt local data. It also
+  validates the versioned racing-line method, closed finite reference geometry,
+  deviation thresholds, and terminal-lap consistency. A rejected Saved replay
+  leaves the valid run library visible and retryable.
 - A second repository-wide line audit now isolates non-finite run checkpoints,
   rejects ambiguous NEAT input/output keys, rejects non-adjacent centerline
   touches and overlaps, and fails closed on non-finite controller outputs.
@@ -171,19 +205,26 @@
 - Previous-run rows now require a terminal result and must match its track,
   population, completed generations, and episode duration; duplicate or
   self-comparison rows are rejected before Results can present them.
-- Focused verification passed `50` simulation and `17` observer pytest cases;
-  after the latest terminal-result hardening, its `3` shared observer-parser
-  cases were rerun; `5` focused RunV1 library and `3` focused Track Library
-  persistence cases plus `1` focused loopback service case also passed. Focused
-  Vitest evidence is `20` simulation, `11` IPC, `15` onboarding, `5`
-  track-renderer, `6` track-workbench, `14` run-presentation, and `8` live-motion
-  Vitest cases; focused Ruff, mypy,
-  Prettier, and TypeScript checks also passed. Per explicit user direction, the
-  complete Phase 10/package gate was not rerun, so the existing EXE/ZIP evidence
-  below does not claim to contain these newest source changes.
-- `npm run test:phase10` passed `82` Vitest tests, `105` pytest tests, all `11`
-  real Chromium flows, all `18` deterministic matrix cases in `13.612335 s`,
-  the Windows EXE build, and clean-runtime release acceptance.
+- The `2026-08-05` deep-audit remediation aligned the Python `__version__` with
+  the JavaScript and Python project metadata, added a cross-metadata regression
+  test, kept live-observer test evaluation budgets internally consistent, and
+  updated the shutdown E2E fixture to the versioned `shutting-down`
+  acknowledgement. Production persistence and IPC validation remain strict.
+- `npm run check` passed Prettier, ESLint, TypeScript type-check, `111` Vitest
+  tests, Ruff format/lint, strict mypy across `27` files, `146` pytest tests,
+  and the Vite production build.
+- `scripts/test-e2e.ps1 -Port 8877` passed all `15` real Chromium flows,
+  including smooth Results marker motion, the champion/reference overlay,
+  generated track selection reaching Review and the submitted Start payload,
+  plus the Welcome journey, minimum primary-action height, motion preference behavior,
+  collapsed telemetry disclosure, and delayed startup response ownership across
+  successful shutdown.
+- `npm run test:phase10` passed the complete composed gate: the source checks,
+  development loopback smoke, all `13` Chromium flows, all `18` deterministic
+  Fixed GA/NEAT matrix cases in `11.134059 s` (median `0.61629 s`), the Windows
+  EXE build, and
+  clean-runtime release acceptance. The regression SHA-256 remained
+  `88a77019558f77947536d50b3f61c6badb9234713555f7ea4ef20d38086e8d64`.
 - A repository-wide audit corrected the development-only transitive
   `brace-expansion` advisory by resolving `5.0.9`; the final
   `npm audit --audit-level=low` reported zero vulnerabilities.
@@ -193,25 +234,52 @@
 - Read-only browser inspection at `1280 x 720` and `390 x 844` found no
   page-level horizontal overflow, external resources, or console warnings and
   errors in Welcome, Track Builder, Training, Results, and the populated saved
-  run library.
+  run library. The refined Welcome also measured `44 px` primary actions at the
+  mobile viewport and retained a one-column journey without page overflow.
+- Focused Track Builder snap verification passed `18` Vitest tests, TypeScript
+  type-check, a production Vite build, and two real Chromium flows covering
+  tray-to-connector insertion and placed-piece reordering. At `1280 x 720`, the
+  tray and connected list rendered side by side with `48 px` piece targets; at
+  `390 x 844`, they reflowed to one column and document `scrollWidth` equaled
+  `clientWidth` (`375`). Evidence is recorded in
+  `docs/verification/post-release-track-builder-snap.md`.
 - A final clean-static rebuild and `npm run test:release` passed packaged open
-  preview, repair, generator-v2, direct-EXE, restore, loopback-only, and
-  no-external-runtime checks.
+  preview, repair, generator-v4, direct-EXE, restore, loopback-only,
+  no-external-runtime, replay, and `minimum-curvature-v1` terminal-result checks.
 - The directly runnable `release\EvoRacer` folder contains `71` files totaling
-  `20,202,698` bytes. Its root-level `EvoRacer.exe` is `2,573,165` bytes and no
+  `20,256,858` bytes. Its root-level `EvoRacer.exe` is `2,595,472` bytes and no
   command script exists.
-- The parallel ZIP contains `72` entries. `EvoRacer/EvoRacer.exe` is `2,573,165`
-  bytes, `EvoRacer.cmd` is absent, and the complete ZIP is `9,433,123` bytes.
+- The parallel ZIP contains `72` entries. `EvoRacer/EvoRacer.exe` is `2,595,472`
+  bytes, `EvoRacer.cmd` is absent, and the complete ZIP is `9,463,859` bytes.
+- The packaged frontend and current production build both contain
+  `index-CK54fsu9.js` (`130,108` bytes) and `index-BeHh3psU.css` (`50,959`
+  bytes), with matching hashes. The package therefore contains the audited
+  source state rather than the previous executable baseline.
 - Clean-runtime acceptance started the EXE directly with a system-only `PATH`,
   verified that it owned the `127.0.0.1:8765` service, used no non-loopback
   connection, and spawned no external Node.js or Python process. It restored
-  and completed `run-ca17ce5c7be747099d5b645704004eb4`.
+  and completed `run-c81e9aa51c314b339821529a6135db94`.
+- The rebuilt EXE's packaged Results screen opened in real Chromium from the
+  restored run. It rendered one champion path, one closed ideal-line path with
+  method `minimum-curvature-v1`, the explicit not-matched verdict, and the
+  reduced-motion final frame. Document width equaled client width (`1265`), no
+  external resource was requested, and no browser warning or error was logged.
 - Final local ZIP SHA-256:
-  `b44510204b76ee551f9004050afef55f41c02907132a3ee01184cc33c1a9bee2`.
+  `52bd876b4f7ddfe7afaca2f83ca0bb7f2900fb0847aab89fbdc7b5f2907998a5`.
+- `Get-AuthenticodeSignature` reports `NotSigned`, and the current user
+  certificate store contains no code-signing certificate. A self-signed
+  certificate was not substituted for a trusted publication identity.
+- `npm run sign:release` now provides a fail-closed maintainer path using a
+  Windows certificate-store thumbprint, SHA-256 Authenticode, an RFC 3161
+  timestamp, exact-signer verification, and signed-folder ZIP/checksum rebuild.
+  PowerShell parsing reported zero errors. A missing-certificate preflight
+  exited `1` while leaving the EXE and ZIP hashes unchanged.
 - Detailed evidence is saved in
   `docs/verification/executable-package-correction.md` and
   `docs/verification/track-builder-generator-v2.md`; the second audit is
-  recorded in `docs/verification/deep-second-audit.md`, and the responsive UI
+  recorded in `docs/verification/deep-second-audit.md`; the audit remediation
+  and current package alignment are recorded in
+  `docs/verification/deep-audit-remediation.md`; and the responsive UI
   corrections are recorded in
   `docs/verification/post-release-ui-hardening.md`. Run recovery is recorded in
   `docs/verification/post-release-run-recovery.md`, and keyboard/interface state
@@ -246,7 +314,15 @@
   Saved runs startup reads are recorded in
   `docs/verification/post-release-run-library-startup-recovery.md`, and the
   batched UI-state correction is recorded in
-  `docs/verification/post-release-batched-ui-state-hardening.md`.
+  `docs/verification/post-release-batched-ui-state-hardening.md`. The
+  player-facing research, decisions, responsive measurements, and acceptance
+  evidence are recorded in
+  `docs/verification/post-release-ux-foundations.md`. Generator v3 history is
+  recorded in `docs/verification/post-release-generator-v3.md`; the generator
+  v4 correction, active-track behavior, and current acceptance evidence are
+  recorded in `docs/verification/post-release-generator-v4.md`. The displayed-champion
+  path research, correction, and browser measurements are recorded in
+  `docs/verification/racing-path-presentation.md`.
   Publication, tagging, and replacement of the immutable `v1.1.0` assets were
   not performed.
 
@@ -983,22 +1059,15 @@ Verification evidence recorded on `2026-07-31`:
 
 ## Blockers
 
-- None.
+- The rebuilt EXE remains unsigned by explicit user decision; Authenticode is
+  optional publication hardening and must not be claimed without a trusted
+  certificate. No commit, tag, push, or public release was requested.
 
 ## Next action
 
-The last local `v1.1.1` executable, recoverable Track and Saved-runs startup reads,
-resilient shutdown lifecycle, route-owned Track commands, unconfirmed-Start
-Saved-run recovery, accessible setup semantics, route-owned Review validation,
-Track Builder, owned Track imports, route-owned Saved actions, replay integrity,
-ordered libraries,
-responsive UI, Start/run recovery, terminal Saved results,
-keyboard/interface-state, and truthful library-error correction remains the last
-package-verified baseline. Continue post-release game/UI hardening through
-reproducible findings with focused tests only; run the complete gate or rebuild
-the package only on explicit request. Commit, tag, and publish only on explicit
-request. Preserve the immutable `v1.0.0` and `v1.1.0` tags, published assets,
-saved evidence, and product claim boundary.
+Commit, tag, publish, or apply the optional trusted-signing path only on
+explicit request. Preserve the immutable `v1.0.0` and `v1.1.0` tags, published
+assets, saved evidence, and product claim boundary.
 
 ## State update rule
 

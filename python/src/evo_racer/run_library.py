@@ -434,6 +434,10 @@ def _validate_terminal_result(
     ):
         raise RunRecordError("Terminal result comparisons do not match their controllers.")
 
+    racing_line = result.get("racingLineComparison")
+    if racing_line is not None:
+        _validate_racing_line_comparison(racing_line, champion_comparison)
+
     replay = _object(result.get("replay"), "result.replay")
     if replay.get("contractVersion") != 1 or replay.get("candidateId") != champion_id:
         raise RunRecordError("Terminal replay identity does not match its champion.")
@@ -449,6 +453,57 @@ def _validate_terminal_result(
     for index, parameter in enumerate(parameters):
         _finite_number(parameter, f"result.replay.controllerParameters[{index}]")
     _validate_replay_frames(replay.get("frames"))
+
+
+def _validate_racing_line_comparison(
+    value: object,
+    champion_comparison: dict[str, object],
+) -> None:
+    comparison = _object(value, "result.racingLineComparison")
+    if comparison.get("contractVersion") != 1 or comparison.get("method") != "minimum-curvature-v1":
+        raise RunRecordError("Racing-line comparison contract is unsupported.")
+    reference = comparison.get("referenceLine")
+    if not isinstance(reference, list) or not 3 <= len(reference) <= 64:
+        raise RunRecordError("Racing-line reference must contain 3 to 64 points.")
+    validated_points: list[tuple[float, float]] = []
+    for index, point in enumerate(reference):
+        if not isinstance(point, list) or len(point) != 2:
+            raise RunRecordError("Racing-line reference points must contain x and y.")
+        validated_points.append(
+            (
+                _finite_number(point[0], f"result.racingLineComparison.referenceLine[{index}].x"),
+                _finite_number(point[1], f"result.racingLineComparison.referenceLine[{index}].y"),
+            )
+        )
+    if validated_points[0] != validated_points[-1]:
+        raise RunRecordError("Racing-line reference must be closed.")
+    champion_finished = comparison.get("championFinished")
+    matched = comparison.get("matched")
+    if (
+        not isinstance(champion_finished, bool)
+        or champion_finished != champion_comparison.get("finished")
+        or not isinstance(matched, bool)
+        or (matched and not champion_finished)
+    ):
+        raise RunRecordError("Racing-line comparison contradicts the champion result.")
+    for field in ("meanDeviationMeters", "p95DeviationMeters"):
+        _bounded_number(
+            comparison.get(field),
+            f"result.racingLineComparison.{field}",
+            0.0,
+            math.inf,
+        )
+    for field in ("meanToleranceMeters", "p95ToleranceMeters"):
+        if (
+            _bounded_number(
+                comparison.get(field),
+                f"result.racingLineComparison.{field}",
+                0.0,
+                math.inf,
+            )
+            <= 0.0
+        ):
+            raise RunRecordError("Racing-line comparison tolerances must be positive.")
 
 
 def _validate_fitness_history(value: object, generation: int, label: str) -> list[object]:

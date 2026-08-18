@@ -1,6 +1,7 @@
 export const PRODUCT_NAME = "EvoRacer AI Lab";
 
-export const LOCAL_SERVICE_ORIGIN = "http://127.0.0.1:8765";
+export const LOCAL_SERVICE_ORIGIN =
+  import.meta.env.VITE_EVORACER_SERVICE_ORIGIN ?? "http://127.0.0.1:8765";
 
 export const PRODUCT_FLOW = [
   "Welcome",

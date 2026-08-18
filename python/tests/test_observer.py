@@ -92,6 +92,11 @@ def test_batched_observation_completes_both_algorithms(algorithm: str) -> None:
     }
     assert len(metadata["trackSha256"]) == 64
     assert len(result["baselineComparisons"]) == 3
+    racing_line = result["racingLineComparison"]
+    assert racing_line["method"] == "minimum-curvature-v1"
+    assert racing_line["championFinished"] == result["baselineComparisons"][0]["finished"]
+    assert 3 <= len(racing_line["referenceLine"]) <= 64
+    assert racing_line["referenceLine"][0] == racing_line["referenceLine"][-1]
 
 
 @pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
@@ -148,16 +153,15 @@ def test_manager_streams_live_candidate_position_while_generation_runs(
 
     def slowed_evaluate_episode(*args: Any, **kwargs: Any) -> Any:
         callback = kwargs.get("telemetry_callback")
-        if callback is None:
-            return original_evaluate_episode(*args, **kwargs)
-
-        def publish_and_yield(snapshot: Any) -> None:
-            callback(snapshot)
-            time.sleep(0.002)
-
         kwargs["max_seconds"] = 0.5
-        kwargs["telemetry_interval_steps"] = 1
-        kwargs["telemetry_callback"] = publish_and_yield
+        if callback is not None:
+
+            def publish_and_yield(snapshot: Any) -> None:
+                callback(snapshot)
+                time.sleep(0.002)
+
+            kwargs["telemetry_interval_steps"] = 1
+            kwargs["telemetry_callback"] = publish_and_yield
         return original_evaluate_episode(*args, **kwargs)
 
     monkeypatch.setattr(observer_module, "evaluate_episode", slowed_evaluate_episode)

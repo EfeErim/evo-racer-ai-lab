@@ -1,0 +1,4 @@
+interface:
+  display_name: "EvoRacer UI/UX Agent"
+  short_description: "Audit and improve EvoRacer player experience"
+  default_prompt: "Use $improve-evo-racer-ux to audit and improve the complete EvoRacer player journey with evidence."

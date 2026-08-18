@@ -3,7 +3,7 @@ import type {
   GenerationTrailV1,
   ObservationSnapshotV1,
 } from "./simulation";
-import type { TrackPoint } from "./track-renderer";
+import type { TrackPoint, TrackTrail } from "./track-renderer";
 
 export const MAX_RECORDED_GENERATION_TRAILS = 8;
 export const MAX_VISIBLE_PRIOR_TRAILS = 7;
@@ -47,6 +47,13 @@ export function priorGenerationTrails(
   return trails
     .filter((trail) => trail.candidateId !== currentCandidateId)
     .slice(-MAX_VISIBLE_PRIOR_TRAILS);
+}
+
+export function replayTrackTrail(replay: GenerationReplayV1): TrackTrail {
+  return {
+    candidateId: replay.candidateId,
+    points: sampleReplayPoints(replay),
+  };
 }
 
 function availableReplay(

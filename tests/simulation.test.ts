@@ -400,6 +400,46 @@ describe("Phase 7 observation and results contract", () => {
     );
   });
 
+  it("parses and validates the Python-owned ideal racing-line comparison", () => {
+    const withRacingLine = structuredClone(observationFixture) as {
+      result: {
+        baselineComparisons: { finished: boolean }[];
+        racingLineComparison?: Record<string, unknown>;
+      };
+    };
+    const championFinished =
+      withRacingLine.result.baselineComparisons[0]?.finished ?? false;
+    withRacingLine.result.racingLineComparison = {
+      contractVersion: 1,
+      method: "minimum-curvature-v1",
+      referenceLine: [
+        [0, 0],
+        [10, 4],
+        [0, 0],
+      ],
+      championFinished,
+      meanDeviationMeters: 0.5,
+      p95DeviationMeters: 1.2,
+      meanToleranceMeters: 1.2,
+      p95ToleranceMeters: 2.64,
+      matched: false,
+    };
+
+    expect(
+      parseObservationSnapshot(withRacingLine).result?.racingLineComparison
+        ?.matched,
+    ).toBe(false);
+
+    const contradictory = structuredClone(withRacingLine) as unknown as {
+      result: { racingLineComparison: { championFinished: boolean } };
+    };
+    contradictory.result.racingLineComparison.championFinished =
+      !championFinished;
+    expect(() => parseObservationSnapshot(contradictory)).toThrow(
+      "contradicts the champion",
+    );
+  });
+
   it("rejects contradictory generation reports and fitness histories", () => {
     const missingHistory = structuredClone(observationFixture) as {
       fitnessHistory: unknown[];
