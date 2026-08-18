@@ -102,13 +102,16 @@ piece list. Add, delete, undo, redo, reset, naming, and road-width controls are
 presentation state. Validation and assisted closure are versioned commands to
 the Python core; the browser never derives closure or geometry.
 
-Generator version 2 uses deterministic SHA-256 candidate ranking and a bounded
-constrained search of at most 200 candidates. Length selects exactly 12, 18, or
-24 canonical pieces. Difficulty selects documented corridor widths and distinct
-shape families: Easy layouts avoid chicanes and hairpins while varying straight
-and corner composition, Technical layouts require chicanes, and Hard layouts
-prefer hairpin stadiums. Every candidate is accepted only by the existing Phase
-2 compiler.
+Generator version 3 uses deterministic SHA-256 candidate ranking and a bounded
+search of at most 200 candidates. It constructs a seeded half lap whose net turn
+is 180 degrees, applies difficulty-specific quality constraints, and repeats the
+motif under rotational symmetry to close a balanced loop. Length selects exactly
+12, 18, or 24 canonical pieces. Easy mixes flowing 45-degree and 90-degree
+corners without chicanes or hairpins, Technical requires direction changes and
+chicanes, and Hard requires direction changes, chicanes, and hairpins. Every
+candidate is accepted only by the existing Phase 2 compiler. A successful
+Generate command also makes that compiled TrackV1 the active setup track; the
+browser does not alter its geometry.
 
 Invalid but schema-valid editor drafts use a separate Python-derived open-loop
 preview. That geometry is presentation-only and never satisfies selection,
@@ -267,12 +270,15 @@ same run's cached replay; a new candidate replaces it and a new run cannot
 inherit it. Python still sends `generationReplay: null` before any replay exists,
 so absence has the narrow meaning of "the acknowledged replay is unchanged."
 
-The browser also samples each newly received generation replay to at most 64 of
-its recorded `(x, y)` points. It keeps a bounded session history of eight paths:
-the current champion plus up to seven prior champions. The renderer draws only
-the prior paths as progressively faded dashed SVG lines behind the animated
-current marker. This is presentation state, is cleared for new and restored
-runs, is not written to `RunV1`, and never derives physics or predicted motion.
+Python samples each generation champion's telemetry to at most 64 recorded
+`(x, y)` points and keeps a bounded history of eight paths in the versioned
+observation checkpoint. The browser draws the currently displayed champion's
+replay as a solid green path and up to seven earlier champions as progressively
+faded dashed paths below the centerline and boundaries. It never snaps an
+off-road point back onto the road or derives predicted motion. Reduced-motion
+presentation holds the marker on the replay's final authoritative frame while
+retaining the full recorded path. Restored runs reproduce the same bounded
+Python-owned history without inheriting paths from another run.
 
 Observation delivery is visibility-aware: the browser schedules at `250 ms`
 while visible and `1000 ms` while hidden, allows at most one request in flight,
@@ -288,11 +294,26 @@ parameters and vehicle setup. The seeded random network and Pure Pursuit
 baselines run on the same track, episode limit, physics, fitness, and champion
 vehicle setup.
 
+At terminal result construction, `python/src/evo_racer/racing_line.py` also
+builds a deterministic geometric reference from the closed Python centerline.
+It samples at most 63 unique positions, varies bounded lateral offsets while
+leaving vehicle-center clearance, and minimizes discrete squared curvature with
+a fixed coordinate-search schedule. The closed reference remains capped at 64
+points. Python compares the recorded champion path in both directions against
+that reference and records mean and 95th-percentile deviation plus explicit
+road-width-relative tolerances. A match requires a completed lap and both
+deviation limits. This is a minimum-curvature geometric benchmark, not a
+minimum-lap-time or global-optimality claim.
+
 TypeScript parses and renders these values only. It owns the live status view,
 pause/resume/stop buttons, SVG fitness chart, comparison tables, and replay
-frame navigation. The replay marker is placed on geometry already returned by
-the Python track compiler; presentation interpolation never performs browser
-physics, scoring, or track construction.
+presentation. Results plays the recorded champion automatically at `1x` with
+`requestAnimationFrame` interpolation and overlays the solid green recorded
+path with the dashed cyan Python reference. The replay marker is placed on
+geometry already returned by the Python track compiler; presentation
+interpolation never performs browser physics, scoring, track construction, or
+racing-line optimization. Reduced motion holds the terminal frame while both
+complete paths remain visible.
 
 ## Phase 8 persistence and recovery boundary
 

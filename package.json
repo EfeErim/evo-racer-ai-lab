@@ -22,6 +22,7 @@
     "lint": "eslint . --max-warnings 0",
     "lint:python": ".venv\\Scripts\\python.exe -m ruff check python",
     "smoke:m0": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/smoke-m0.ps1",
+    "sign:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/sign-release.ps1",
     "test": "vitest run tests",
     "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e.ps1",
     "test:phase10": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/phase10-gate.ps1",

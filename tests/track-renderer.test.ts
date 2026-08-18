@@ -54,7 +54,7 @@ describe("Phase 2 Python geometry renderer", () => {
     expect(svg).toContain("translate(12.5 4.25) rotate(90)");
   });
 
-  it("renders faded prior-generation paths behind the current marker", () => {
+  it("renders faded prior paths behind a distinct displayed-champion path", () => {
     const svg = renderTrackSvg(
       fixture.compiled,
       { x: 12.5, y: 4.25, heading: 0 },
@@ -74,13 +74,42 @@ describe("Phase 2 Python geometry renderer", () => {
           ],
         },
       ],
+      {
+        candidateId: "g0002-c0004",
+        points: [
+          [0, 0],
+          [24, 12],
+        ],
+      },
+      {
+        candidateId: "minimum-curvature-v1",
+        points: [
+          [0, 0],
+          [30, 14],
+        ],
+      },
     );
 
     expect(svg.match(/class="generation-trail"/g)).toHaveLength(2);
     expect(svg).toContain('data-trail-candidate="g0000-c0001"');
     expect(svg).toContain('d="M 0 0 L 18 8"');
-    expect(svg).toContain('opacity="0.16"');
-    expect(svg).toContain('opacity="0.62"');
+    expect(svg).toContain('opacity="0.08"');
+    expect(svg).toContain('opacity="0.28"');
+    expect(svg).toContain('class="current-generation-path"');
+    expect(svg).toContain('data-current-candidate="g0002-c0004"');
+    expect(svg).toContain('d="M 0 0 L 24 12"');
+    expect(svg).toContain('class="ideal-racing-line"');
+    expect(svg).toContain('data-reference-method="minimum-curvature-v1"');
+    expect(svg).toContain('d="M 0 0 L 30 14"');
+    expect(svg.indexOf('class="generation-trails"')).toBeLessThan(
+      svg.indexOf('class="track-centerline"'),
+    );
+    expect(svg.indexOf('class="track-boundary"')).toBeLessThan(
+      svg.indexOf('class="ideal-racing-line"'),
+    );
+    expect(svg.indexOf('class="ideal-racing-line"')).toBeLessThan(
+      svg.indexOf('class="current-generation-path"'),
+    );
   });
 
   it("rejects malformed geometry contracts", () => {

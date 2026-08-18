@@ -15,11 +15,14 @@ from evo_racer.tracks import (
     TrackValidationError,
     compile_track,
     parse_track,
+    preview_track,
 )
 
 GENERATOR_CONTRACT_VERSION: Final = 1
-GENERATOR_VERSION: Final = 2
+GENERATOR_VERSION: Final = 4
 MAX_GENERATOR_CANDIDATES: Final = 200
+_DESIGNED_CANDIDATE_BUDGET: Final = 176
+_HALF_LAYOUT_BUDGET: Final = 512
 
 type TrackLength = Literal["short", "medium", "long"]
 type TrackDifficulty = Literal["easy", "technical", "hard"]
@@ -40,6 +43,18 @@ _CLOSURE_SEGMENTS: Final = (
     "straight-short",
     "straight-long",
 )
+_TURN_DEGREES: Final[dict[str, int]] = {
+    "straight-short": 0,
+    "straight-long": 0,
+    "turn-left-45": 45,
+    "turn-right-45": -45,
+    "turn-left-90": 90,
+    "turn-right-90": -90,
+    "hairpin-left": 180,
+    "hairpin-right": -180,
+    "chicane-left": 0,
+    "chicane-right": 0,
+}
 
 
 def generate_track_payload(payload: object) -> dict[str, object]:
@@ -98,7 +113,7 @@ def generate_track_payload(payload: object) -> dict[str, object]:
     assert length in LENGTH_TARGETS
     assert difficulty in DIFFICULTY_WIDTHS
     target = LENGTH_TARGETS[length]
-    candidates = _rectangle_candidates(seed, length, difficulty, target)
+    candidates = _search_candidates(seed, length, difficulty, target)
 
     for candidate_count, pieces in enumerate(candidates, start=1):
         track = TrackV1(
@@ -124,6 +139,7 @@ def generate_track_payload(payload: object) -> dict[str, object]:
                 "difficulty": difficulty,
                 "targetSegments": target,
             },
+            "features": _generation_features(pieces),
             "compiled": compiled,
         }
 
@@ -212,66 +228,260 @@ def assist_track_closure_payload(payload: object) -> dict[str, object]:
     return _closure_exhausted(candidate_count)
 
 
-def _rectangle_candidates(
+def _search_candidates(
     seed: int,
     length: TrackLength,
     difficulty: TrackDifficulty,
     target: int,
 ) -> list[tuple[TrackPieceV1, ...]]:
-    candidates = _varied_rectangle_candidates(difficulty, target)
-    if difficulty == "hard":
-        candidates.extend(_stadium_candidates(difficulty, target))
-
-    unique = {_piece_key(candidate): candidate for candidate in candidates}
-    fallbacks = _simple_rectangle_candidates(target)
-    fallback_keys = {_piece_key(candidate) for candidate in fallbacks}
-
-    if difficulty == "hard":
-        preferred = [
-            candidate
-            for key, candidate in unique.items()
-            if key not in fallback_keys
-            and any(piece.kind.startswith("hairpin-") for piece in candidate)
-        ]
-    elif difficulty == "technical":
-        preferred = [
-            candidate
-            for key, candidate in unique.items()
-            if key not in fallback_keys
-            and any(piece.kind.startswith("chicane-") for piece in candidate)
-        ]
-    else:
-        preferred = [
-            candidate
-            for key, candidate in unique.items()
-            if key not in fallback_keys
-            and not any(
-                piece.kind.startswith("chicane-") or piece.kind.startswith("hairpin-")
-                for piece in candidate
-            )
-        ]
-
-    preferred = sorted(
-        preferred,
-        key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
+    candidates = _balanced_loop_candidates(seed, length, difficulty, target)
+    candidates = sorted(
+        candidates,
+        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
     )
-    preferred_keys = {_piece_key(candidate) for candidate in preferred}
-    remaining = sorted(
-        (
-            candidate
-            for key, candidate in unique.items()
-            if key not in fallback_keys and key not in preferred_keys
-        ),
-        key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
-    )
+
+    fallbacks = _varied_rectangle_candidates(difficulty, target)
+    if difficulty == "hard":
+        fallbacks.extend(_stadium_candidates(difficulty, target))
+    fallbacks.extend(_simple_rectangle_candidates(target))
     ranked_fallbacks = sorted(
-        fallbacks,
+        {_piece_key(candidate): candidate for candidate in fallbacks}.values(),
         key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
-    fallback_budget = min(12, len(ranked_fallbacks))
-    return (preferred + remaining)[: MAX_GENERATOR_CANDIDATES - fallback_budget] + ranked_fallbacks[
-        :fallback_budget
+    seen = {_piece_key(candidate) for candidate in candidates}
+    for fallback in ranked_fallbacks:
+        if len(candidates) >= MAX_GENERATOR_CANDIDATES:
+            break
+        if _piece_key(fallback) not in seen:
+            candidates.append(fallback)
+            seen.add(_piece_key(fallback))
+    return candidates
+
+
+def _balanced_loop_candidates(
+    seed: int,
+    length: TrackLength,
+    difficulty: TrackDifficulty,
+    target: int,
+) -> list[tuple[TrackPieceV1, ...]]:
+    """Pair distinct compatible half laps into closed, asymmetric circuits."""
+    half_target = target // 2
+    target_turn = 180 if _rank(seed, length, difficulty, ("turn-direction",))[0] % 2 == 0 else -180
+    allowed = _allowed_generator_pieces(difficulty, target_turn)
+    halves: list[tuple[str, ...]] = []
+
+    def search(prefix: tuple[str, ...], turn_total: int) -> None:
+        if len(halves) >= _HALF_LAYOUT_BUDGET:
+            return
+        slots_left = half_target - len(prefix)
+        if slots_left == 0:
+            if turn_total != target_turn or not _half_meets_difficulty(prefix, difficulty):
+                return
+            halves.append(prefix)
+            return
+
+        ordered = sorted(
+            allowed,
+            key=lambda kind: (
+                _choice_penalty(prefix, turn_total, target_turn, slots_left, kind),
+                _rank(seed, length, difficulty, prefix + (kind,)),
+            ),
+        )
+        for kind in ordered:
+            if not _prefix_accepts(prefix, kind):
+                continue
+            next_turn = turn_total + _TURN_DEGREES[kind]
+            remaining_slots = slots_left - 1
+            if abs(target_turn - next_turn) > 180 * remaining_slots:
+                continue
+            search(prefix + (kind,), next_turn)
+
+    search(("start-finish",), 0)
+    groups: dict[tuple[float, float], list[tuple[str, ...]]] = {}
+    for half in halves:
+        groups.setdefault(_half_endpoint_key(half), []).append(half)
+
+    paired: list[tuple[TrackPieceV1, ...]] = []
+    for matching_halves in groups.values():
+        for first, second in itertools.permutations(matching_halves, 2):
+            if _half_difference(first, second) < 2:
+                continue
+            second_without_start = tuple(
+                "straight-short" if kind == "start-finish" else kind for kind in second
+            )
+            paired.append(_pieces(first + second_without_start))
+
+    paired = sorted(
+        {_piece_key(candidate): candidate for candidate in paired}.values(),
+        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
+    )
+    if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
+        return paired[:_DESIGNED_CANDIDATE_BUDGET]
+
+    seen = {_piece_key(candidate) for candidate in paired}
+    mirrored = sorted(
+        (
+            _pieces(
+                half + tuple("straight-short" if kind == "start-finish" else kind for kind in half)
+            )
+            for half in halves
+        ),
+        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
+    )
+    for candidate in mirrored:
+        if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
+            break
+        if _piece_key(candidate) not in seen:
+            paired.append(candidate)
+            seen.add(_piece_key(candidate))
+    return paired
+
+
+def _half_endpoint_key(half: tuple[str, ...]) -> tuple[float, float]:
+    preview = preview_track(
+        TrackV1(
+            schema_version=1,
+            track_id="generator-half",
+            name="Generator half",
+            road_width=10.0,
+            pieces=_pieces(half),
+        )
+    )
+    geometry = cast(dict[str, object], preview["geometry"])
+    centerline = cast(list[list[float]], geometry["centerline"])
+    return centerline[-1][0], centerline[-1][1]
+
+
+def _half_difference(first: tuple[str, ...], second: tuple[str, ...]) -> int:
+    return sum(left != right for left, right in zip(first, second, strict=True))
+
+
+def _generation_features(pieces: tuple[TrackPieceV1, ...]) -> dict[str, object]:
+    kinds = _piece_key(pieces)
+    half_length = len(kinds) // 2
+    first_half = kinds[:half_length]
+    second_half = ("start-finish",) + kinds[half_length + 1 :]
+    signed_turns = [
+        _TURN_DEGREES[kind] for kind in kinds if kind in _TURN_DEGREES and _TURN_DEGREES[kind] != 0
     ]
+    turn_signs = [1 if turn > 0 else -1 for turn in signed_turns]
+    return {
+        "layout": "asymmetric" if _half_difference(first_half, second_half) >= 2 else "balanced",
+        "straightCount": sum(
+            kind == "start-finish" or kind.startswith("straight-") for kind in kinds
+        ),
+        "cornerCount": sum(kind.startswith("turn-") for kind in kinds),
+        "chicaneCount": sum(kind.startswith("chicane-") for kind in kinds),
+        "hairpinCount": sum(kind.startswith("hairpin-") for kind in kinds),
+        "directionChanges": sum(
+            first != second for first, second in itertools.pairwise(turn_signs)
+        ),
+    }
+
+
+def _allowed_generator_pieces(
+    difficulty: TrackDifficulty,
+    target_turn: int,
+) -> tuple[str, ...]:
+    target_side = "left" if target_turn > 0 else "right"
+    opposite_side = "right" if target_turn > 0 else "left"
+    if difficulty == "easy":
+        return (
+            "straight-short",
+            "straight-long",
+            f"turn-{target_side}-45",
+            f"turn-{opposite_side}-45",
+            f"turn-{target_side}-90",
+        )
+    common = (
+        "straight-short",
+        "straight-long",
+        f"turn-{target_side}-45",
+        f"turn-{opposite_side}-45",
+        f"turn-{target_side}-90",
+        f"turn-{opposite_side}-90",
+        "chicane-left",
+        "chicane-right",
+    )
+    if difficulty == "technical":
+        return common
+    return common + (f"hairpin-{target_side}", f"hairpin-{opposite_side}")
+
+
+def _choice_penalty(
+    prefix: tuple[str, ...],
+    turn_total: int,
+    target_turn: int,
+    slots_left: int,
+    kind: str,
+) -> tuple[float, int]:
+    angle = _TURN_DEGREES[kind]
+    ideal_turn = (target_turn - turn_total) / slots_left
+    repeated = int(bool(prefix) and prefix[-1] == kind)
+    return abs(ideal_turn - angle), repeated
+
+
+def _prefix_accepts(prefix: tuple[str, ...], kind: str) -> bool:
+    if len(prefix) >= 2 and prefix[-1] == prefix[-2] == kind:
+        return False
+    if kind.startswith("hairpin-") and prefix[-1].startswith("hairpin-"):
+        return False
+    if _TURN_DEGREES[kind] == 0 and len(prefix) >= 2:
+        if all(_TURN_DEGREES.get(previous, 0) == 0 for previous in prefix[-2:]):
+            return False
+    return True
+
+
+def _half_meets_difficulty(prefix: tuple[str, ...], difficulty: TrackDifficulty) -> bool:
+    kinds = prefix[1:]
+    turns = [_TURN_DEGREES[kind] for kind in kinds if _TURN_DEGREES[kind] != 0]
+    magnitudes = {abs(turn) for turn in turns}
+    signs = {1 if turn > 0 else -1 for turn in turns}
+    if difficulty == "easy":
+        return 45 in magnitudes and 90 in magnitudes and len(turns) >= 3
+    has_chicane = any(kind.startswith("chicane-") for kind in kinds)
+    if difficulty == "technical":
+        return has_chicane and 45 in magnitudes and 90 in magnitudes and len(signs) == 2
+    return (
+        has_chicane
+        and any(kind.startswith("hairpin-") for kind in kinds)
+        and len(signs) == 2
+        and len(turns) >= 3
+    )
+
+
+def _layout_rank(
+    seed: int,
+    length: TrackLength,
+    difficulty: TrackDifficulty,
+    candidate: tuple[TrackPieceV1, ...],
+) -> tuple[object, ...]:
+    all_kinds = _piece_key(candidate)
+    half_length = len(candidate) // 2
+    kinds = all_kinds[:half_length]
+    second_half = ("start-finish",) + all_kinds[half_length + 1 :]
+    symmetry = -_half_difference(kinds, second_half)
+    turns = [_TURN_DEGREES[kind] for kind in kinds if kind in _TURN_DEGREES and _TURN_DEGREES[kind]]
+    signs = [1 if turn > 0 else -1 for turn in turns]
+    direction_changes = sum(first != second for first, second in itertools.pairwise(signs))
+    repeated = sum(first == second for first, second in itertools.pairwise(kinds))
+    variety = len(set(kinds))
+    chicanes = sum(kind.startswith("chicane-") for kind in kinds)
+    hairpins = sum(kind.startswith("hairpin-") for kind in kinds)
+    design: tuple[int, ...]
+    if difficulty == "easy":
+        design = (repeated, -variety)
+    elif difficulty == "technical":
+        design = (abs(chicanes - 1), -direction_changes, repeated, -variety)
+    else:
+        design = (
+            abs(hairpins - 1),
+            abs(chicanes - 1),
+            -direction_changes,
+            repeated,
+            -variety,
+        )
+    return (symmetry,) + design + (_rank(seed, length, difficulty, all_kinds),)
 
 
 def _varied_rectangle_candidates(

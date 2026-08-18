@@ -6,7 +6,9 @@ import {
   deleteEditorPiece,
   duplicateEditorPiece,
   editorTrack,
+  insertEditorPiece,
   moveEditorPiece,
+  moveEditorPieceToIndex,
   parseTrackCommandResponse,
   parseTrackDocument,
   redoEditor,
@@ -54,6 +56,21 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
     expect(editorTrack(resetEditor(duplicated)).id).toBe("track-draft-7");
   });
 
+  it("inserts and snaps pieces at arbitrary connector positions", () => {
+    const initial = createEditorState("snap-draft");
+    const inserted = insertEditorPiece(initial, "chicane-right", 2);
+    const snappedToEnd = moveEditorPieceToIndex(
+      inserted,
+      2,
+      inserted.present.pieces.length,
+    );
+
+    expect(editorTrack(inserted).pieces[2]?.kind).toBe("chicane-right");
+    expect(editorTrack(snappedToEnd).pieces.at(-1)?.kind).toBe("chicane-right");
+    expect(moveEditorPieceToIndex(initial, 0, 3)).toBe(initial);
+    expect(insertEditorPiece(initial, "straight-short", 0)).toBe(initial);
+  });
+
   it("round-trips versioned canonical JSON and fails safely on unknown shapes", () => {
     const track = editorTrack(createEditorState());
     expect(parseTrackDocument(serializeTrackDocument(track))).toEqual(track);
@@ -85,6 +102,49 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
         "Track command",
       ),
     ).toThrow("inconsistent response");
+  });
+
+  it("parses Python-owned generated-track feature evidence", () => {
+    const compiledFixture = JSON.parse(
+      readFileSync(
+        fileURLToPath(
+          new URL(
+            "../contracts/phase2-easy-oval-geometry.json",
+            import.meta.url,
+          ),
+        ),
+        "utf8",
+      ),
+    ) as { compiled: unknown };
+    const response = parseTrackCommandResponse(
+      {
+        contractVersion: 1,
+        valid: true,
+        errors: [],
+        compiled: compiledFixture.compiled,
+        generatorVersion: 4,
+        candidateCount: 1,
+        features: {
+          layout: "asymmetric",
+          straightCount: 7,
+          cornerCount: 10,
+          chicaneCount: 2,
+          hairpinCount: 1,
+          directionChanges: 6,
+        },
+      },
+      "Track generation",
+    );
+
+    expect(response.generatorVersion).toBe(4);
+    expect(response.features).toEqual({
+      layout: "asymmetric",
+      straightCount: 7,
+      cornerCount: 10,
+      chicaneCount: 2,
+      hairpinCount: 1,
+      directionChanges: 6,
+    });
   });
 });
 import { readFileSync } from "node:fs";

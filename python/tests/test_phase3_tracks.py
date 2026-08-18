@@ -58,6 +58,8 @@ def test_every_length_and_difficulty_uses_the_canonical_compiler() -> None:
             assert isinstance(pieces, list)
             assert len(pieces) == target
             assert compile_track_payload(track) == compiled
+            features = response["features"]
+            assert features["layout"] == "asymmetric"
 
 
 def test_generator_seed_and_difficulty_change_the_canonical_shape_family() -> None:
@@ -68,7 +70,7 @@ def test_generator_seed_and_difficulty_change_the_canonical_shape_family() -> No
         hard = _generate(seed=seed, length="medium", difficulty="hard")
 
         for response in (easy, technical, hard):
-            assert response["generatorVersion"] == 2
+            assert response["generatorVersion"] == 4
             compiled = response["compiled"]
             assert isinstance(compiled, dict)
             track = compiled["track"]
@@ -83,6 +85,47 @@ def test_generator_seed_and_difficulty_change_the_canonical_shape_family() -> No
         assert any(kind.startswith("hairpin-") for kind in hard_kinds)
 
     assert len(generated_ids) == 9
+
+
+def test_generator_v4_uses_asymmetric_non_template_layouts() -> None:
+    for difficulty in ("easy", "technical", "hard"):
+        response = _generate(seed=731, length="long", difficulty=difficulty)
+        assert response["valid"] is True
+        assert response["generatorVersion"] == 4
+        pieces = response["compiled"]["track"]["pieces"]
+        kinds = [piece["kind"] for piece in pieces]
+        first_half = kinds[: len(kinds) // 2]
+        second_half = ["start-finish", *kinds[len(kinds) // 2 + 1 :]]
+
+        assert (
+            sum(first != second for first, second in zip(first_half, second_half, strict=True)) >= 2
+        )
+        assert len(set(first_half)) >= 4
+        assert any(kind.endswith("-45") for kind in first_half)
+        assert any(kind.endswith("-90") for kind in first_half)
+        if difficulty == "technical":
+            assert any(kind.startswith("chicane-") for kind in first_half)
+        if difficulty == "hard":
+            assert any(kind.startswith("chicane-") for kind in first_half)
+            assert any(kind.startswith("hairpin-") for kind in first_half)
+        features = response["features"]
+        assert features["layout"] == "asymmetric"
+        assert features["straightCount"] >= 2
+        assert features["cornerCount"] >= 4
+        assert features["directionChanges"] >= 1
+
+
+def test_generator_v4_medium_technical_seed_corpus_is_unique() -> None:
+    identifiers: set[str] = set()
+    for seed in range(12):
+        response = _generate(seed=seed, length="medium", difficulty="technical")
+        assert response["valid"] is True
+        assert response["features"]["layout"] == "asymmetric"
+        track_id = response["compiled"]["track"]["id"]
+        assert isinstance(track_id, str)
+        identifiers.add(track_id)
+
+    assert len(identifiers) == 12
 
 
 def test_invalid_editor_draft_keeps_a_python_derived_open_preview() -> None:

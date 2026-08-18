@@ -49,6 +49,7 @@ import {
 } from "./observer-refresh";
 import {
   priorGenerationTrails,
+  replayTrackTrail,
   updateGenerationTrails,
   type GenerationTrail,
 } from "./generation-trails";
@@ -56,12 +57,12 @@ import type {
   ObservationSnapshotV1,
   GenerationReplayV1,
   ReplayFrameV1,
+  RunResultV1,
   RunDocumentV1,
   RunLibraryResponseV1,
   SelectedCarTelemetryV1,
 } from "./simulation";
 import {
-  clampReplayFrameIndex,
   replayFrameIndexAfterAction,
   runCompletion,
   runControls,
@@ -78,7 +79,9 @@ import {
   deleteEditorPiece,
   duplicateEditorPiece,
   editorTrack,
+  insertEditorPiece,
   moveEditorPiece,
+  moveEditorPieceToIndex,
   parseTrackDocument,
   redoEditor,
   replaceEditorTrack,
@@ -106,11 +109,15 @@ const MIN_MARKER_TWEEN_MS = 100;
 const MAX_MARKER_TWEEN_MS = 240;
 const MARKER_TWEEN_SCALE = 1.25;
 const CHAMPION_REPLAY_RATE = 2;
-const LIVE_MARKER_SELECTOR = ".live-race-stage .track-replay-marker";
+const RESULTS_REPLAY_RATE = 1;
 const TRACK_LIBRARY_REFRESHED_NOTICE: TrackWorkspaceState["notice"] = {
   tone: "success",
   message: "Local track library refreshed.",
 };
+
+type EditorDragPayload =
+  | { source: "palette"; kind: SegmentKind }
+  | { source: "sequence"; pieceIndex: number };
 
 interface LiveMarkerMotion {
   candidateId: string;
@@ -125,6 +132,7 @@ interface ChampionReplayMotion {
   key: string;
   frames: ReplayFrameV1[];
   startedAt: number;
+  rate: number;
 }
 
 function closureRepairMessage(response: TrackCommandResponse): string {
@@ -378,6 +386,7 @@ export function mountApp(root: HTMLElement): AppController {
   const reducedMotionQuery = window.matchMedia(
     "(prefers-reduced-motion: reduce)",
   );
+  let reducedMotionOverride = false;
   let state = createInitialState();
   let presetGeometry: PresetGeometryState = { status: "loading" };
   let simulation: SimulationState = { status: "idle" };
@@ -434,8 +443,12 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const paintLiveMarker = (marker: TrackMarker): void => {
+    const selector =
+      state.route === "results"
+        ? ".replay-stage .track-replay-marker"
+        : ".live-race-stage .track-replay-marker";
     root
-      .querySelector<SVGGElement>(LIVE_MARKER_SELECTOR)
+      .querySelector<SVGGElement>(selector)
       ?.setAttribute("transform", trackMarkerTransform(marker));
   };
 
@@ -453,7 +466,8 @@ export function mountApp(root: HTMLElement): AppController {
         lastFrame.simulatedSeconds - firstFrame.simulatedSeconds,
       );
       const elapsedSeconds =
-        ((now - championReplayMotion.startedAt) / 1000) * CHAMPION_REPLAY_RATE;
+        ((now - championReplayMotion.startedAt) / 1000) *
+        championReplayMotion.rate;
       if (elapsedSeconds >= replaySeconds) {
         championReplayMotion = {
           ...championReplayMotion,
@@ -465,7 +479,7 @@ export function mountApp(root: HTMLElement): AppController {
       if (activeFirst !== undefined && activeLast !== undefined) {
         const activeElapsed =
           ((now - championReplayMotion.startedAt) / 1000) *
-          CHAMPION_REPLAY_RATE;
+          championReplayMotion.rate;
         const marker = loopingReplayTrackMarker(
           championReplayMotion.frames,
           activeElapsed,
@@ -531,11 +545,14 @@ export function mountApp(root: HTMLElement): AppController {
   };
 
   const syncLiveMarkerMotion = (): void => {
-    if (state.route !== "training" || simulation.status !== "ready") {
+    if (
+      (state.route !== "training" && state.route !== "results") ||
+      simulation.status !== "ready"
+    ) {
       resetLiveMarkerMotion();
       return;
     }
-    const reducedMotion = reducedMotionQuery.matches;
+    const reducedMotion = reducedMotionQuery.matches || reducedMotionOverride;
     const replay = availableChampionReplay();
     if (replay !== null) {
       if (!shouldAnimateReplay(reducedMotion, replay.replay.frames.length)) {
@@ -545,11 +562,15 @@ export function mountApp(root: HTMLElement): AppController {
         return;
       }
       const nextReplay = {
-        key: replay.key,
+        key: `${state.route}:${replay.key}`,
         frames: replay.replay.frames,
         startedAt: window.performance.now(),
+        rate:
+          state.route === "results"
+            ? RESULTS_REPLAY_RATE
+            : CHAMPION_REPLAY_RATE,
       };
-      if (championReplayMotion?.key !== replay.key) {
+      if (championReplayMotion?.key !== nextReplay.key) {
         championReplayMotion = nextReplay;
       } else {
         const marker = loopingReplayTrackMarker(
@@ -1276,6 +1297,32 @@ export function mountApp(root: HTMLElement): AppController {
     void validateEditorDraft();
   };
 
+  const dropEditorPiece = (
+    payload: EditorDragPayload,
+    insertionIndex: number,
+  ): void => {
+    if (trackWorkspace.pending !== null) {
+      return;
+    }
+    const editor =
+      payload.source === "palette"
+        ? insertEditorPiece(trackWorkspace.editor, payload.kind, insertionIndex)
+        : moveEditorPieceToIndex(
+            trackWorkspace.editor,
+            payload.pieceIndex,
+            insertionIndex,
+          );
+    if (editor === trackWorkspace.editor) {
+      return;
+    }
+    setEditorDraft(
+      editor,
+      payload.source === "palette"
+        ? "Piece snapped into the circuit. Python is checking the new sequence."
+        : "Pieces reconnected. Python is checking the new sequence.",
+    );
+  };
+
   const validateEditorDraft = async (): Promise<void> => {
     const requestId = ++trackValidationRequest;
     const draft = editorTrack(trackWorkspace.editor);
@@ -1408,7 +1455,6 @@ export function mountApp(root: HTMLElement): AppController {
           trackWorkspace = {
             ...trackWorkspace,
             toolsOpen: true,
-            tab: "build",
             notice: shouldValidate
               ? {
                   tone: "info",
@@ -1705,17 +1751,25 @@ export function mountApp(root: HTMLElement): AppController {
               ...trackWorkspace,
               pending: null,
               generatedInputs: generator,
+              generatedFeatures: response.features,
               generatedPreview: response.compiled,
+              selected: response.compiled,
               notice: {
                 tone: "success",
-                message: `Generated and verified ${String(response.compiled.track.pieces.length)} canonical pieces with generator v${String(response.generatorVersion ?? "?")} after ${String(response.candidateCount ?? 1)} candidate(s).`,
+                message: `Generated, verified, and selected ${String(response.compiled.track.pieces.length)} canonical pieces with generator v${String(response.generatorVersion ?? "?")} after ${String(response.candidateCount ?? 1)} candidate(s).`,
               },
             };
+            dispatch({
+              type: "select-custom-track",
+              track: response.compiled.track,
+            });
+            return;
           } else {
             trackWorkspace = {
               ...trackWorkspace,
               pending: null,
               generatedInputs: undefined,
+              generatedFeatures: undefined,
               generatedPreview: undefined,
               notice: {
                 tone: "error",
@@ -2058,6 +2112,8 @@ export function mountApp(root: HTMLElement): AppController {
       runLibrary,
       replayFrameIndex,
       generationTrails,
+      reducedMotionQuery.matches || reducedMotionOverride,
+      reducedMotionQuery.matches,
     );
     syncLiveMarkerMotion();
     bindActions(
@@ -2070,10 +2126,15 @@ export function mountApp(root: HTMLElement): AppController {
       moveReplay,
       handleRunAction,
       handleTrackAction,
+      dropEditorPiece,
       importTrack,
       retryPresetTracks,
       retryRunLibrary,
       exitApplication,
+      () => {
+        reducedMotionOverride = !reducedMotionOverride;
+        render();
+      },
       (name, roadWidth) => {
         setEditorDraft(
           updateEditorDetails(trackWorkspace.editor, name, roadWidth),
@@ -2140,6 +2201,8 @@ function renderShell(
   runLibrary: RunLibraryState,
   replayFrameIndex: number,
   generationTrails: readonly GenerationTrail[],
+  reducedMotion: boolean,
+  systemReducedMotion: boolean,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -2176,15 +2239,25 @@ function renderShell(
           <span class="brand-mark" aria-hidden="true"></span>
           <span>
             <strong>EvoRacer</strong>
-            <small>Simulation workspace</small>
+            <small>Offline evolution lab</small>
           </span>
         </a>
         <div class="topbar-actions">
           <p class="local-status">
             <span aria-hidden="true"></span>
-            Offline
+            Local core
           </p>
-          <button class="exit-button" type="button" data-action="exit-application">
+          <button
+            class="motion-button"
+            type="button"
+            data-action="toggle-motion"
+            aria-pressed="${String(reducedMotion)}"
+            title="${systemReducedMotion ? "Windows motion preference is active" : reducedMotion ? "Restore interface motion" : "Reduce interface motion"}"
+            ${systemReducedMotion ? "disabled" : ""}
+          >
+            ${systemReducedMotion ? "Motion reduced by Windows" : reducedMotion ? "Motion reduced" : "Reduce motion"}
+          </button>
+          <button class="exit-button" type="button" data-action="exit-application" title="Exit application">
             Exit application
           </button>
         </div>
@@ -2211,6 +2284,7 @@ function renderShell(
           runLibrary,
           replayFrameIndex,
           generationTrails,
+          reducedMotion,
         )}
       </main>
     </div>
@@ -2225,6 +2299,7 @@ function renderRoute(
   runLibrary: RunLibraryState,
   replayFrameIndex: number,
   generationTrails: readonly GenerationTrail[],
+  reducedMotion: boolean,
 ): string {
   const activeTrack =
     state.draft.track === null
@@ -2244,7 +2319,13 @@ function renderRoute(
     case "review":
       return renderReview(state);
     case "training":
-      return renderTraining(state, simulation, activeTrack, generationTrails);
+      return renderTraining(
+        state,
+        simulation,
+        activeTrack,
+        generationTrails,
+        reducedMotion,
+      );
     case "results":
       return renderResults(
         state,
@@ -2252,6 +2333,7 @@ function renderRoute(
         replayFrameIndex,
         activeTrack,
         generationTrails,
+        reducedMotion,
       );
   }
 }
@@ -2344,8 +2426,23 @@ function renderWelcome(runLibrary: RunLibraryState): string {
       ${pageHeader(
         "EvoRacer / New experiment",
         "Start an AI racing experiment.",
-        "Use the recommended first run or customize it. Nothing runs until you review the setup and press Start.",
+        "Choose a circuit, watch a population learn the racing line, and compare the champion. Nothing runs until you review the setup and press Start.",
       )}
+
+      <div class="welcome-journey" aria-label="How EvoRacer works">
+        <div>
+          <span aria-hidden="true">01</span>
+          <p><strong>Choose a track</strong>Start with the forgiving oval or build your own circuit.</p>
+        </div>
+        <div>
+          <span aria-hidden="true">02</span>
+          <p><strong>Watch evolution</strong>See each candidate race with Python-owned physics and telemetry.</p>
+        </div>
+        <div>
+          <span aria-hidden="true">03</span>
+          <p><strong>Compare the champion</strong>Replay the best car and inspect real generation progress.</p>
+        </div>
+      </div>
 
       <div class="welcome-panel">
         <div class="welcome-summary" aria-label="Experiment setup summary">
@@ -2800,6 +2897,7 @@ function renderTraining(
   simulation: SimulationState,
   activeTrack: CompiledTrackV1 | undefined,
   generationTrails: readonly GenerationTrail[],
+  reducedMotion: boolean,
 ): string {
   let observerContent: string;
   if (simulation.status === "loading") {
@@ -2842,6 +2940,7 @@ function renderTraining(
             live,
             replay,
             priorTrails,
+            reducedMotion,
           )}
           ${renderSelectedCarTelemetry(
             snapshot.selectedCar,
@@ -2918,20 +3017,22 @@ function renderLiveRace(
   live: boolean,
   replay: GenerationReplayV1 | undefined | null,
   priorTrails: readonly GenerationTrail[],
+  reducedMotion: boolean,
 ): string {
-  const firstReplayFrame = replay?.frames[0];
+  const staticReplayFrame =
+    reducedMotion && replay !== null && replay !== undefined
+      ? replay.frames.at(-1)
+      : replay?.frames[0];
   const marker =
-    firstReplayFrame === undefined
+    staticReplayFrame === undefined
       ? liveTrackMarker(telemetry)
       : {
-          x: firstReplayFrame.x,
-          y: firstReplayFrame.y,
-          heading: firstReplayFrame.heading,
+          x: staticReplayFrame.x,
+          y: staticReplayFrame.y,
+          heading: staticReplayFrame.heading,
         };
   const replaying = replay !== null && replay !== undefined;
-  const reducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
+  const currentTrail = replaying ? replayTrackTrail(replay) : undefined;
   const animatedReplay =
     replaying && shouldAnimateReplay(reducedMotion, replay.frames.length);
   const candidateLabel = replaying
@@ -2956,33 +3057,42 @@ function renderLiveRace(
       <div
         class="live-race-stage"
         role="img"
-        aria-label="${animatedReplay ? "Smooth champion replay" : replaying ? "Static champion replay" : live ? "Live" : "Latest"} car position${priorTrails.length === 0 ? "" : ` with ${String(priorTrails.length)} previous generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
+        aria-label="${animatedReplay ? "Smooth champion replay" : replaying ? "Static champion replay" : live ? "Live" : "Latest"} car position${currentTrail === undefined ? "" : " with its complete recorded path"}${priorTrails.length === 0 ? "" : ` and ${String(priorTrails.length)} earlier generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
       >
         ${
           activeTrack === undefined
             ? '<p class="track-preview-status">Validated track geometry is unavailable.</p>'
             : marker !== undefined
-              ? renderTrackSvg(activeTrack, marker, priorTrails)
-              : renderTrackSvg(activeTrack, undefined, priorTrails)
+              ? renderTrackSvg(activeTrack, marker, priorTrails, currentTrail)
+              : renderTrackSvg(
+                  activeTrack,
+                  undefined,
+                  priorTrails,
+                  currentTrail,
+                )
         }
       </div>
-      ${renderGenerationTrailSummary(priorTrails.length)}
+      ${renderGenerationTrailSummary(currentTrail !== undefined, priorTrails.length)}
       <div class="live-race-footer">
-        <span>${animatedReplay ? "Buffered authoritative frames at 60 FPS" : replaying ? (reducedMotion ? "Authoritative replay held still for reduced motion" : "Single authoritative replay frame") : live ? "Accelerated live evaluation" : "Generation boundary"}</span>
+        <span>${animatedReplay ? "Full authoritative path · buffered replay at 60 FPS" : replaying ? (reducedMotion ? "Full authoritative path · final frame held for reduced motion" : "Full authoritative path · single recorded frame") : live ? "Accelerated live evaluation" : "Generation boundary"}</span>
         <strong>${replaying ? `${String(replay.frames.length)} Python frames` : `${telemetry.simulatedSeconds.toFixed(2)} simulated seconds · ${(telemetry.progress * 100).toFixed(1)}%`}</strong>
       </div>
     </section>
   `;
 }
 
-function renderGenerationTrailSummary(count: number): string {
-  if (count === 0) {
+function renderGenerationTrailSummary(
+  hasCurrentPath: boolean,
+  priorCount: number,
+): string {
+  if (!hasCurrentPath && priorCount === 0) {
     return "";
   }
   return `
     <div class="generation-trail-summary" aria-live="polite">
-      <span><i aria-hidden="true"></i> Evolution trail</span>
-      <strong>${String(count)} previous champion path${count === 1 ? "" : "s"} · older paths fade</strong>
+      <span class="current-path-label"><i aria-hidden="true"></i> Displayed champion</span>
+      ${priorCount === 0 ? "" : `<span class="prior-path-label"><i aria-hidden="true"></i> ${String(priorCount)} earlier champion${priorCount === 1 ? "" : "s"}</span>`}
+      <strong>Python-recorded driving path${priorCount === 0 ? "" : " · older paths fade"}</strong>
     </div>
   `;
 }
@@ -3033,27 +3143,29 @@ function renderSelectedCarTelemetry(
     .join("");
 
   return `
-    <section class="telemetry-panel" aria-labelledby="telemetry-title">
-      <div class="telemetry-heading">
+    <details class="telemetry-panel telemetry-disclosure">
+      <summary class="telemetry-heading">
         <div>
           <p class="section-kicker">Selected car · ${escapeHtml(telemetry.selectedCarId)}</p>
           <h2 id="telemetry-title">${escapeHtml(title)}</h2>
         </div>
         <span class="data-chip">${escapeHtml(status)}</span>
-      </div>
-      <dl class="telemetry-metrics">${metrics}</dl>
-      <div class="sensor-panel">
-        <div>
-          <h3>Road-edge sensors</h3>
-          <p>Seven Python-derived rays · ${telemetry.simulatedSeconds.toFixed(2)} simulated seconds</p>
+      </summary>
+      <div class="telemetry-content">
+        <dl class="telemetry-metrics">${metrics}</dl>
+        <div class="sensor-panel">
+          <div>
+            <h3>Road-edge sensors</h3>
+            <p>Seven Python-derived rays · ${telemetry.simulatedSeconds.toFixed(2)} simulated seconds</p>
+          </div>
+          <ul>${sensors}</ul>
         </div>
-        <ul>${sensors}</ul>
+        <p class="telemetry-note">
+          Vehicle setup and controller parameters stayed fixed during this episode.
+          Controls are observer telemetry only; there are no driving inputs.
+        </p>
       </div>
-      <p class="telemetry-note">
-        Vehicle setup and controller parameters stayed fixed during this episode.
-        Controls are observer telemetry only; there are no driving inputs.
-      </p>
-    </section>
+    </details>
   `;
 }
 
@@ -3199,6 +3311,7 @@ function renderResults(
   replayFrameIndex: number,
   replayTrack: CompiledTrackV1 | undefined,
   generationTrails: readonly GenerationTrail[],
+  reducedMotion: boolean,
 ): string {
   const preset = TRACK_PRESETS.find(
     (candidate) => candidate.id === state.draft.trackPreset,
@@ -3229,15 +3342,26 @@ function renderResults(
     return "";
   }
   const snapshot = simulation.snapshot;
-  const normalizedReplayFrameIndex = clampReplayFrameIndex(
-    replayFrameIndex,
-    result.replay.frames.length,
-  );
-  const priorTrails = priorGenerationTrails(
-    generationTrails,
-    result.replay.candidateId,
-  );
-  const frame = result.replay.frames[normalizedReplayFrameIndex];
+  void replayFrameIndex;
+  void generationTrails;
+  const championComparison = result.baselineComparisons[0];
+  const firstBest =
+    result.fitnessHistory[0]?.bestFitness ?? result.champion.fitness;
+  const fitnessGain = result.champion.fitness - firstBest;
+  const improvement = fitnessGain > 1e-6;
+  const racingLine = result.racingLineComparison;
+  const lineHeadline =
+    racingLine === undefined
+      ? "Ideal-line comparison unavailable"
+      : racingLine.matched
+        ? "Yes — the champion matched the ideal-line benchmark"
+        : racingLine.championFinished
+          ? "Not yet — the champion finished, but used a different line"
+          : "Not yet — the champion did not complete the lap";
+  const lineEvidence =
+    racingLine === undefined
+      ? "This result predates the geometric racing-line benchmark."
+      : `Average deviation ${racingLine.meanDeviationMeters.toFixed(2)} m (target ≤ ${racingLine.meanToleranceMeters.toFixed(2)} m); 95th percentile ${racingLine.p95DeviationMeters.toFixed(2)} m (target ≤ ${racingLine.p95ToleranceMeters.toFixed(2)} m).`;
   const comparisons = result.baselineComparisons
     .map(
       (item) => `
@@ -3281,45 +3405,48 @@ function renderResults(
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
         "Experiment / Results",
-        "Results",
-        "Python-owned metadata, champion replay, and comparable baselines from the same track and vehicle setup.",
+        "What did the AI achieve?",
+        "Read the verdict first, then inspect the champion against the same Python-owned track and reference.",
       )}
-      <section class="result-summary" aria-labelledby="result-summary-title">
-        <div>
-          <p class="section-kicker">${escapeHtml(result.metadata.status)} run</p>
-          <h2 id="result-summary-title">${escapeHtml(result.metadata.trackName)}</h2>
-          <p>${escapeHtml(result.metadata.runId)} · ${escapeHtml(result.metadata.algorithm)} · seed ${String(result.metadata.seed)}</p>
+      <section class="result-verdict" aria-labelledby="result-verdict-title">
+        <div class="result-verdict-copy">
+          <p class="section-kicker">Ideal racing line · geometric reference</p>
+          <h2 id="result-verdict-title">${lineHeadline}</h2>
+          <p>${lineEvidence}</p>
+          <p class="comparison-note">The dashed cyan line minimizes geometric curvature inside the road corridor. It is a benchmark, not proof of the globally fastest lap.</p>
         </div>
-        <dl>
-          <div><dt>Champion fitness</dt><dd>${result.champion.fitness.toFixed(3)}</dd></div>
-          <div><dt>Progress</dt><dd>${(result.champion.progress * 100).toFixed(1)}%</dd></div>
-          <div><dt>Generations</dt><dd>${String(result.metadata.generationsCompleted)} / ${String(result.metadata.generationsRequested)}</dd></div>
-          <div><dt>Track SHA-256</dt><dd>${escapeHtml(result.metadata.trackSha256.slice(0, 12))}…</dd></div>
-        </dl>
-      </section>
-      ${renderFitnessChart(result.fitnessHistory)}
-      <section class="comparison-panel" aria-labelledby="baseline-title">
-        <h2 id="baseline-title">Champion and baselines</h2>
-        <div class="table-scroll">
-          <table>
-            <thead><tr><th>Controller</th><th>Fitness</th><th>Progress</th><th>Outcome</th></tr></thead>
-            <tbody>${comparisons}</tbody>
-          </table>
+        <div class="verdict-grid" aria-label="Result summary">
+          <article><span>Learning</span><strong>${improvement ? "Improved" : "No measured gain"}</strong><p>${fitnessGain >= 0 ? "+" : ""}${fitnessGain.toFixed(3)} fitness from generation 1 best</p></article>
+          <article><span>Lap outcome</span><strong>${championComparison?.finished === true ? "Finished" : "Incomplete"}</strong><p>${(result.champion.progress * 100).toFixed(1)}% progress · ${String(championComparison?.collisionCount ?? 0)} collision(s)</p></article>
+          <article><span>Ideal-line match</span><strong>${racingLine === undefined ? "Unavailable" : racingLine.matched ? "Matched" : "Not matched"}</strong><p>${racingLine === undefined ? "Older result contract" : `${racingLine.meanDeviationMeters.toFixed(2)} m average deviation`}</p></article>
+          <article><span>Training</span><strong>${String(result.metadata.generationsCompleted)} / ${String(result.metadata.generationsRequested)}</strong><p>${escapeHtml(result.metadata.algorithm)} · seed ${String(result.metadata.seed)}</p></article>
         </div>
       </section>
       ${renderReplay(
         result.replay.frames,
-        frame,
-        normalizedReplayFrameIndex,
-        result.replay.vehicleSetup.frontDriveBias,
-        result.replay.vehicleSetup.frontBrakeBias,
+        result.replay.candidateId,
         replayTrack,
-        priorTrails,
+        racingLine,
+        reducedMotion,
       )}
-      <section class="comparison-panel" aria-labelledby="run-comparison-title">
-        <h2 id="run-comparison-title">Previous saved runs</h2>
-        ${previous}
-      </section>
+      <div class="result-analysis-grid">
+        ${renderFitnessChart(result.fitnessHistory)}
+        <section class="comparison-panel" aria-labelledby="baseline-title">
+          <div class="chart-heading"><div><p class="section-kicker">Same track and vehicle setup</p><h2 id="baseline-title">Champion vs baselines</h2></div></div>
+          <p class="comparison-note">Higher fitness and progress are better. Compare these values only inside this run.</p>
+          <div class="table-scroll"><table><thead><tr><th>Controller</th><th>Fitness</th><th>Progress</th><th>Outcome</th></tr></thead><tbody>${comparisons}</tbody></table></div>
+        </section>
+      </div>
+      <details class="result-details"><summary>Previous comparable runs</summary><div class="result-details-body" id="run-comparison-title">${previous}</div></details>
+      <details class="result-details">
+        <summary>Run details</summary>
+        <dl class="result-metadata">
+          <div><dt>Track</dt><dd>${escapeHtml(result.metadata.trackName)}</dd></div>
+          <div><dt>Run</dt><dd>${escapeHtml(result.metadata.runId)}</dd></div>
+          <div><dt>Champion</dt><dd>${escapeHtml(result.champion.candidateId)}</dd></div>
+          <div><dt>Track SHA-256</dt><dd>${escapeHtml(result.metadata.trackSha256.slice(0, 12))}…</dd></div>
+        </dl>
+      </details>
       <div class="page-actions">
         <button class="button primary" type="button" data-action="new-setup">
           Create another setup
@@ -3331,13 +3458,12 @@ function renderResults(
 
 function renderReplay(
   frames: ReplayFrameV1[],
-  frame: ReplayFrameV1 | undefined,
-  replayFrameIndex: number,
-  frontDriveBias: number,
-  frontBrakeBias: number,
+  candidateId: string,
   replayTrack: CompiledTrackV1 | undefined,
-  priorTrails: readonly GenerationTrail[],
+  racingLine: RunResultV1["racingLineComparison"],
+  reducedMotion: boolean,
 ): string {
+  const frame = reducedMotion ? frames.at(-1) : frames[0];
   if (frame === undefined) {
     return `
       <section class="replay-panel" aria-labelledby="replay-title">
@@ -3346,33 +3472,34 @@ function renderReplay(
       </section>
     `;
   }
+  const currentTrail = replayTrackTrail({ candidateId, frames });
+  const referenceTrail =
+    racingLine === undefined
+      ? undefined
+      : { candidateId: racingLine.method, points: racingLine.referenceLine };
   return `
     <section class="replay-panel" aria-labelledby="replay-title">
       <div class="chart-heading">
-        <div><p class="section-kicker">Recorded Python motion and controls</p><h2 id="replay-title">Champion replay</h2></div>
-        <span class="data-chip">Frame ${String(replayFrameIndex + 1)} / ${String(frames.length)}</span>
+        <div><p class="section-kicker">Actual route vs geometric benchmark</p><h2 id="replay-title">Champion and ideal racing line</h2></div>
+        <span class="data-chip">${reducedMotion ? "Final frame · motion reduced" : "Smooth replay · 1×"}</span>
       </div>
-      <div class="replay-stage" role="img" aria-label="Champion position and heading at ${frame.simulatedSeconds.toFixed(2)} simulated seconds">
+      <div class="replay-stage" role="img" aria-label="Champion path overlaid with the minimum-curvature ideal racing-line reference">
         ${
           replayTrack === undefined
             ? '<p class="track-preview-status">Validated track geometry is unavailable.</p>'
-            : renderTrackSvg(replayTrack, frame, priorTrails)
+            : renderTrackSvg(
+                replayTrack,
+                frame,
+                [],
+                currentTrail,
+                referenceTrail,
+              )
         }
-        <p>x ${frame.x.toFixed(2)} · y ${frame.y.toFixed(2)} · ${(frame.progress * 100).toFixed(1)}%</p>
       </div>
-      ${renderGenerationTrailSummary(priorTrails.length)}
-      <dl class="telemetry-metrics">
-        <div><dt>Steering</dt><dd>${frame.steering.toFixed(3)}</dd></div>
-        <div><dt>Throttle</dt><dd>${frame.throttle.toFixed(3)}</dd></div>
-        <div><dt>Brake</dt><dd>${frame.brake.toFixed(3)}</dd></div>
-        <div><dt>Front drive bias</dt><dd>${frontDriveBias.toFixed(3)}</dd></div>
-        <div><dt>Front brake bias</dt><dd>${frontBrakeBias.toFixed(3)}</dd></div>
-        <div><dt>Simulated time</dt><dd>${frame.simulatedSeconds.toFixed(2)} s</dd></div>
-      </dl>
-      <div class="replay-controls">
-        <button class="button secondary" type="button" data-action="replay-restart">Restart</button>
-        <button class="button secondary" type="button" data-action="replay-previous" ${replayFrameIndex === 0 ? "disabled" : ""}>Previous</button>
-        <button class="button secondary" type="button" data-action="replay-next" ${replayFrameIndex >= frames.length - 1 ? "disabled" : ""}>Next</button>
+      <div class="racing-line-legend" aria-label="Racing-line legend">
+        <span><i class="actual-line-key" aria-hidden="true"></i>Champion path</span>
+        <span><i class="ideal-line-key" aria-hidden="true"></i>Ideal line · minimum curvature</span>
+        <span>${escapeHtml(candidateId)} · ${String(frames.length)} recorded Python frames</span>
       </div>
     </section>
   `;
@@ -3417,10 +3544,12 @@ function bindActions(
     runId: string,
   ) => Promise<void>,
   handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
+  dropEditorPiece: (payload: EditorDragPayload, insertionIndex: number) => void,
   importTrack: (file: File) => Promise<void>,
   retryPresetTracks: () => void,
   retryRunLibrary: () => void,
   exitApplication: () => Promise<void>,
+  toggleReducedMotion: () => void,
   updateEditor: (name: string, roadWidth: number) => void,
   updateGenerator: (
     seed: number,
@@ -3477,6 +3606,9 @@ function bindActions(
         case "exit-application":
           void exitApplication();
           break;
+        case "toggle-motion":
+          toggleReducedMotion();
+          break;
         case "retry-preset-tracks":
           retryPresetTracks();
           break;
@@ -3521,6 +3653,101 @@ function bindActions(
         const action = element.dataset.trackAction;
         if (action !== undefined) {
           void handleTrackAction(action, element);
+        }
+      });
+    });
+
+  let dragPayload: EditorDragPayload | null = null;
+  const clearEditorDrag = (): void => {
+    dragPayload = null;
+    root
+      .querySelectorAll<HTMLElement>(
+        ".is-dragging, .is-drop-target, .is-drag-active",
+      )
+      .forEach((element) => {
+        element.classList.remove(
+          "is-dragging",
+          "is-drop-target",
+          "is-drag-active",
+        );
+      });
+  };
+
+  root
+    .querySelectorAll<HTMLElement>(
+      "[data-editor-drag-kind], [data-editor-drag-index]",
+    )
+    .forEach((element) => {
+      element.addEventListener("dragstart", (event) => {
+        if (!(event instanceof DragEvent) || element.matches(":disabled")) {
+          event.preventDefault();
+          return;
+        }
+        const kind = element.dataset.editorDragKind as SegmentKind | undefined;
+        const pieceIndex = Number(element.dataset.editorDragIndex);
+        dragPayload =
+          kind === undefined
+            ? Number.isInteger(pieceIndex) && pieceIndex > 0
+              ? { source: "sequence", pieceIndex }
+              : null
+            : { source: "palette", kind };
+        if (dragPayload === null) {
+          event.preventDefault();
+          return;
+        }
+        element.classList.add("is-dragging");
+        root
+          .querySelector<HTMLElement>(".builder-sequence")
+          ?.classList.add("is-drag-active");
+        if (event.dataTransfer !== null) {
+          event.dataTransfer.effectAllowed =
+            dragPayload.source === "palette" ? "copy" : "move";
+          event.dataTransfer.setData(
+            "text/plain",
+            dragPayload.source === "palette"
+              ? dragPayload.kind
+              : String(dragPayload.pieceIndex),
+          );
+        }
+      });
+      element.addEventListener("dragend", clearEditorDrag);
+    });
+
+  root
+    .querySelectorAll<HTMLElement>("[data-track-drop-index]")
+    .forEach((dropZone) => {
+      dropZone.addEventListener("dragover", (event) => {
+        if (!(event instanceof DragEvent) || dragPayload === null) {
+          return;
+        }
+        event.preventDefault();
+        root
+          .querySelectorAll<HTMLElement>(".sequence-drop-zone.is-drop-target")
+          .forEach((element) => {
+            element.classList.remove("is-drop-target");
+          });
+        dropZone.classList.add("is-drop-target");
+        if (event.dataTransfer !== null) {
+          event.dataTransfer.dropEffect =
+            dragPayload.source === "palette" ? "copy" : "move";
+        }
+      });
+      dropZone.addEventListener("dragleave", (event) => {
+        const nextTarget = event.relatedTarget;
+        if (!(nextTarget instanceof Node) || !dropZone.contains(nextTarget)) {
+          dropZone.classList.remove("is-drop-target");
+        }
+      });
+      dropZone.addEventListener("drop", (event) => {
+        if (!(event instanceof DragEvent) || dragPayload === null) {
+          return;
+        }
+        event.preventDefault();
+        const payload = dragPayload;
+        const insertionIndex = Number(dropZone.dataset.trackDropIndex);
+        clearEditorDrag();
+        if (Number.isInteger(insertionIndex)) {
+          dropEditorPiece(payload, insertionIndex);
         }
       });
     });
@@ -3671,9 +3898,19 @@ function syncGeneratorDraftPresentation(
   }
 
   const inputsChanged = generatorInputsChanged(workspace);
+  const selectedMatches =
+    workspace.generatedPreview !== undefined &&
+    workspace.selected !== undefined &&
+    JSON.stringify(workspace.generatedPreview.track) ===
+      JSON.stringify(workspace.selected.track);
   badge.classList.toggle("is-warning", inputsChanged);
-  badge.classList.toggle("is-success", !inputsChanged);
-  badge.textContent = inputsChanged ? "Inputs changed" : "Python verified";
+  badge.classList.toggle("is-success", !inputsChanged && selectedMatches);
+  badge.classList.toggle("is-info", !inputsChanged && !selectedMatches);
+  badge.textContent = inputsChanged
+    ? "Inputs changed"
+    : selectedMatches
+      ? "Active experiment track"
+      : "Verified candidate";
 
   const notice = root.querySelector<HTMLElement>("[data-track-builder-notice]");
   const noticeMessage = root.querySelector<HTMLElement>(

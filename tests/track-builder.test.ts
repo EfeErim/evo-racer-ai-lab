@@ -60,6 +60,11 @@ describe("Track Builder workspace", () => {
     expect(html).toContain("Python verified");
     expect(html).toContain("Short straight");
     expect(html).toContain("Left hairpin");
+    expect(html).toContain('aria-label="Track piece tray"');
+    expect(html).toContain('data-editor-drag-kind="straight-short"');
+    expect(html).toContain('data-editor-drag-index="1" draggable="true"');
+    expect(html).toContain('data-track-drop-index="1"');
+    expect(html).toContain("Drag a piece into a glowing connector");
     expect(html).toContain('data-track-action="editor-move"');
     expect(html).toContain('data-track-action="editor-duplicate"');
     expect(html).toContain('data-track-action="use-editor"');
@@ -99,6 +104,10 @@ describe("Track Builder workspace", () => {
     expect(html).toMatch(/data-editor-name[^>]*disabled/);
     expect(html).toMatch(/data-editor-width[^>]*disabled/);
     expect(html).toMatch(/data-segment-kind="straight-short"[^>]*disabled/);
+    expect(html).toMatch(
+      /data-editor-drag-kind="straight-short"[^>]*draggable="false"/,
+    );
+    expect(html).toMatch(/data-editor-drag-index="1"[^>]*draggable="false"/);
     expect(html).toMatch(/data-track-action="editor-move"[^>]*disabled/);
     expect(html).toMatch(/data-track-action="editor-delete"[^>]*disabled/);
   });
@@ -148,6 +157,14 @@ describe("Track Builder workspace", () => {
     state.tab = "generate";
     state.generator = { seed: 731, length: "long", difficulty: "hard" };
     state.generatedInputs = { ...state.generator };
+    state.generatedFeatures = {
+      layout: "asymmetric",
+      straightCount: 7,
+      cornerCount: 10,
+      chicaneCount: 3,
+      hairpinCount: 1,
+      directionChanges: 5,
+    };
     state.generatedPreview = fixture.compiled;
     const generatorHtml = renderTrackBuilder(state, false);
 
@@ -155,6 +172,8 @@ describe("Track Builder workspace", () => {
     expect(generatorHtml).toContain('value="long" checked');
     expect(generatorHtml).toContain('value="hard" checked');
     expect(generatorHtml).toContain('data-track-action="edit-generated"');
+    expect(generatorHtml).toContain("Asymmetric");
+    expect(generatorHtml).toContain("5 direction changes");
 
     state.tab = "library";
     state.library = {
@@ -214,5 +233,31 @@ describe("Track Builder workspace", () => {
     expect(html).toContain("Inputs changed");
     expect(html).toContain("<dt>Seed</dt><dd>42</dd>");
     expect(html).not.toContain("<dt>Seed</dt><dd>99</dd>");
+  });
+
+  it("makes the generated active TrackV1 unmistakable", () => {
+    const state = createTrackWorkspaceState("custom-track-test");
+    state.toolsOpen = true;
+    state.tab = "generate";
+    state.generatedInputs = { ...state.generator };
+    state.generatedFeatures = {
+      layout: "asymmetric",
+      straightCount: 6,
+      cornerCount: 8,
+      chicaneCount: 2,
+      hairpinCount: 0,
+      directionChanges: 4,
+    };
+    state.generatedPreview = fixture.compiled;
+    state.selected = fixture.compiled;
+
+    const html = renderTrackBuilder(state, true);
+
+    expect(html).toContain("Active experiment track");
+    expect(html).toContain("Active for Review and Start");
+    expect(html).toContain(
+      "This exact Python-verified TrackV1 will be submitted.",
+    );
+    expect(html).not.toContain('data-track-action="use-generated"');
   });
 });

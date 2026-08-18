@@ -150,9 +150,28 @@ export function addEditorPiece(
   state: EditorState,
   kind: SegmentKind,
 ): EditorState {
+  return insertEditorPiece(state, kind, state.present.pieces.length);
+}
+
+export function insertEditorPiece(
+  state: EditorState,
+  kind: SegmentKind,
+  insertionIndex: number,
+): EditorState {
+  if (
+    !Number.isInteger(insertionIndex) ||
+    insertionIndex < 1 ||
+    insertionIndex > state.present.pieces.length
+  ) {
+    return state;
+  }
   return commit(state, {
     ...state.present,
-    pieces: [...state.present.pieces, { kind }],
+    pieces: [
+      ...state.present.pieces.slice(0, insertionIndex),
+      { kind },
+      ...state.present.pieces.slice(insertionIndex),
+    ],
   });
 }
 
@@ -197,6 +216,37 @@ export function moveEditorPiece(
   }
   pieces[index] = target;
   pieces[destination] = source;
+  return commit(state, { ...state.present, pieces });
+}
+
+export function moveEditorPieceToIndex(
+  state: EditorState,
+  sourceIndex: number,
+  insertionIndex: number,
+): EditorState {
+  if (
+    !Number.isInteger(sourceIndex) ||
+    !Number.isInteger(insertionIndex) ||
+    sourceIndex <= 0 ||
+    sourceIndex >= state.present.pieces.length ||
+    insertionIndex < 1 ||
+    insertionIndex > state.present.pieces.length
+  ) {
+    return state;
+  }
+
+  const destinationIndex =
+    insertionIndex > sourceIndex ? insertionIndex - 1 : insertionIndex;
+  if (destinationIndex === sourceIndex) {
+    return state;
+  }
+
+  const pieces = state.present.pieces.map((piece) => ({ ...piece }));
+  const [source] = pieces.splice(sourceIndex, 1);
+  if (source === undefined) {
+    return state;
+  }
+  pieces.splice(destinationIndex, 0, source);
   return commit(state, { ...state.present, pieces });
 }
 
@@ -317,6 +367,16 @@ export interface TrackCommandResponse {
   removedPieces?: number;
   candidateCount?: number;
   generatorVersion?: number;
+  features?: GeneratedTrackFeatures;
+}
+
+export interface GeneratedTrackFeatures {
+  layout: "asymmetric" | "balanced";
+  straightCount: number;
+  cornerCount: number;
+  chicaneCount: number;
+  hairpinCount: number;
+  directionChanges: number;
 }
 
 export interface TrackLibraryResponse {
@@ -361,6 +421,7 @@ export function parseTrackCommandResponse(
     value.generatorVersion,
     label,
   );
+  const features = parseGeneratedTrackFeatures(value.features, label);
   return {
     contractVersion: 1,
     valid: value.valid,
@@ -371,6 +432,7 @@ export function parseTrackCommandResponse(
     ...(removedPieces === undefined ? {} : { removedPieces }),
     ...(candidateCount === undefined ? {} : { candidateCount }),
     ...(generatorVersion === undefined ? {} : { generatorVersion }),
+    ...(features === undefined ? {} : { features }),
   };
 }
 
@@ -458,6 +520,46 @@ function optionalNonNegativeInteger(
     throw new Error(`${label} returned an invalid response.`);
   }
   return value as number;
+}
+
+function parseGeneratedTrackFeatures(
+  value: unknown,
+  label: string,
+): GeneratedTrackFeatures | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (
+    !isRecord(value) ||
+    (value.layout !== "asymmetric" && value.layout !== "balanced")
+  ) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  const straightCount = optionalNonNegativeInteger(value.straightCount, label);
+  const cornerCount = optionalNonNegativeInteger(value.cornerCount, label);
+  const chicaneCount = optionalNonNegativeInteger(value.chicaneCount, label);
+  const hairpinCount = optionalNonNegativeInteger(value.hairpinCount, label);
+  const directionChanges = optionalNonNegativeInteger(
+    value.directionChanges,
+    label,
+  );
+  if (
+    straightCount === undefined ||
+    cornerCount === undefined ||
+    chicaneCount === undefined ||
+    hairpinCount === undefined ||
+    directionChanges === undefined
+  ) {
+    throw new Error(`${label} returned an invalid response.`);
+  }
+  return {
+    layout: value.layout,
+    straightCount,
+    cornerCount,
+    chicaneCount,
+    hairpinCount,
+    directionChanges,
+  };
 }
 
 function commit(state: EditorState, next: EditorSnapshot): EditorState {

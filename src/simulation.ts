@@ -123,6 +123,17 @@ export interface RunResultV1 {
     collisionCount: number;
     steps: number;
   }[];
+  racingLineComparison?: {
+    contractVersion: 1;
+    method: "minimum-curvature-v1";
+    referenceLine: (readonly [number, number])[];
+    championFinished: boolean;
+    meanDeviationMeters: number;
+    p95DeviationMeters: number;
+    meanToleranceMeters: number;
+    p95ToleranceMeters: number;
+    matched: boolean;
+  };
   replay: {
     contractVersion: 1;
     candidateId: string;
@@ -737,6 +748,13 @@ function validateObservationResultConsistency(value: {
     throw new Error("Run comparisons do not match their result controllers.");
   }
   if (
+    value.result.racingLineComparison !== undefined &&
+    value.result.racingLineComparison.championFinished !==
+      championComparison.finished
+  ) {
+    throw new Error("Racing-line comparison contradicts the champion result.");
+  }
+  if (
     JSON.stringify(value.result.replay.vehicleSetup) !==
     JSON.stringify(value.result.champion.vehicleSetup)
   ) {
@@ -864,6 +882,10 @@ function parseRunResult(value: unknown): RunResultV1 {
   }
   const replayFrames = parseReplayFrames(replay.frames, "Run replay");
   const genome = asRecord(champion.genome, "Champion genome");
+  const racingLineComparison =
+    result.racingLineComparison === undefined
+      ? undefined
+      : parseRacingLineComparison(result.racingLineComparison);
   return {
     metadata: {
       contractVersion: requiredVersion(metadata.contractVersion, "metadata"),
@@ -924,6 +946,7 @@ function parseRunResult(value: unknown): RunResultV1 {
         steps: nonNegativeInteger(item.steps, "steps"),
       };
     }),
+    ...(racingLineComparison === undefined ? {} : { racingLineComparison }),
     replay: {
       contractVersion: requiredVersion(replay.contractVersion, "replay"),
       candidateId: requiredString(replay.candidateId, "candidateId"),
@@ -935,6 +958,71 @@ function parseRunResult(value: unknown): RunResultV1 {
       termination: requiredString(replay.termination, "termination"),
       frames: replayFrames,
     },
+  };
+}
+
+function parseRacingLineComparison(
+  value: unknown,
+): NonNullable<RunResultV1["racingLineComparison"]> {
+  const comparison = asRecord(value, "Racing-line comparison");
+  if (
+    comparison.contractVersion !== 1 ||
+    comparison.method !== "minimum-curvature-v1" ||
+    !Array.isArray(comparison.referenceLine) ||
+    comparison.referenceLine.length < 3 ||
+    comparison.referenceLine.length > 64
+  ) {
+    throw new Error("Racing-line comparison has an invalid contract.");
+  }
+  const referenceLine = comparison.referenceLine.map((point, index) => {
+    if (!Array.isArray(point) || point.length !== 2) {
+      throw new Error(
+        `Racing-line reference point ${String(index)} must contain x and y.`,
+      );
+    }
+    return [
+      finiteNumber(point[0], "racingLine.x"),
+      finiteNumber(point[1], "racingLine.y"),
+    ] as const;
+  });
+  const championFinished = requiredBoolean(
+    comparison.championFinished,
+    "championFinished",
+  );
+  const matched = requiredBoolean(comparison.matched, "matched");
+  if (matched && !championFinished) {
+    throw new Error(
+      "An unfinished champion cannot match the racing-line reference.",
+    );
+  }
+  if (
+    referenceLine[0]?.[0] !== referenceLine.at(-1)?.[0] ||
+    referenceLine[0]?.[1] !== referenceLine.at(-1)?.[1]
+  ) {
+    throw new Error("Racing-line reference must be closed.");
+  }
+  return {
+    contractVersion: 1,
+    method: "minimum-curvature-v1",
+    referenceLine,
+    championFinished,
+    meanDeviationMeters: nonNegativeNumber(
+      comparison.meanDeviationMeters,
+      "meanDeviationMeters",
+    ),
+    p95DeviationMeters: nonNegativeNumber(
+      comparison.p95DeviationMeters,
+      "p95DeviationMeters",
+    ),
+    meanToleranceMeters: positiveNumber(
+      comparison.meanToleranceMeters,
+      "meanToleranceMeters",
+    ),
+    p95ToleranceMeters: positiveNumber(
+      comparison.p95ToleranceMeters,
+      "p95ToleranceMeters",
+    ),
+    matched,
   };
 }
 

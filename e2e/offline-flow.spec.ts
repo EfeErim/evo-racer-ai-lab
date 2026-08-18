@@ -1,5 +1,44 @@
 import { expect, test } from "@playwright/test";
 
+test("Welcome explains the racing loop and provides a local motion control", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  await page.goto("/");
+
+  const journey = page.locator('[aria-label="How EvoRacer works"]');
+  await expect(
+    journey.getByText("Choose a track", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    journey.getByText("Watch evolution", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    journey.getByText("Compare the champion", { exact: true }),
+  ).toBeVisible();
+
+  const motion = page.getByRole("button", { name: "Reduce motion" });
+  await expect(motion).toHaveAttribute("aria-pressed", "false");
+  await expect(motion).toBeEnabled();
+  await motion.click();
+  await expect(
+    page.getByRole("button", { name: "Motion reduced", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+
+  const recommended = page.getByRole("button", {
+    name: "Review recommended setup",
+  });
+  const recommendedBox = await recommended.boundingBox();
+  expect(recommendedBox?.height).toBeGreaterThanOrEqual(44);
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  const systemMotion = page.getByRole("button", {
+    name: "Motion reduced by Windows",
+  });
+  await expect(systemMotion).toBeDisabled();
+  await expect(systemMotion).toHaveAttribute("aria-pressed", "true");
+});
+
 test("track builder previews invalid drafts, repairs them, and generates technical layouts", async ({
   page,
 }) => {
@@ -63,10 +102,13 @@ test("track builder previews invalid drafts, repairs them, and generates technic
       exact: true,
     }),
   ).toBeChecked();
+  await expect(page.locator(".track-preview .track-geometry")).toHaveCount(3);
 
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
   const builder = page.getByTestId("track-builder");
-  await expect(builder.getByText("Python verified")).toBeVisible();
+  await expect(
+    builder.getByText("Draft geometry is valid and ready to use."),
+  ).toBeVisible();
   await expect(
     builder.getByRole("heading", { name: "Track Builder", exact: true }),
   ).toBeFocused();
@@ -94,16 +136,29 @@ test("track builder previews invalid drafts, repairs them, and generates technic
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
-  await expect(builder.getByText("Python verified")).toBeVisible();
+  await expect(
+    builder.getByText("Draft geometry is valid and ready to use."),
+  ).toBeVisible();
   await expect(roadWidth).toBeFocused();
 
   await builder
-    .getByRole("button", { name: "Short straight", exact: true })
-    .click();
+    .locator('[data-editor-drag-kind="straight-short"]')
+    .dragTo(builder.locator('[data-track-drop-index="2"]'));
+  await expect(builder.locator(".sequence-piece")).toHaveCount(9);
+  await expect(builder.locator(".sequence-piece").nth(2)).toContainText(
+    "Short straight",
+  );
   await expect(builder.getByText("Needs changes")).toBeVisible();
   await expect(
     builder.locator(".builder-canvas .track-geometry"),
   ).toBeVisible();
+  await expect(builder.getByText("LOOP_NOT_CLOSED")).toBeVisible();
+
+  await builder.getByRole("button", { name: /Undo/ }).click();
+  await expect(
+    builder.getByText("Draft geometry is valid and ready to use."),
+  ).toBeVisible();
+  await builder.locator('[data-editor-drag-kind="straight-short"]').click();
   await expect(builder.getByText("LOOP_NOT_CLOSED")).toBeVisible();
 
   await builder.getByRole("button", { name: "Assist closure" }).click();
@@ -116,15 +171,23 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   await builder
     .locator('input[name="generator-difficulty"][value="hard"]')
     .check();
-  await builder.getByRole("button", { name: "Generate track" }).click();
+  await builder.getByRole("button", { name: "Generate & use track" }).click();
   await expect(
     builder.getByText("Track generation failed with status 503."),
   ).toBeVisible();
-  await builder.getByRole("button", { name: "Generate track" }).click();
-  await expect(builder.getByText(/generator v2/)).toBeVisible();
+  await builder.getByRole("button", { name: "Generate & use track" }).click();
+  await expect(builder.getByText(/generator v4/)).toBeVisible();
   await expect(
     builder.locator(".generated-preview .track-geometry"),
   ).toBeVisible();
+  await expect(
+    builder.getByText("Active experiment track", { exact: true }),
+  ).toBeVisible();
+  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+  await expect(builder.getByText("Asymmetric")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Selected custom track" }),
+  ).toContainText("Hard Long 731");
 
   await builder.locator("[data-generator-seed]").fill("732");
   await expect(
@@ -242,6 +305,27 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   ).toBeFocused();
 });
 
+test("placed track pieces can be dragged to a new connector", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Customize setup" }).click();
+  await expect(page.locator(".track-preview .track-geometry")).toHaveCount(3);
+  await page.getByRole("button", { name: /Open Track Builder/ }).click();
+
+  const builder = page.getByTestId("track-builder");
+  await expect(
+    builder.getByText("Draft geometry is valid and ready to use."),
+  ).toBeVisible();
+  await builder
+    .locator('[data-editor-drag-index="1"]')
+    .dragTo(builder.locator('[data-track-drop-index="4"]'));
+
+  await expect(builder.locator(".sequence-piece").nth(3)).toContainText(
+    "Long straight",
+  );
+});
+
 test("a late generated track cannot overwrite Track Builder after leaving Track", async ({
   page,
 }) => {
@@ -267,7 +351,7 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
 
   const builder = page.getByTestId("track-builder");
   await builder.getByRole("tab", { name: /Generate/ }).click();
-  await builder.getByRole("button", { name: "Generate track" }).click();
+  await builder.getByRole("button", { name: "Generate & use track" }).click();
   await generationCaptured;
   await expect(builder.getByText("Generating…", { exact: true })).toBeVisible();
 
@@ -286,6 +370,83 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
   await expect(
     page.getByText("Track generation response ignored after leaving Track."),
   ).toBeVisible();
+});
+
+test("a generated track becomes the active reviewed setup without a second selection", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: /Open Track Builder/ }).click();
+
+  const builder = page.getByTestId("track-builder");
+  await builder.getByRole("tab", { name: /Generate/ }).click();
+  await builder.locator("[data-generator-seed]").fill("90210");
+  await builder.locator('input[name="generator-length"][value="long"]').check();
+  await builder
+    .locator('input[name="generator-difficulty"][value="technical"]')
+    .check();
+  await builder.getByRole("button", { name: "Generate & use track" }).click();
+
+  await expect(builder.getByText(/generator v4/)).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Selected custom track" }),
+  ).toContainText("Technical Long 90210");
+  await expect(
+    builder.getByText("Active experiment track", { exact: true }),
+  ).toBeVisible();
+  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+
+  await builder.getByRole("button", { name: "Close Track Builder" }).click();
+  await page.getByRole("button", { name: /Open Track Builder/ }).click();
+  await expect(builder.getByRole("tab", { name: /Generate/ })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
+  await expect(
+    builder.getByRole("heading", { name: "Technical Long 90210" }),
+  ).toBeVisible();
+  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue to settings" }).click();
+  await page.getByRole("button", { name: "Review experiment" }).click();
+  await expect(
+    page.getByRole("region", { name: "Technical Long 90210" }),
+  ).toContainText("24 canonical pieces");
+  await expect(page.getByText("Configuration valid")).toBeVisible();
+
+  let submittedTrackName = "";
+  let submittedPieceCount = 0;
+  await page.route("**/v1/runs/start", async (route) => {
+    const payload = route.request().postDataJSON() as {
+      track?: { name?: string; pieces?: unknown[] };
+    };
+    submittedTrackName = payload.track?.name ?? "";
+    submittedPieceCount = payload.track?.pieces?.length ?? 0;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        contractVersion: 1,
+        valid: false,
+        errors: [
+          {
+            code: "TEST_CAPTURED_START",
+            field: "track",
+            message: "Generated track start payload captured.",
+          },
+        ],
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Start training" }).click();
+  await expect(
+    page
+      .getByLabel("Training did not open")
+      .getByText("Generated track start payload captured."),
+  ).toBeVisible();
+  expect(submittedTrackName).toBe("Technical Long 90210");
+  expect(submittedPieceCount).toBe(24);
 });
 
 test("a dismissed track save refreshes the Python-owned library without taking over the route", async ({
@@ -374,7 +535,7 @@ test("late startup responses cannot resurrect the interface after shutdown", asy
     await route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ contractVersion: 1, shuttingDown: true }),
+      body: JSON.stringify({ contractVersion: 1, status: "shutting-down" }),
     });
   });
 
@@ -704,9 +865,52 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
 });
 
+test("reduced-motion Training shows the displayed champion's complete recorded path", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Review recommended setup" }).click();
+  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await page.getByRole("button", { name: /Start training/ }).click();
+
+  const currentPath = page.locator(".current-generation-path");
+  await expect(currentPath).toBeVisible({ timeout: 90_000 });
+  await expect(page.getByText("Displayed champion")).toBeVisible();
+  await expect(page.locator(".live-race-stage")).toHaveAttribute(
+    "aria-label",
+    /with its complete recorded path/,
+  );
+
+  const pathIdentity = await page
+    .locator(".live-race-stage")
+    .evaluate((stage) => {
+      const path = stage.querySelector(".current-generation-path");
+      const marker = stage.querySelector(".track-replay-marker");
+      const lastPoint = path?.getAttribute("d")?.split(" L ").at(-1);
+      return {
+        candidateId: path?.getAttribute("data-current-candidate"),
+        markerTransform: marker?.getAttribute("transform"),
+        lastPoint,
+      };
+    });
+  expect(pathIdentity.candidateId).toBeTruthy();
+  await expect(
+    page.getByRole("heading", {
+      name: pathIdentity.candidateId ?? "missing candidate",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(pathIdentity.lastPoint).toBeTruthy();
+  expect(pathIdentity.markerTransform).toContain(
+    `translate(${pathIdentity.lastPoint ?? "missing point"})`,
+  );
+});
+
 test("recommended offline run reaches results without starting automatically", async ({
   page,
 }) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
   let startAttempts = 0;
   let runLibraryRequests = 0;
   let markInitialRunLibraryCaptured: (() => void) | undefined;
@@ -866,6 +1070,11 @@ test("recommended offline run reaches results without starting automatically", a
   await expect(
     page.getByRole("heading", { name: "Training workspace" }),
   ).toBeVisible();
+  const telemetryDetails = page.locator("details.telemetry-disclosure");
+  await expect(telemetryDetails).toBeVisible({ timeout: 15_000 });
+  await expect(telemetryDetails).not.toHaveAttribute("open", "");
+  await telemetryDetails.locator(":scope > summary").click();
+  await expect(page.getByText("Road-edge sensors")).toBeVisible();
   const stop = page.getByRole("button", { name: /Stop after generation/ });
   await stop.focus();
   await expect(stop).toBeFocused();
@@ -881,14 +1090,25 @@ test("recommended offline run reaches results without starting automatically", a
   await page.waitForTimeout(100);
   await page.getByRole("button", { name: /Open results/ }).click();
 
-  await expect(page.getByRole("heading", { name: "Results" })).toBeVisible();
-  await expect(page.getByText("Champion fitness")).toBeVisible();
-  await expect(page.getByText("Champion and baselines")).toBeVisible();
-  await expect(page.getByText(/^Frame 1 \/ /)).toBeVisible();
-  await page.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByText(/^Frame 2 \/ /)).toBeVisible();
-  await page.getByRole("button", { name: "Restart" }).click();
-  await expect(page.getByText(/^Frame 1 \/ /)).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "What did the AI achieve?" }),
+  ).toBeVisible();
+  await expect(page.getByText("Ideal-line match")).toBeVisible();
+  await expect(page.getByText("Champion vs baselines")).toBeVisible();
+  await expect(page.getByText("Smooth replay · 1×")).toBeVisible();
+  await expect(page.locator(".current-generation-path")).toBeVisible();
+  await expect(page.locator(".ideal-racing-line")).toBeVisible();
+  await expect(page.locator(".ideal-racing-line")).toHaveAttribute(
+    "data-reference-method",
+    "minimum-curvature-v1",
+  );
+  const marker = page.locator(".replay-stage .track-replay-marker");
+  const firstTransform = await marker.getAttribute("transform");
+  await page.waitForTimeout(80);
+  const secondTransform = await marker.getAttribute("transform");
+  expect(secondTransform).not.toBe(firstTransform);
+  await page.waitForTimeout(80);
+  expect(await marker.getAttribute("transform")).not.toBe(secondTransform);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(
@@ -897,6 +1117,19 @@ test("recommended offline run reaches results without starting automatically", a
         document.documentElement.clientWidth,
     ),
   ).toBe(true);
+  expect(
+    await page
+      .locator(".result-verdict-copy > p:not(.section-kicker)")
+      .first()
+      .evaluate((element) =>
+        Number.parseFloat(getComputedStyle(element).fontSize),
+      ),
+  ).toBeGreaterThanOrEqual(14);
+  expect(
+    await page
+      .locator(".replay-stage")
+      .evaluate((element) => element.scrollWidth - element.clientWidth),
+  ).toBe(0);
 
   await page.getByRole("button", { name: "Create another setup" }).click();
   await page.getByText("Saved runs", { exact: true }).click();
@@ -943,7 +1176,9 @@ test("recommended offline run reaches results without starting automatically", a
   await expect(
     page.getByRole("heading", { name: "Start an AI racing experiment." }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Results" })).toBeHidden();
+  await expect(
+    page.getByRole("heading", { name: "What did the AI achieve?" }),
+  ).toBeHidden();
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(
     page.getByText("Saved run response ignored after leaving Welcome."),
@@ -986,11 +1221,15 @@ test("recommended offline run reaches results without starting automatically", a
     page.getByRole("button", { name: "Open results" }).first(),
   ).toBeEnabled();
   await page.getByRole("button", { name: "Open results" }).first().click();
-  await expect(page.getByRole("heading", { name: "Results" })).toBeVisible();
-  await expect(page.getByText("Champion fitness")).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Champion replay" }),
+    page.getByRole("heading", { name: "What did the AI achieve?" }),
   ).toBeVisible();
+  await expect(page.getByText("Ideal-line match")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Champion and ideal racing line" }),
+  ).toBeVisible();
+  await expect(page.locator(".current-generation-path")).toBeVisible();
+  await expect(page.locator(".ideal-racing-line")).toBeVisible();
 
   await page.getByRole("button", { name: "Create another setup" }).click();
   await page.getByText("Saved runs", { exact: true }).click();

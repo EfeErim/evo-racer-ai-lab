@@ -24,6 +24,23 @@ try {
     Invoke-Check "TypeScript lint" { npm run lint --silent }
     Invoke-Check "TypeScript type-check" { npm run typecheck --silent }
     Invoke-Check "TypeScript tests" { npm run test --silent }
+    Invoke-Check "PowerShell syntax" {
+        $syntaxErrors = @()
+        foreach ($scriptPath in Get-ChildItem -LiteralPath (Join-Path $repoRoot "scripts") -Filter "*.ps1" -File) {
+            $tokens = $null
+            $errors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+                $scriptPath.FullName,
+                [ref] $tokens,
+                [ref] $errors
+            ) | Out-Null
+            $syntaxErrors += $errors
+        }
+        if ($syntaxErrors.Count -gt 0) {
+            $syntaxErrors | ForEach-Object { Write-Error $_.Message }
+            throw "PowerShell syntax validation failed."
+        }
+    }
     Invoke-Check "Python formatting" { npm run format:python:check --silent }
     Invoke-Check "Python lint" { npm run lint:python --silent }
     Invoke-Check "Python type-check" { npm run typecheck:python --silent }
