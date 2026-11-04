@@ -122,7 +122,7 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
         valid: true,
         errors: [],
         compiled: compiledFixture.compiled,
-        generatorVersion: 4,
+        generatorVersion: 5,
         candidateCount: 1,
         features: {
           layout: "asymmetric",
@@ -136,7 +136,7 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
       "Track generation",
     );
 
-    expect(response.generatorVersion).toBe(4);
+    expect(response.generatorVersion).toBe(5);
     expect(response.features).toEqual({
       layout: "asymmetric",
       straightCount: 7,

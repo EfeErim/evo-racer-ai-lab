@@ -5,24 +5,28 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import random
 from dataclasses import replace
 from typing import Final, Literal, cast
 
 from evo_racer.tracks import (
+    Point,
     SegmentKind,
     TrackPieceV1,
     TrackV1,
     TrackValidationError,
+    _compile_piece,
+    _Pose,
     compile_track,
     parse_track,
-    preview_track,
 )
 
 GENERATOR_CONTRACT_VERSION: Final = 1
-GENERATOR_VERSION: Final = 4
+GENERATOR_VERSION: Final = 5
 MAX_GENERATOR_CANDIDATES: Final = 200
 _DESIGNED_CANDIDATE_BUDGET: Final = 176
-_HALF_LAYOUT_BUDGET: Final = 512
+_HALF_LAYOUT_BUDGET: Final = 2048
+_HALF_LAYOUT_ATTEMPTS: Final = 16384
 
 type TrackLength = Literal["short", "medium", "long"]
 type TrackDifficulty = Literal["easy", "technical", "hard"]
@@ -235,10 +239,6 @@ def _search_candidates(
     target: int,
 ) -> list[tuple[TrackPieceV1, ...]]:
     candidates = _balanced_loop_candidates(seed, length, difficulty, target)
-    candidates = sorted(
-        candidates,
-        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
-    )
 
     fallbacks = _varied_rectangle_candidates(difficulty, target)
     if difficulty == "hard":
@@ -268,35 +268,16 @@ def _balanced_loop_candidates(
     half_target = target // 2
     target_turn = 180 if _rank(seed, length, difficulty, ("turn-direction",))[0] % 2 == 0 else -180
     allowed = _allowed_generator_pieces(difficulty, target_turn)
-    halves: list[tuple[str, ...]] = []
-
-    def search(prefix: tuple[str, ...], turn_total: int) -> None:
+    halves: dict[tuple[str, ...], None] = {}
+    for attempt in range(_HALF_LAYOUT_ATTEMPTS):
         if len(halves) >= _HALF_LAYOUT_BUDGET:
-            return
-        slots_left = half_target - len(prefix)
-        if slots_left == 0:
-            if turn_total != target_turn or not _half_meets_difficulty(prefix, difficulty):
-                return
-            halves.append(prefix)
-            return
-
-        ordered = sorted(
-            allowed,
-            key=lambda kind: (
-                _choice_penalty(prefix, turn_total, target_turn, slots_left, kind),
-                _rank(seed, length, difficulty, prefix + (kind,)),
-            ),
+            break
+        half = _sample_half_lap(
+            seed, length, difficulty, attempt, half_target, target_turn, allowed
         )
-        for kind in ordered:
-            if not _prefix_accepts(prefix, kind):
-                continue
-            next_turn = turn_total + _TURN_DEGREES[kind]
-            remaining_slots = slots_left - 1
-            if abs(target_turn - next_turn) > 180 * remaining_slots:
-                continue
-            search(prefix + (kind,), next_turn)
+        if half is not None:
+            halves.setdefault(half, None)
 
-    search(("start-finish",), 0)
     groups: dict[tuple[float, float], list[tuple[str, ...]]] = {}
     for half in halves:
         groups.setdefault(_half_endpoint_key(half), []).append(half)
@@ -313,8 +294,9 @@ def _balanced_loop_candidates(
 
     paired = sorted(
         {_piece_key(candidate): candidate for candidate in paired}.values(),
-        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
+        key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
+    paired = [candidate for candidate in paired if _compiles(candidate)]
     if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
         return paired[:_DESIGNED_CANDIDATE_BUDGET]
 
@@ -326,7 +308,7 @@ def _balanced_loop_candidates(
             )
             for half in halves
         ),
-        key=lambda candidate: _layout_rank(seed, length, difficulty, candidate),
+        key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
     for candidate in mirrored:
         if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
@@ -337,19 +319,66 @@ def _balanced_loop_candidates(
     return paired
 
 
-def _half_endpoint_key(half: tuple[str, ...]) -> tuple[float, float]:
-    preview = preview_track(
-        TrackV1(
-            schema_version=1,
-            track_id="generator-half",
-            name="Generator half",
-            road_width=10.0,
-            pieces=_pieces(half),
+def _compiles(pieces: tuple[TrackPieceV1, ...]) -> bool:
+    """Return whether the canonical compiler accepts a candidate's closure and geometry."""
+    try:
+        compile_track(
+            TrackV1(
+                schema_version=1,
+                track_id="generator-candidate",
+                name="Generator candidate",
+                road_width=10.0,
+                pieces=pieces,
+            )
         )
+    except TrackValidationError:
+        return False
+    return True
+
+
+def _sample_half_lap(
+    seed: int,
+    length: TrackLength,
+    difficulty: TrackDifficulty,
+    attempt: int,
+    half_target: int,
+    target_turn: int,
+    allowed: tuple[str, ...],
+) -> tuple[str, ...] | None:
+    """Draw one seeded half lap that spends exactly the required turn budget."""
+    rng = random.Random(
+        int.from_bytes(_rank(seed, length, difficulty, ("half", str(attempt)))[:8], "big")
     )
-    geometry = cast(dict[str, object], preview["geometry"])
-    centerline = cast(list[list[float]], geometry["centerline"])
-    return centerline[-1][0], centerline[-1][1]
+    prefix: tuple[str, ...] = ("start-finish",)
+    turn_total = 0
+    while len(prefix) < half_target:
+        slots_left = half_target - len(prefix)
+        options = [
+            kind
+            for kind in allowed
+            if _prefix_accepts(prefix, kind)
+            and abs(target_turn - (turn_total + _TURN_DEGREES[kind])) <= 180 * (slots_left - 1)
+        ]
+        if not options:
+            return None
+        kind = rng.choice(options)
+        prefix += (kind,)
+        turn_total += _TURN_DEGREES[kind]
+    if turn_total != target_turn or not _half_meets_difficulty(prefix, difficulty):
+        return None
+    return prefix
+
+
+def _half_endpoint_key(half: tuple[str, ...]) -> tuple[float, float]:
+    pose = _Pose(0.0, 0.0, 0.0)
+    _compile_piece_kinds(half, pose)
+    return pose.x, pose.y
+
+
+def _compile_piece_kinds(kinds: tuple[str, ...], pose: _Pose) -> None:
+    points: list[Point] = []
+    for kind in kinds:
+        _compile_piece(cast(SegmentKind, kind), pose, points)
 
 
 def _half_difference(first: tuple[str, ...], second: tuple[str, ...]) -> int:
@@ -408,19 +437,6 @@ def _allowed_generator_pieces(
     return common + (f"hairpin-{target_side}", f"hairpin-{opposite_side}")
 
 
-def _choice_penalty(
-    prefix: tuple[str, ...],
-    turn_total: int,
-    target_turn: int,
-    slots_left: int,
-    kind: str,
-) -> tuple[float, int]:
-    angle = _TURN_DEGREES[kind]
-    ideal_turn = (target_turn - turn_total) / slots_left
-    repeated = int(bool(prefix) and prefix[-1] == kind)
-    return abs(ideal_turn - angle), repeated
-
-
 def _prefix_accepts(prefix: tuple[str, ...], kind: str) -> bool:
     if len(prefix) >= 2 and prefix[-1] == prefix[-2] == kind:
         return False
@@ -448,40 +464,6 @@ def _half_meets_difficulty(prefix: tuple[str, ...], difficulty: TrackDifficulty)
         and len(signs) == 2
         and len(turns) >= 3
     )
-
-
-def _layout_rank(
-    seed: int,
-    length: TrackLength,
-    difficulty: TrackDifficulty,
-    candidate: tuple[TrackPieceV1, ...],
-) -> tuple[object, ...]:
-    all_kinds = _piece_key(candidate)
-    half_length = len(candidate) // 2
-    kinds = all_kinds[:half_length]
-    second_half = ("start-finish",) + all_kinds[half_length + 1 :]
-    symmetry = -_half_difference(kinds, second_half)
-    turns = [_TURN_DEGREES[kind] for kind in kinds if kind in _TURN_DEGREES and _TURN_DEGREES[kind]]
-    signs = [1 if turn > 0 else -1 for turn in turns]
-    direction_changes = sum(first != second for first, second in itertools.pairwise(signs))
-    repeated = sum(first == second for first, second in itertools.pairwise(kinds))
-    variety = len(set(kinds))
-    chicanes = sum(kind.startswith("chicane-") for kind in kinds)
-    hairpins = sum(kind.startswith("hairpin-") for kind in kinds)
-    design: tuple[int, ...]
-    if difficulty == "easy":
-        design = (repeated, -variety)
-    elif difficulty == "technical":
-        design = (abs(chicanes - 1), -direction_changes, repeated, -variety)
-    else:
-        design = (
-            abs(hairpins - 1),
-            abs(chicanes - 1),
-            -direction_changes,
-            repeated,
-            -variety,
-        )
-    return (symmetry,) + design + (_rank(seed, length, difficulty, all_kinds),)
 
 
 def _varied_rectangle_candidates(
