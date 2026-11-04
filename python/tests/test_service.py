@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from http import HTTPStatus
+from http.client import HTTPConnection
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -303,7 +304,8 @@ def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
             },
             data=json.dumps(payload).encode("utf-8"),
         )
-        with urlopen(request, timeout=2) as response:  # noqa: S310
+        # Generator v5 alone takes about 2 s here, and CI machines can be slower.
+        with urlopen(request, timeout=30) as response:  # noqa: S310
             assert response.status == HTTPStatus.OK
             result: dict[str, Any] = json.load(response)
             return result
@@ -640,3 +642,24 @@ def test_launcher_uses_the_packaged_origin_policy(
     launcher_module.run_launcher(static_root=tmp_path, data_root=tmp_path, open_browser=False)
 
     assert created[0].allowed_origins == frozenset()
+
+
+def test_a_running_service_owns_its_port_and_frees_it_for_a_restart(tmp_path: Path) -> None:
+    server = create_server(port=0, data_root=tmp_path)
+    port = server.server_port
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        connection = HTTPConnection(LOOPBACK_HOST, port, timeout=5)
+        connection.request("GET", "/health")
+        assert connection.getresponse().status == HTTPStatus.OK
+        connection.close()
+        with pytest.raises(OSError):
+            create_server(port=port, data_root=tmp_path)
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    restarted = create_server(port=port, data_root=tmp_path)
+    restarted.server_close()

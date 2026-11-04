@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
+import socket
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -51,11 +53,21 @@ class EvoRacerServer(ThreadingHTTPServer):
     """Loopback server carrying the resolved local data root."""
 
     daemon_threads = True
+    # On Windows SO_REUSEADDR lets a second process bind an occupied port and share it
+    # unpredictably, so a running service must own its port exclusively there.
+    allow_reuse_address = os.name != "nt"
 
     data_root: Path | None
     run_manager: RunManager
     static_root: Path | None
     allowed_origins: frozenset[str]
+
+    def server_bind(self) -> None:
+        """Refuse to share the port with another process where the platform allows it."""
+        exclusive_option = getattr(socket, "SO_EXCLUSIVEADDRUSE", None)
+        if exclusive_option is not None:
+            self.socket.setsockopt(socket.SOL_SOCKET, exclusive_option, 1)
+        super().server_bind()
 
 
 class HealthHandler(BaseHTTPRequestHandler):

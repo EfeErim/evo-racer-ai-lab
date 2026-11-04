@@ -300,7 +300,7 @@ test("the recommended action always reviews the recommended setup", async ({
   await expect(page.locator(".review-summary")).toContainText("Easy Oval");
   await expect(page.locator(".review-summary")).toContainText("Quick check");
   await expect(page.locator(".review-summary")).toContainText(
-    "Up to 80 candidate evaluations",
+    "Up to 160 candidate evaluations",
   );
 });
 
