@@ -6,6 +6,8 @@ const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
+  // Every spec shares one Python service and local data root.
+  workers: 1,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: "line",
