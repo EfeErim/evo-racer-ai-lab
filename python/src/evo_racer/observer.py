@@ -28,6 +28,7 @@ from evo_racer.neat_evolution import (
     EvoRacerGenome,
     NEATCandidate,
     NEATGenerationReport,
+    NEATRandomStream,
     NEATScoredCandidate,
     compile_neat_network,
     create_neat_population,
@@ -109,6 +110,7 @@ class RunSession:
         self._fixed_ga: FixedGA | None = None
         self._neat_population: Any | None = None
         self._neat_config: Any | None = None
+        self._neat_random = NEATRandomStream(settings.seed)
         if settings.algorithm == "fixed-ga":
             self._fixed_ga = FixedGA(
                 FixedGAConfig(
@@ -119,10 +121,11 @@ class RunSession:
                 settings.seed,
             )
         else:
-            self._neat_population, self._neat_config = create_neat_population(
-                population_size=settings.population_size,
-                seed=settings.seed,
-            )
+            with self._neat_random.active():
+                self._neat_population, self._neat_config = create_neat_population(
+                    population_size=settings.population_size,
+                    seed=settings.seed,
+                )
 
     def advance(self) -> None:
         """Run one complete generation without using UI or wall-clock cadence."""
@@ -474,7 +477,8 @@ class RunSession:
                 )
             )
 
-        population.run(evaluate_genomes, 1)
+        with self._neat_random.active():
+            population.run(evaluate_genomes, 1)
         if len(produced) != 1:
             raise RuntimeError("NEAT did not produce exactly one generation report.")
         return produced[0], episodes

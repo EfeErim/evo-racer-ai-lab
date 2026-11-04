@@ -5,10 +5,12 @@ from __future__ import annotations
 import math
 import random
 import statistics
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
+from threading import RLock
 from typing import Any, Final, cast
 
 import neat  # type: ignore[import-untyped]
@@ -31,6 +33,32 @@ VEHICLE_MUTATION_RATE: Final = 0.2
 PERFORMANCE_MUTATION_POWER: Final = 0.25
 BIAS_MUTATION_POWER: Final = 0.1
 VEHICLE_DISTANCE_COEFFICIENT: Final = 0.5
+_GLOBAL_RANDOM_LOCK: Final = RLock()
+
+
+class NEATRandomStream:
+    """One run's private view of the process-global `random` module.
+
+    neat-python draws only from that module, so concurrent runs would otherwise consume
+    each other's numbers. Holding the lock across a generation serializes concurrent NEAT
+    generations; evaluation itself uses no randomness, but neat-python offers no hook to
+    release the lock around it.
+    """
+
+    def __init__(self, seed: int) -> None:
+        self._state = random.Random(seed).getstate()
+
+    @contextmanager
+    def active(self) -> Iterator[None]:
+        """Make this stream the global generator, then restore whatever was there."""
+        with _GLOBAL_RANDOM_LOCK:
+            outer_state = random.getstate()
+            random.setstate(self._state)
+            try:
+                yield
+            finally:
+                self._state = random.getstate()
+                random.setstate(outer_state)
 
 
 class EvoRacerGenome(neat.DefaultGenome):  # type: ignore[misc]
@@ -502,13 +530,15 @@ def run_neat(
     """Run or resume a bounded deterministic feed-forward NEAT experiment."""
     if generations <= 0:
         raise ValueError("generations must be positive.")
-    if restore_checkpoint is None:
-        population, config = create_neat_population(population_size=population_size, seed=seed)
-    else:
-        population, config = restore_neat_population(
-            restore_checkpoint,
-            population_size=population_size,
-        )
+    stream = NEATRandomStream(seed)
+    with stream.active():
+        if restore_checkpoint is None:
+            population, config = create_neat_population(population_size=population_size, seed=seed)
+        else:
+            population, config = restore_neat_population(
+                restore_checkpoint,
+                population_size=population_size,
+            )
     if checkpoint_prefix is not None:
         checkpoint_prefix.parent.mkdir(parents=True, exist_ok=True)
         population.add_reporter(
@@ -566,7 +596,8 @@ def run_neat(
         ):
             best = ranked[0]
 
-    population.run(evaluate_genomes, generations)
+    with stream.active():
+        population.run(evaluate_genomes, generations)
     if best is None:
         raise RuntimeError("NEAT produced no evaluated candidate.")
     return NEATRunResult(seed=seed, reports=tuple(reports), champion=best)

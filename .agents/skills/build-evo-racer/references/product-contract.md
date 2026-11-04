@@ -176,6 +176,12 @@ browser:
   while it is hidden, with an immediate observation when visibility returns.
   Visibility may change presentation traffic only; it may not pause, accelerate,
   select, or otherwise alter Python evaluation.
+- A run's results may depend only on its track, settings, and seed. Concurrent runs
+  must not share random state, even though neat-python draws from the process-global
+  `random` module.
+- One service owns the loopback port. On Windows it binds exclusively, because
+  `SO_REUSEADDR` would let a second process share the port unpredictably. A second
+  launch opens the running instance instead of starting another one.
 
 ## Persistence and release
 

@@ -37,13 +37,13 @@ describe("Phase 1 onboarding contract", () => {
     expect(state.draft.trackPreset).toBe("easy-oval");
     expect(canRequestReview(state)).toBe(true);
     expect(state.draft.settings).toEqual({
-      algorithm: "fixed-ga",
-      populationSize: 10,
-      generations: 8,
-      episodeSeconds: 15,
+      algorithm: "neat",
+      populationSize: 16,
+      generations: 10,
+      episodeSeconds: 30,
       seed: 42,
     });
-    expect(maximumCandidateEpisodes(state.draft.settings)).toBe(80);
+    expect(maximumCandidateEpisodes(state.draft.settings)).toBe(160);
   });
 
   it("keeps Start locked until a complete setup passes authoritative validation", () => {

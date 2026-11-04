@@ -10,7 +10,7 @@ evidence lives in
 - Current phase: `Post-release v1.1.1 game and interface hardening`
 - Status: `Generator v4 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
 - Active milestone: `None`
-- Last verified: `2026-11-04`
+- Last verified: `2026-11-05`
 
 ## Milestones
 
@@ -47,9 +47,29 @@ is recorded here, and documentation matches behavior.
 
 ## Latest verification
 
-Recorded on `2026-11-04` for the uncommitted UI redesign, which sits on top of the
-uncommitted race buffer below. Findings and measurements are in
-[`docs/verification/ui-redesign.md`](docs/verification/ui-redesign.md).
+Recorded on `2026-11-04` and `2026-11-05` for the CI repair, NEAT run isolation, port
+ownership, and new Quick check budget. Causes and measurements are in
+[`docs/verification/first-run-and-isolation.md`](docs/verification/first-run-and-isolation.md).
+
+- In a clean `core.autocrlf=true` clone, `npm run test:e2e` passed `27` of `27` flows.
+  `npm run check` passed formatting, docs, lint, types, and `135` Vitest tests. pytest
+  had `163` passed and `1` failed from a `2 s` test timeout that also fails at `0c12cf6`.
+  After that timeout was fixed, `test_service.py` and `test_launcher.py` passed `23`
+  tests. `npm run check` then passed in full in the working tree: `135` Vitest and
+  `164` pytest tests, plus the production build.
+- `npm run build:release` and `npm run test:release` passed. The ZIP is `9,468,792`
+  bytes with SHA-256
+  `d22c2f92c73dc3091463910cf8b17159718db9b083e6990c18b1f694bb6a0e68`.
+- The packaged EXE was clicked through Review, Start, Training, and Results. The Quick
+  check on Easy Oval with seed `42` finished a lap. A second launch exited and left one
+  listening process.
+- CI has not run on GitHub with these changes. Every earlier recorded run on `main`
+  failed.
+
+Recorded on `2026-11-04` for the UI redesign, since committed in `0c12cf6` with the
+race buffer below. Findings and measurements are in
+[`docs/verification/ui-redesign.md`](docs/verification/ui-redesign.md). The archive
+hashes in this entry and the two below describe earlier builds.
 
 - `npm run check` passed: `135` Vitest and `158` pytest tests.
 - `scripts/test-e2e.ps1 -Port 8798`: all `27` Chromium flows passed, including the
@@ -62,7 +82,7 @@ uncommitted race buffer below. Findings and measurements are in
   packaged EXE, and a clean Windows machine with its network adapters disabled were
   not tested.
 
-Recorded on `2026-11-04` for the uncommitted two-second race buffer.
+Recorded on `2026-11-04` for the two-second race buffer, since committed in `0c12cf6`.
 
 - `npm run test:release` passed against the archive below, including run
   `run-ea5028c8295642b5bcd939faac50e1ac`, with loopback-only traffic and no
@@ -124,8 +144,10 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Review and merge `chore/review-cleanup`. Push, tag, publish, or apply the
-optional trusted-signing path only on explicit request. Preserve the immutable
+Confirm CI on GitHub. The workflow runs only on pull requests and pushes to `main`, so
+the pushed `feat/ui-redesign` branch needs a pull request or a merge to start it.
+Push, tag, publish, or apply the optional trusted-signing path only on explicit
+request. Preserve the immutable
 `v1.0.0` and `v1.1.0` tags, published
 assets, saved evidence, and product claim boundary.
 
