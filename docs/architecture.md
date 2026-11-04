@@ -419,7 +419,7 @@ versioned, atomic files defined in Phase 8.
 ## Phase 10 verification boundary
 
 Phase 10 adds a verification plane without adding a second simulation path.
-`evo_racer.hardening` creates a bounded matrix through the public
+`python/tools/hardening.py` creates a bounded matrix through the public
 `RunSession`, bundled preset compiler, Fixed GA, NEAT, canonical evaluator, and
 terminal result builder. It records stable case metadata and SHA-256 signatures
 in `contracts/phase10-regression.json`; timing stays outside that deterministic

@@ -26,7 +26,7 @@ try {
     Invoke-GateStep "Development loopback smoke" { npm run smoke:m0 --silent }
     Invoke-GateStep "Chromium recommended offline user flow" { npm run test:e2e --silent }
     Invoke-GateStep "Three-seed, three-preset algorithm matrix" {
-        & $python -m evo_racer.hardening `
+        & $python python/tools/hardening.py `
             --fixture contracts/phase10-regression.json `
             --report $reportPath
     }

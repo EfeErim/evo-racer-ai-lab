@@ -32,7 +32,7 @@
     "test:thorough": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-thorough.ps1",
     "test:python": ".venv\\Scripts\\python.exe -m pytest",
     "typecheck": "tsc -b --pretty false",
-    "typecheck:python": ".venv\\Scripts\\python.exe -m mypy python/src python/tests"
+    "typecheck:python": ".venv\\Scripts\\python.exe -m mypy python/src python/tests python/tools"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

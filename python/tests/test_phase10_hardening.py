@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from evo_racer.hardening import build_regression_matrix
+from hardening import build_regression_matrix
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase10-regression.json"
 
