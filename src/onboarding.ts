@@ -1,7 +1,7 @@
 export const ROUTES = [
   { id: "welcome", label: "Welcome" },
   { id: "track", label: "Track" },
-  { id: "settings", label: "Training Settings" },
+  { id: "settings", label: "Settings" },
   { id: "review", label: "Review" },
   { id: "training", label: "Training" },
   { id: "results", label: "Results" },
@@ -79,27 +79,32 @@ export interface StartFailure {
 }
 
 export function startFailurePresentation(failure: StartFailure): {
+  title: string;
   badge: string;
   guidance: string;
 } {
   return failure.kind === "unconfirmed"
     ? {
+        title: "No response yet. Try again.",
         badge: "Start unconfirmed",
         guidance:
-          "The start result is unknown. Check Saved runs before retrying if the local core may have accepted the request.",
+          "A run may or may not have started. Check Saved runs first, then press Start training again if it is not listed.",
       }
     : {
+        title: "Training did not start",
         badge: "Start rejected",
         guidance:
-          "The local core rejected the setup and no run was created. Validate again after reviewing the reported issue.",
+          "No run was created. Fix the reported issue, then check the setup again.",
       };
 }
 
 export const TRAINING_PRESETS = [
   {
     id: "quick",
-    name: "Quick start",
-    description: "10 cars × 8 generations × 15 s — fastest visual demo.",
+    name: "Quick check",
+    outcome:
+      "See the full loop work. The shortest run, so expect modest driving.",
+    description: "10 cars × 8 generations × 15 s",
     settings: {
       algorithm: "fixed-ga",
       populationSize: 10,
@@ -111,7 +116,9 @@ export const TRAINING_PRESETS = [
   {
     id: "balanced",
     name: "Balanced",
-    description: "24 cars × 20 generations × 30 s — longer learning run.",
+    outcome:
+      "More cars and more time per attempt, for a longer look at progress.",
+    description: "24 cars × 20 generations × 30 s",
     settings: {
       algorithm: "fixed-ga",
       populationSize: 24,
@@ -123,7 +130,9 @@ export const TRAINING_PRESETS = [
   {
     id: "thorough",
     name: "Thorough",
-    description: "48 cars × 40 generations × 60 s — extended NEAT experiment.",
+    outcome:
+      "The longest preset, using a network that can grow. It costs the most.",
+    description: "48 cars × 40 generations × 60 s",
     settings: {
       algorithm: "neat",
       populationSize: 48,
@@ -135,6 +144,7 @@ export const TRAINING_PRESETS = [
 ] as const satisfies readonly {
   id: string;
   name: string;
+  outcome: string;
   description: string;
   settings: TrainingSettings;
 }[];
@@ -148,6 +158,8 @@ export function maximumCandidateEpisodes(settings: TrainingSettings): number {
 
 export type AppAction =
   | { type: "begin-setup" }
+  | { type: "use-recommended" }
+  | { type: "revise-setup" }
   | { type: "navigate"; route: RouteId }
   | { type: "select-track"; trackPreset: string }
   | { type: "select-custom-track"; track: TrackV1 }
@@ -276,6 +288,17 @@ export function transition(state: AppState, action: AppAction): AppState {
   switch (action.type) {
     case "begin-setup":
       return { ...state, route: "track" };
+    case "use-recommended":
+      if (state.sessionStarted) {
+        return state;
+      }
+      return { ...createInitialState(), route: state.route };
+    case "revise-setup":
+      return {
+        ...state,
+        route: "review",
+        ...invalidate(),
+      };
     case "navigate":
       if (
         state.sessionStarted &&

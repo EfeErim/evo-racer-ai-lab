@@ -178,14 +178,16 @@ describe("Phase 1 onboarding contract", () => {
     state = transition(state, { type: "start-session" });
     state = transition(state, {
       type: "start-session-unconfirmed",
-      message: "Run start failed with status 503.",
+      message:
+        "Run start has no confirmed response yet (status 503). Try again.",
     });
 
     expect(state.route).toBe("review");
     expect(state.sessionStarted).toBe(false);
     expect(state.startFailure).toEqual({
       kind: "unconfirmed",
-      message: "Run start failed with status 503.",
+      message:
+        "Run start has no confirmed response yet (status 503). Try again.",
     });
     expect(canStartSession(state)).toBe(true);
   });
@@ -300,7 +302,9 @@ describe("setup validation transport errors", () => {
   it("distinguishes an HTTP rejection from an unavailable local core", () => {
     expect(
       serviceUnavailableResponse(
-        new Error("Local validation failed with status 403."),
+        new Error(
+          "Local validation has no confirmed response yet (status 403). Try again.",
+        ),
       ),
     ).toEqual({
       contractVersion: 1,
@@ -310,7 +314,7 @@ describe("setup validation transport errors", () => {
           code: "LOCAL_VALIDATION_REQUEST_FAILED",
           field: "service",
           message:
-            "Local validation failed with status 403. Confirm that the app is open on a supported loopback address.",
+            "Local validation has no confirmed response yet (status 403). Try again. Confirm that the app is open on a supported loopback address.",
         },
       ],
     });

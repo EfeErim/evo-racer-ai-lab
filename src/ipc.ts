@@ -88,6 +88,7 @@ export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
 export async function observeRun(
   runId: string,
   knownGenerationReplayCandidateId?: string,
+  includeRaceClip = false,
 ): Promise<RunResponseV1> {
   return parseRunResponse(
     await postJson<unknown>(
@@ -98,6 +99,7 @@ export async function observeRun(
         ...(knownGenerationReplayCandidateId === undefined
           ? {}
           : { knownGenerationReplayCandidateId }),
+        ...(includeRaceClip ? { includeRaceClip } : {}),
       },
       "Run observation",
     ),
@@ -336,12 +338,14 @@ async function requestJson<T>(
     response = await fetch(`${LOCAL_SERVICE_ORIGIN}${path}`, init);
   } catch (error) {
     throw new Error(
-      `${label} could not reach the local service.${error instanceof Error ? ` ${error.message}` : ""}`,
+      `${label} has no response yet from the local service. Try again.${error instanceof Error ? ` ${error.message}` : ""}`,
       { cause: error },
     );
   }
   if (!response.ok) {
-    throw new Error(`${label} failed with status ${String(response.status)}.`);
+    throw new Error(
+      `${label} has no confirmed response yet (status ${String(response.status)}). Try again.`,
+    );
   }
   try {
     return (await response.json()) as T;
@@ -411,7 +415,7 @@ export function serviceUnavailableResponse(
 ): SetupValidationResponse {
   const errorMessage = error instanceof Error ? error.message : undefined;
   const rejectedByCore = errorMessage?.startsWith(
-    "Local validation failed with status ",
+    "Local validation has no confirmed response yet (status ",
   );
   const invalidResponse =
     errorMessage === "Local validation returned invalid JSON." ||
@@ -432,7 +436,7 @@ export function serviceUnavailableResponse(
           rejectedByCore && errorMessage !== undefined
             ? `${errorMessage} Confirm that the app is open on a supported loopback address.`
             : (errorMessage ??
-              "The local core is unavailable. Start it, then review again."),
+              "No response yet from the local core. Try again."),
       },
     ],
   };

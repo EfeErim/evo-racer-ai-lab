@@ -27,7 +27,6 @@ describe("Track Builder workspace", () => {
   it("keeps the full workspace closed by default behind a visible launcher", () => {
     const html = renderTrackBuilder(
       createTrackWorkspaceState("custom-track-test"),
-      false,
     );
 
     expect(html).toContain("Track Builder");
@@ -40,7 +39,7 @@ describe("Track Builder workspace", () => {
     state.toolsOpen = true;
     state.editorPreview = fixture.compiled;
     state.editorValidation = { status: "valid", errors: [] };
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toContain('data-testid="track-builder"');
     expect(html).toContain('role="tablist"');
@@ -56,15 +55,14 @@ describe("Track Builder workspace", () => {
     expect(html).toContain(
       'id="track-builder-panel-library" aria-labelledby="track-builder-tab-library" hidden',
     );
-    expect(html).toContain("Python-compiled preview");
-    expect(html).toContain("Python verified");
+    expect(html).toContain("Valid");
     expect(html).toContain("Short straight");
     expect(html).toContain("Left hairpin");
     expect(html).toContain('aria-label="Track piece tray"');
     expect(html).toContain('data-editor-drag-kind="straight-short"');
     expect(html).toContain('data-editor-drag-index="1" draggable="true"');
     expect(html).toContain('data-track-drop-index="1"');
-    expect(html).toContain("Drag a piece into a glowing connector");
+    expect(html).toContain("Drag a piece into a connector");
     expect(html).toContain('data-track-action="editor-move"');
     expect(html).toContain('data-track-action="editor-duplicate"');
     expect(html).toContain('data-track-action="use-editor"');
@@ -84,14 +82,14 @@ describe("Track Builder workspace", () => {
       ],
     };
     state.editorPreview = fixture.compiled;
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toContain("LOOP_NOT_CLOSED");
     expect(html).toContain("Close &lt;this&gt; loop.");
     expect(html).not.toContain("Close <this> loop.");
     expect(html).toContain('data-track-action="use-editor" disabled');
     expect(html).toContain("track-geometry");
-    expect(html).not.toContain("No valid geometry yet");
+    expect(html).not.toContain("No preview yet");
   });
 
   it("locks every editor mutation while a Python command is pending", () => {
@@ -99,7 +97,7 @@ describe("Track Builder workspace", () => {
     state.toolsOpen = true;
     state.pending = "assist";
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toMatch(/data-editor-name[^>]*disabled/);
     expect(html).toMatch(/data-editor-width[^>]*disabled/);
@@ -118,7 +116,7 @@ describe("Track Builder workspace", () => {
     state.tab = "generate";
     state.pending = "generate";
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toMatch(/data-generator-seed[^>]*disabled/);
     expect(html).toMatch(/name="generator-length"[^>]*disabled/);
@@ -131,7 +129,7 @@ describe("Track Builder workspace", () => {
     state.toolsOpen = true;
     state.notice = { tone: "error", message: "Python command failed." };
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toContain('role="alert" aria-live="assertive"');
     expect(html).toContain("Python command failed.");
@@ -144,7 +142,7 @@ describe("Track Builder workspace", () => {
     state.editorPreview = fixture.compiled;
     state.editorValidation = { status: "valid", errors: [] };
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toMatch(
       /data-track-action="save-editor"[^>]*disabled[^>]*>Saving…<\/button>/,
@@ -166,7 +164,7 @@ describe("Track Builder workspace", () => {
       directionChanges: 5,
     };
     state.generatedPreview = fixture.compiled;
-    const generatorHtml = renderTrackBuilder(state, false);
+    const generatorHtml = renderTrackBuilder(state);
 
     expect(generatorHtml).toContain('value="731"');
     expect(generatorHtml).toContain('value="long" checked');
@@ -182,8 +180,8 @@ describe("Track Builder workspace", () => {
       isolated: [],
     };
     state.libraryStatus = "ready";
-    const libraryHtml = renderTrackBuilder(state, false);
-    expect(libraryHtml).toContain("Import TrackV1 JSON");
+    const libraryHtml = renderTrackBuilder(state);
+    expect(libraryHtml).toContain("Import a track file");
     expect(libraryHtml).toContain('data-track-action="edit-library"');
     expect(libraryHtml).toContain('data-track-action="delete-library"');
   });
@@ -194,7 +192,7 @@ describe("Track Builder workspace", () => {
     state.tab = "library";
     state.pending = "import";
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toContain("Importing…");
     expect(html).toMatch(/data-track-import[^>]*disabled/);
@@ -207,7 +205,7 @@ describe("Track Builder workspace", () => {
     state.libraryStatus = "unavailable";
     state.libraryMessage = "Track library <failed>.";
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(html).toContain("Local track library unavailable");
     expect(html).toContain("Track library &lt;failed&gt;.");
@@ -227,7 +225,7 @@ describe("Track Builder workspace", () => {
     };
     state.generatedPreview = fixture.compiled;
 
-    const html = renderTrackBuilder(state, false);
+    const html = renderTrackBuilder(state);
 
     expect(generatorInputsChanged(state)).toBe(true);
     expect(html).toContain("Inputs changed");
@@ -251,13 +249,62 @@ describe("Track Builder workspace", () => {
     state.generatedPreview = fixture.compiled;
     state.selected = fixture.compiled;
 
-    const html = renderTrackBuilder(state, true);
+    const html = renderTrackBuilder(state);
 
-    expect(html).toContain("Active experiment track");
+    expect(html).toContain("Active track");
     expect(html).toContain("Active for Review and Start");
-    expect(html).toContain(
-      "This exact Python-verified TrackV1 will be submitted.",
-    );
+    expect(html).toContain("This exact track will be used.");
     expect(html).not.toContain('data-track-action="use-generated"');
+  });
+
+  it("treats a generated track as a candidate until it is applied", () => {
+    const state = createTrackWorkspaceState("custom-track-test");
+    state.toolsOpen = true;
+    state.tab = "generate";
+    state.generatedInputs = { ...state.generator, seed: 731 };
+    state.generator = { ...state.generatedInputs };
+    state.generatedFeatures = {
+      layout: "asymmetric",
+      straightCount: 1,
+      cornerCount: 8,
+      chicaneCount: 2,
+      hairpinCount: 0,
+      directionChanges: 4,
+    };
+    state.generatedPreview = fixture.compiled;
+
+    const html = renderTrackBuilder(state);
+
+    expect(html).toContain("Candidate, not active");
+    expect(html).toContain('data-track-action="use-generated"');
+    expect(html).toContain('data-track-action="regenerate"');
+    expect(html).toContain("Regenerate seed 731");
+    expect(html).toContain("<dt>Seed</dt><dd>731</dd>");
+    expect(html).toContain("1 straight · 8 corners · 2 chicanes");
+    expect(html).not.toContain("Active for Review and Start");
+  });
+
+  it("shows each tool's status on its tab", () => {
+    const state = createTrackWorkspaceState("custom-track-test");
+    state.toolsOpen = true;
+    state.editorValidation = { status: "invalid", errors: [] };
+    state.library = {
+      contractVersion: 1,
+      tracks: [fixture.compiled],
+      isolated: [],
+    };
+    state.libraryStatus = "ready";
+
+    const html = renderTrackBuilder(state);
+
+    expect(html).toContain(
+      "<strong>Editor</strong>\n      <span>Needs changes</span>",
+    );
+    expect(html).toContain(
+      "<strong>Generate</strong>\n      <span>No candidate yet</span>",
+    );
+    expect(html).toContain(
+      "<strong>Library</strong>\n      <span>1 saved</span>",
+    );
   });
 });

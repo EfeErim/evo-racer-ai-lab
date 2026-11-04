@@ -112,7 +112,7 @@ describe("generation-boundary controls", () => {
     expect(runControls(snapshot())).toMatchObject({
       pauseLabel: "Pause after generation",
       stopLabel: "Stop after generation",
-      note: "Run controls apply at deterministic generation boundaries.",
+      note: "Pause and stop take effect when the current generation finishes.",
     });
   });
 
@@ -123,7 +123,7 @@ describe("generation-boundary controls", () => {
       pauseLabel: "Pause queued",
       stopDisabled: false,
       stopLabel: "Stop after generation",
-      note: "Pause is queued for the current generation boundary.",
+      note: "Pause is queued. It takes effect when this generation finishes.",
     });
   });
 
@@ -167,8 +167,7 @@ describe("terminal training handoff", () => {
       ),
     ).toEqual({
       title: "Training complete",
-      message:
-        "All 8 generations finished. Results and the final champion replay are ready.",
+      message: "All 8 generations finished.",
     });
   });
 
@@ -186,7 +185,7 @@ describe("terminal training handoff", () => {
     ).toEqual({
       title: "Run stopped",
       message:
-        "Stopped safely after 3 of 8 generations. Results for the completed work are ready.",
+        "Stopped after 3 of 8 generations. Results cover the finished generations.",
     });
   });
 

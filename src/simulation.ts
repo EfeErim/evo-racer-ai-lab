@@ -80,6 +80,12 @@ export interface GenerationReplayV1 {
   frames: ReplayFrameV1[];
 }
 
+export interface RaceClipV1 extends GenerationReplayV1 {
+  candidateIndex: number;
+  populationSize: number;
+  generation: number;
+}
+
 export interface GenerationTrailV1 {
   runId: string;
   candidateId: string;
@@ -221,6 +227,7 @@ export interface ObservationSnapshotV1 {
   } | null;
   pendingCommand?: "pause" | "stop" | null;
   generationReplay?: GenerationReplayV1 | null;
+  raceClip?: RaceClipV1 | null;
   generationTrails?: GenerationTrailV1[];
   generationReport: GenerationReportV1 | null;
   fitnessHistory: FitnessPointV1[];
@@ -586,6 +593,10 @@ export function parseObservationSnapshot(
       };
     }
   }
+  const raceClip =
+    snapshot.raceClip === undefined || snapshot.raceClip === null
+      ? snapshot.raceClip
+      : parseRaceClip(snapshot.raceClip);
   const generationTrails =
     snapshot.generationTrails === undefined
       ? undefined
@@ -625,12 +636,39 @@ export function parseObservationSnapshot(
     ...(activeCandidate === undefined ? {} : { activeCandidate }),
     ...(pendingCommand === undefined ? {} : { pendingCommand }),
     ...(generationReplay === undefined ? {} : { generationReplay }),
+    ...(raceClip === undefined ? {} : { raceClip }),
     ...(generationTrails === undefined ? {} : { generationTrails }),
     generationReport,
     fitnessHistory,
     selectedCar,
     result,
     previousRuns,
+  };
+}
+
+function parseRaceClip(value: unknown): RaceClipV1 {
+  const clip = asRecord(value, "raceClip");
+  if (!Array.isArray(clip.frames)) {
+    throw new Error("Race clip frames must be an array.");
+  }
+  const candidateIndex = integerNumber(
+    clip.candidateIndex,
+    "raceClip.candidateIndex",
+  );
+  const populationSize = integerNumber(
+    clip.populationSize,
+    "raceClip.populationSize",
+  );
+  const generation = integerNumber(clip.generation, "raceClip.generation");
+  if (candidateIndex < 1 || candidateIndex > populationSize || generation < 1) {
+    throw new Error("Race clip counters are invalid.");
+  }
+  return {
+    candidateId: requiredString(clip.candidateId, "raceClip.candidateId"),
+    candidateIndex,
+    populationSize,
+    generation,
+    frames: parseReplayFrames(clip.frames, "Race clip"),
   };
 }
 
@@ -1076,7 +1114,7 @@ function parseReplayFrame(value: unknown): ReplayFrameV1 {
 
 function parseReplayFrames(
   values: unknown[],
-  label: "Generation replay" | "Run replay",
+  label: "Generation replay" | "Race clip" | "Run replay",
 ): ReplayFrameV1[] {
   if (values.length === 0) {
     throw new Error(`${label} must contain at least one frame.`);

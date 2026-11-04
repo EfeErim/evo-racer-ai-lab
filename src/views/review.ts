@@ -1,77 +1,62 @@
 import { escapeHtml } from "../html";
 import {
   type AppState,
-  TRACK_PRESETS,
   canStartSession,
   getPresentationIssues,
   maximumCandidateEpisodes,
   startFailurePresentation,
 } from "../onboarding";
-import { pageHeader } from "./shared";
+import type { CompiledTrackV1 } from "../track-renderer";
+import { selectedTrainingPreset } from "./settings";
+import { pageHeader, trackIdentity } from "./shared";
 
-export function renderReview(state: AppState): string {
-  const preset = TRACK_PRESETS.find(
-    (candidate) => candidate.id === state.draft.trackPreset,
-  );
-  const trackName = state.draft.track?.name ?? preset?.name ?? "Not selected";
-  const trackDescription =
-    state.draft.track === null
-      ? (preset?.description ?? "Choose a track to continue.")
-      : `${String(state.draft.track.pieces.length)} canonical pieces · local TrackV1`;
-  const status = renderValidationStatus(state);
+export function renderReview(
+  state: AppState,
+  activeTrack: CompiledTrackV1 | undefined,
+  selectedSeed: number | undefined,
+): string {
+  const identity = trackIdentity(state, activeTrack, selectedSeed);
+  const { settings } = state.draft;
+  const preset = selectedTrainingPreset(settings);
   const startDisabled = !canStartSession(state);
-  const maximumEpisodes = maximumCandidateEpisodes(state.draft.settings);
+  const maximumEpisodes = maximumCandidateEpisodes(settings);
 
   return `
-    <section class="page" aria-labelledby="page-title">
+    <section class="page review-page" aria-labelledby="page-title">
       ${pageHeader(
-        "Setup / Review",
-        "Review the setup.",
-        "Confirm the track and training parameters. Starting makes this configuration read-only.",
+        "Review and start",
+        "Check these choices. They are locked once training starts.",
       )}
 
-      <div class="review-grid">
-        <section class="review-card" aria-labelledby="track-review-title">
-          <div class="review-heading">
-            <div>
-              <p class="section-kicker">Track</p>
-              <h2 id="track-review-title">${escapeHtml(trackName)}</h2>
-            </div>
-            <button type="button" data-route="track">Edit</button>
-          </div>
-          <p>${escapeHtml(trackDescription)}</p>
-        </section>
+      <dl class="review-summary">
+        <div>
+          <dt>Track</dt>
+          <dd><strong>${escapeHtml(identity.name)}</strong> <span>${escapeHtml(identity.summary)}</span></dd>
+          <button class="button secondary compact" type="button" data-route="track" aria-label="Edit track">Edit</button>
+        </div>
+        <div>
+          <dt>Training plan</dt>
+          <dd><strong>${preset?.name ?? "Custom settings"}</strong></dd>
+          <button class="button secondary compact" type="button" data-route="settings" aria-label="Edit training plan">Edit</button>
+        </div>
+        <div>
+          <dt>Population</dt>
+          <dd><strong>${String(settings.populationSize)} cars</strong> <span>per generation</span></dd>
+        </div>
+        <div>
+          <dt>Evaluation budget</dt>
+          <dd><strong>Up to ${String(maximumEpisodes)} candidate evaluations</strong> <span>${String(settings.generations)} generations, up to ${String(settings.episodeSeconds)} s per attempt. This counts work, not clock time.</span></dd>
+        </div>
+      </dl>
 
-        <section class="review-card" aria-labelledby="training-review-title">
-          <div class="review-heading">
-            <div>
-              <p class="section-kicker">Training</p>
-              <h2 id="training-review-title">${state.draft.settings.algorithm === "fixed-ga" ? "Fixed GA" : "NEAT"}</h2>
-            </div>
-            <button type="button" data-route="settings">Edit</button>
-          </div>
-          <dl class="review-values">
-            <div><dt>Population</dt><dd>${String(state.draft.settings.populationSize)}</dd></div>
-            <div><dt>Generations</dt><dd>${String(state.draft.settings.generations)}</dd></div>
-            <div><dt>Episode</dt><dd>${String(state.draft.settings.episodeSeconds)}s</dd></div>
-            <div><dt>Seed</dt><dd>${String(state.draft.settings.seed)}</dd></div>
-          </dl>
-          <p class="workload-note">
-            Maximum workload: <strong>${String(maximumEpisodes)} candidate episodes</strong>.
-            This is a compute budget, not a wall-clock estimate.
-          </p>
-        </section>
-      </div>
-
-      ${status}
+      ${renderValidationStatus(state)}
       ${renderStartFailure(state)}
 
       <div class="start-panel">
-        <div>
-          <p class="section-kicker">Manual start</p>
-          <h2>Start this experiment</h2>
-          <p>No run begins from navigation or validation alone.</p>
-        </div>
+        <p>
+          <strong>Start is the only action that begins training.</strong>
+          ${startDisabled ? "It unlocks when the setup is valid." : "Nothing has started yet."}
+        </p>
         <button
           class="button primary start-button"
           type="button"
@@ -83,7 +68,7 @@ export function renderReview(state: AppState): string {
           <span aria-hidden="true">→</span>
         </button>
         <p id="start-condition" class="sr-only">
-          ${startDisabled ? "Start requires successful local validation." : "Configuration is valid. Start is available."}
+          ${startDisabled ? "Start requires a successful setup check." : "Start is available."}
         </p>
       </div>
 
@@ -92,8 +77,8 @@ export function renderReview(state: AppState): string {
           <span aria-hidden="true">←</span>
           Back to settings
         </button>
-        <button class="button text-button" type="button" data-action="review">
-          Validate again
+        <button class="button secondary" type="button" data-action="review">
+          Check again
         </button>
       </div>
     </section>
@@ -106,26 +91,37 @@ function renderStartFailure(state: AppState): string {
   }
   const presentation = startFailurePresentation(state.startFailure);
   return `
-    <section class="start-failure-notice" role="alert" aria-labelledby="start-failure-title">
-      <span class="data-chip">${presentation.badge}</span>
+    <section class="notice is-warning start-failure-notice" role="alert" aria-labelledby="start-failure-title">
       <div>
-        <h2 id="start-failure-title">Training did not open</h2>
+        <h2 id="start-failure-title">${presentation.title}</h2>
         <p>${escapeHtml(state.startFailure.message)}</p>
         <p>${presentation.guidance}</p>
-        <button class="button secondary" type="button" data-route="welcome">
-          Open Welcome and Saved runs
-        </button>
       </div>
+      <button class="button secondary compact" type="button" data-route="welcome">
+        Open Welcome and Saved runs
+      </button>
     </section>
   `;
+}
+
+function fixRouteFor(field: string): {
+  route: "track" | "settings";
+  label: string;
+} | null {
+  if (field === "service") {
+    return null;
+  }
+  return field === "track" || field === "trackPreset" || field === "pieces"
+    ? { route: "track", label: "Fix the track" }
+    : { route: "settings", label: "Fix the settings" };
 }
 
 function renderValidationStatus(state: AppState): string {
   if (state.validation.status === "checking") {
     return `
       <div class="validation-status is-checking" role="status" aria-live="polite">
-        <span class="status-dot" aria-hidden="true"></span>
-        <div><strong>Checking with the local core</strong><p>Start stays locked during validation.</p></div>
+        <span class="status-glyph is-info is-pending" aria-hidden="true">…</span>
+        <div><strong>Checking the setup</strong><p>Start stays locked until this finishes.</p></div>
       </div>
     `;
   }
@@ -136,8 +132,8 @@ function renderValidationStatus(state: AppState): string {
   ) {
     return `
       <div class="validation-status is-valid" role="status" aria-live="polite">
-        <span class="status-icon" aria-hidden="true">✓</span>
-        <div><strong>Configuration valid</strong><p>The local core accepted contract version 1.</p></div>
+        <span class="status-glyph is-success" aria-hidden="true">✓</span>
+        <div><strong>Setup is valid</strong><p>The local core accepted this track and these settings.</p></div>
       </div>
     `;
   }
@@ -149,14 +145,16 @@ function renderValidationStatus(state: AppState): string {
   const errorList = errors
     .map((error) => `<li>${escapeHtml(error.message)}</li>`)
     .join("");
+  const fix = errors[0] === undefined ? null : fixRouteFor(errors[0].field);
 
   return `
     <div class="validation-status is-invalid" role="alert">
-      <span class="status-icon" aria-hidden="true">!</span>
+      <span class="status-glyph is-danger" aria-hidden="true">!</span>
       <div>
         <strong>Start is locked</strong>
-        <ul>${errorList || "<li>Validate the setup with the local core.</li>"}</ul>
+        <ul>${errorList || "<li>Check the setup again to continue.</li>"}</ul>
       </div>
+      ${fix === null ? "" : `<button class="button secondary compact" type="button" data-route="${fix.route}">${fix.label}</button>`}
     </div>
   `;
 }

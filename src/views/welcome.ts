@@ -1,61 +1,82 @@
-import type { RunLibraryState } from "../app-store";
+import type { PresetGeometryState, RunLibraryState } from "../app-store";
 import { escapeHtml } from "../html";
-import { pageHeader } from "./shared";
+import {
+  maximumCandidateEpisodes,
+  TRACK_PRESETS,
+  TRAINING_PRESETS,
+} from "../onboarding";
+import { renderTrackSvg, trackLengthMeters } from "../track-renderer";
 
-export function renderWelcome(runLibrary: RunLibraryState): string {
+const STATUS_LABELS: Record<string, string> = {
+  running: "Interrupted",
+  paused: "Paused",
+  stopped: "Stopped",
+  completed: "Completed",
+};
+
+export function renderWelcome(
+  runLibrary: RunLibraryState,
+  presetGeometry: PresetGeometryState,
+): string {
   const pending =
     runLibrary.status === "ready" ? runLibrary.pending : undefined;
   const libraryNotice =
     runLibrary.status === "ready"
       ? runLibrary.notice.tone === "error"
         ? `
-            <div class="run-library-notice is-error" role="alert">
+            <div class="notice is-error" role="alert">
               <p>${escapeHtml(runLibrary.notice.message)}</p>
-              <button class="button secondary" type="button" data-action="retry-run-library">Retry saved runs</button>
+              <button class="button secondary compact" type="button" data-action="retry-run-library">Retry saved runs</button>
             </div>
           `
-        : `<p class="run-library-notice is-${runLibrary.notice.tone}" role="status">${escapeHtml(runLibrary.notice.message)}</p>`
+        : `<p class="notice is-${runLibrary.notice.tone}" role="status">${escapeHtml(runLibrary.notice.message)}</p>`
       : "";
   const forceSavedRunsOpen =
     runLibrary.status === "unavailable" ||
     (runLibrary.status === "ready" && runLibrary.notice.tone === "error");
+  const savedRunCount =
+    runLibrary.status === "ready"
+      ? `${String(runLibrary.value.runs.length)} saved`
+      : runLibrary.status === "loading"
+        ? "Loading"
+        : "No response yet";
   const savedRuns =
     runLibrary.status === "loading"
       ? "<p>Loading local run files…</p>"
       : runLibrary.status === "unavailable"
         ? `
-            <div class="run-library-notice is-error" role="alert">
+            <div class="notice is-error" role="alert">
               <p>${escapeHtml(runLibrary.message)}</p>
-              <button class="button secondary" type="button" data-action="retry-run-library">Retry saved runs</button>
+              <button class="button secondary compact" type="button" data-action="retry-run-library">Retry saved runs</button>
             </div>
           `
         : runLibrary.value.runs.length === 0
-          ? `${libraryNotice}<p>No saved runs yet. Every started run will appear here.</p>`
+          ? `${libraryNotice}<p>No saved runs yet. Every run you start will appear here.</p>`
           : `
             ${libraryNotice}
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Saved runs table">
               <table>
-              <thead><tr><th>Run</th><th>Track</th><th>Progress</th><th>Status</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Track</th><th>Generations</th><th>Status</th><th>Run</th><th>Actions</th></tr></thead>
               <tbody>
                 ${runLibrary.value.runs
                   .map(
                     (run) => `
                       <tr>
-                        <th scope="row">${escapeHtml(run.runId.slice(0, 18))}</th>
-                        <td>${escapeHtml(run.trackName)} · ${escapeHtml(run.algorithm)}</td>
-                        <td>${String(run.generation)} / ${String(run.totalGenerations)}</td>
-                        <td>${escapeHtml(run.status)}</td>
+                        <th scope="row">${escapeHtml(run.trackName)}</th>
+                        <td>${String(run.generation)} of ${String(run.totalGenerations)}</td>
+                        <td>${escapeHtml(STATUS_LABELS[run.status] ?? run.status)}</td>
+                        <td class="data-id">${escapeHtml(run.runId.slice(0, 18))}</td>
                         <td>
                           <div class="library-actions">
                             ${
                               run.resumable
-                                ? `<button class="button secondary" type="button" data-run-action="resume" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "resume" && pending.runId === run.runId ? "Restoring…" : "Resume"}</button>`
+                                ? `<button class="button secondary compact" type="button" data-run-action="resume" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "resume" && pending.runId === run.runId ? "Restoring…" : "Resume"}</button>`
                                 : run.championFitness !== null
-                                  ? `<button class="button secondary" type="button" data-run-action="open" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "open" && pending.runId === run.runId ? "Opening…" : "Open results"}</button>`
-                                  : `<button class="button secondary" type="button" disabled>No results</button>`
+                                  ? `<button class="button secondary compact" type="button" data-run-action="open" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "open" && pending.runId === run.runId ? "Opening…" : "Open results"}</button>`
+                                  : `<button class="button secondary compact" type="button" disabled>No results</button>`
                             }
-                            <button class="button secondary" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "export" && pending.runId === run.runId ? "Exporting…" : "Export"}</button>
-                            <button class="button secondary" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "delete" && pending.runId === run.runId ? "Deleting…" : "Delete"}</button>
+                            <button class="button secondary compact" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "export" && pending.runId === run.runId ? "Exporting…" : "Export"}</button>
+                            <button class="button danger compact" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "delete" && pending.runId === run.runId ? "Deleting…" : "Delete"}</button>
                           </div>
                         </td>
                       </tr>
@@ -68,69 +89,57 @@ export function renderWelcome(runLibrary: RunLibraryState): string {
             ${
               runLibrary.value.isolated.length === 0
                 ? ""
-                : `<p role="status">${String(runLibrary.value.isolated.length)} corrupt run record(s) were isolated without blocking this library.</p>`
+                : `<p role="status">${String(runLibrary.value.isolated.length)} damaged run record(s) were set aside. The other runs are unaffected.</p>`
             }
           `;
+  const recommendedTrack = TRACK_PRESETS[0];
+  const recommendedPlan = TRAINING_PRESETS[0];
+  const compiled =
+    presetGeometry.status === "ready"
+      ? presetGeometry.presets.find(
+          (candidate) => candidate.track.id === recommendedTrack.id,
+        )
+      : undefined;
   return `
     <section class="page welcome-page" aria-labelledby="page-title">
-      ${pageHeader(
-        "EvoRacer / New experiment",
-        "Start an AI racing experiment.",
-        "Choose a circuit, watch a population learn the racing line, and compare the champion. Nothing runs until you review the setup and press Start.",
-      )}
-
-      <div class="welcome-journey" aria-label="How EvoRacer works">
-        <div>
-          <span aria-hidden="true">01</span>
-          <p><strong>Choose a track</strong>Start with the forgiving oval or build your own circuit.</p>
-        </div>
-        <div>
-          <span aria-hidden="true">02</span>
-          <p><strong>Watch evolution</strong>See each candidate race with Python-owned physics and telemetry.</p>
-        </div>
-        <div>
-          <span aria-hidden="true">03</span>
-          <p><strong>Compare the champion</strong>Replay the best car and inspect real generation progress.</p>
-        </div>
-      </div>
-
-      <div class="welcome-panel">
-        <div class="welcome-summary" aria-label="Experiment setup summary">
-          <div class="summary-row">
-            <span>Track</span>
-            <strong>Easy Oval</strong>
-          </div>
-          <div class="summary-row">
-            <span>Training</span>
-            <strong>Quick start · Fixed GA · 80 candidate episodes</strong>
-          </div>
-          <div class="summary-row">
-            <span>Run policy</span>
-            <strong>Manual start after local validation</strong>
-          </div>
-        </div>
-        <div class="welcome-aside">
-          <span class="data-chip">Local only</span>
-          <p>No account, cloud connection, telemetry, or automatic training.</p>
+      <div class="welcome-hero">
+        <div class="welcome-intro">
+          <h1 id="page-title" tabindex="-1">AI cars learn to race by evolution, and you watch.</h1>
           <div class="welcome-actions">
-            <button class="button primary" type="button" data-action="review" ${pending?.action === "resume" ? "disabled" : ""}>
-              Review recommended setup
+            <button class="button primary" type="button" data-action="review-recommended" ${pending?.action === "resume" ? "disabled" : ""}>
+              Review recommended experiment
+              <span aria-hidden="true">→</span>
             </button>
             <button class="button secondary" type="button" data-action="begin-setup" ${pending?.action === "resume" ? "disabled" : ""}>
-              Customize setup
+              Choose track and settings
             </button>
           </div>
+          <p class="next-hint">Next you check the setup. Training begins only when you press Start.</p>
         </div>
-      </div>
-      <details class="comparison-panel saved-runs-panel" ${forceSavedRunsOpen ? 'open data-force-open="true"' : ""}>
-        <summary class="chart-heading">
-          <div>
-            <p class="section-kicker">Versioned local recovery</p>
-            <h2 id="saved-runs-title">Saved runs</h2>
+        <aside class="recommended" aria-label="Recommended first experiment">
+          <div class="recommended-preview" aria-hidden="true">
+            ${compiled === undefined ? "" : renderTrackSvg(compiled)}
           </div>
-          <span class="data-chip">Open library</span>
+          <dl class="fact-list">
+            <div><dt>Track</dt><dd>${recommendedTrack.name}${compiled === undefined ? "" : ` · ${String(Math.round(trackLengthMeters(compiled)))} m`}</dd></div>
+            <div><dt>Training plan</dt><dd>${recommendedPlan.name}</dd></div>
+            <div><dt>Budget</dt><dd>Up to ${String(maximumCandidateEpisodes(recommendedPlan.settings))} candidate evaluations</dd></div>
+          </dl>
+        </aside>
+      </div>
+
+      <ol class="loop-steps" aria-label="How EvoRacer works">
+        <li><span aria-hidden="true">1</span><p><strong>Set up</strong> Pick a track and how long to train.</p></li>
+        <li><span aria-hidden="true">2</span><p><strong>Watch</strong> Each generation of cars tries the track. The best ones breed the next.</p></li>
+        <li><span aria-hidden="true">3</span><p><strong>Compare</strong> See whether the best car improved, and replay it.</p></li>
+      </ol>
+
+      <details class="disclosure saved-runs-panel" ${forceSavedRunsOpen ? 'open data-force-open="true"' : ""}>
+        <summary>
+          <h2 id="saved-runs-title">Saved runs</h2>
+          <span class="chip">${savedRunCount}</span>
         </summary>
-        <div class="saved-runs-content">${savedRuns}</div>
+        <div class="disclosure-body">${savedRuns}</div>
       </details>
     </section>
   `;

@@ -124,6 +124,13 @@ describe("observer replay deltas", () => {
       runId: "run-observer-refresh",
       knownGenerationReplayCandidateId: replay.candidateId,
     });
+
+    await observeRun("run-observer-refresh", replay.candidateId, true);
+    const clipBody = fetchMock.mock.calls[1]?.[1]?.body;
+    if (typeof clipBody !== "string") {
+      throw new Error("Observe request body was not JSON text.");
+    }
+    expect(JSON.parse(clipBody)).toMatchObject({ includeRaceClip: true });
   });
 
   it("identifies an observation HTTP failure as a run error", async () => {
@@ -135,7 +142,7 @@ describe("observer replay deltas", () => {
     );
 
     await expect(observeRun("run-observer-refresh")).rejects.toThrow(
-      "Run observation failed with status 503.",
+      "Run observation has no confirmed response yet (status 503). Try again.",
     );
   });
 });

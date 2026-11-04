@@ -15,6 +15,7 @@ import {
   createTrackWorkspaceState,
   type TrackWorkspaceState,
 } from "./track-builder";
+import type { RaceBufferState } from "./race-buffer";
 import type { CompiledTrackV1, TrackMarker } from "./track-renderer";
 
 export interface LiveMarkerMotion {
@@ -71,6 +72,7 @@ export interface RunLibraryNotice {
 export interface AppStore {
   applicationLifecycle: ApplicationLifecycle;
   reducedMotionOverride: boolean;
+  systemMotionOptIn: boolean;
   state: AppState;
   presetGeometry: PresetGeometryState;
   simulation: SimulationState;
@@ -79,8 +81,10 @@ export interface AppStore {
   liveMarkerFrame: number | undefined;
   liveMarkerMotion: LiveMarkerMotion | undefined;
   championReplayMotion: ChampionReplayMotion | undefined;
+  raceBuffer: RaceBufferState | undefined;
   generationTrails: GenerationTrail[];
   replayFrameIndex: number;
+  replayPaused: boolean;
   runLibrary: RunLibraryState;
   trackValidationRequest: number;
   presetGeometryRequestVersion: number;
@@ -103,10 +107,21 @@ export interface AppContext {
   dispatch: (action: AppAction) => void;
 }
 
+/** Windows' preference is the default; only an explicit in-app choice opts out. */
+export function motionIsReduced(
+  store: AppStore,
+  systemReducedMotion: MediaQueryList,
+): boolean {
+  return systemReducedMotion.matches
+    ? !store.systemMotionOptIn
+    : store.reducedMotionOverride;
+}
+
 export function createAppStore(): AppStore {
   return {
     applicationLifecycle: "active",
     reducedMotionOverride: false,
+    systemMotionOptIn: false,
     state: createInitialState(),
     presetGeometry: { status: "loading" },
     simulation: { status: "idle" },
@@ -115,8 +130,10 @@ export function createAppStore(): AppStore {
     liveMarkerFrame: undefined,
     liveMarkerMotion: undefined,
     championReplayMotion: undefined,
+    raceBuffer: undefined,
     generationTrails: [],
     replayFrameIndex: 0,
+    replayPaused: false,
     runLibrary: { status: "loading" },
     trackValidationRequest: 0,
     presetGeometryRequestVersion: 0,

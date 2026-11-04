@@ -1,5 +1,11 @@
-import type { AppContext, RunLibraryNotice } from "../app-store";
+import {
+  type AppContext,
+  motionIsReduced,
+  type RunLibraryNotice,
+} from "../app-store";
 import { updateGenerationTrails } from "../generation-trails";
+import { loopingReplayFrameIndex } from "../live-motion";
+import type { ReplayFrameV1 } from "../simulation";
 import {
   commandRun,
   observeRun,
@@ -13,6 +19,12 @@ import {
 } from "../observer-refresh";
 import { canRequestReview, canStartSession } from "../onboarding";
 import {
+  acceptRaceClip,
+  bufferedObservationDelay,
+  raceBufferForRun,
+  raceClipRequestDelay,
+} from "../race-buffer";
+import {
   replayFrameIndexAfterAction,
   type RunCommand,
 } from "../run-presentation";
@@ -21,7 +33,21 @@ export function createRunSession(
   context: AppContext,
   refreshRuns: (notice?: RunLibraryNotice) => Promise<void>,
 ) {
-  const { store, render, dispatch } = context;
+  const { store, render, dispatch, reducedMotionQuery } = context;
+
+  const raceBufferActive = (): boolean =>
+    document.visibilityState === "visible" &&
+    !motionIsReduced(store, reducedMotionQuery);
+
+  const nextObservationDelay = (runId: string): number => {
+    const pollDelay = observationPollDelay(document.visibilityState);
+    if (!raceBufferActive()) {
+      return pollDelay;
+    }
+    const now = window.performance.now();
+    store.raceBuffer = raceBufferForRun(store.raceBuffer, runId, now);
+    return bufferedObservationDelay(pollDelay, store.raceBuffer, now);
+  };
 
   const review = async (): Promise<void> => {
     if (!canRequestReview(store.state)) {
@@ -68,7 +94,7 @@ export function createRunSession(
     }
     store.observationTimer = window.setTimeout(() => {
       void observeSession();
-    }, observationPollDelay(document.visibilityState));
+    }, nextObservationDelay(store.simulation.snapshot.runId));
   };
 
   const isCurrentRun = (runId: string): boolean =>
@@ -135,10 +161,30 @@ export function createRunSession(
     const requestVersion = ++store.runRequestVersion;
     const knownReplayCandidateId =
       store.simulation.snapshot.generationReplay?.candidateId;
+    const raceBuffer = raceBufferForRun(
+      store.raceBuffer,
+      runId,
+      window.performance.now(),
+    );
+    store.raceBuffer = raceBuffer;
+    const includeRaceClip =
+      raceBufferActive() &&
+      raceClipRequestDelay(raceBuffer, window.performance.now()) === 0;
     try {
-      const response = await observeRun(runId, knownReplayCandidateId);
+      const response = await observeRun(
+        runId,
+        knownReplayCandidateId,
+        includeRaceClip,
+      );
       if (!isLatestRunRequest(runId, requestVersion)) {
         return;
+      }
+      if (includeRaceClip && response.valid) {
+        store.raceBuffer = acceptRaceClip(
+          raceBuffer,
+          response.snapshot.raceClip,
+          window.performance.now(),
+        );
       }
       applyRunResponse(response);
     } catch (error) {
@@ -147,8 +193,8 @@ export function createRunSession(
       }
       setRunFailure(
         error instanceof Error
-          ? `Telemetry update failed: ${error.message}`
-          : "The local core could not advance the training run.",
+          ? `Telemetry update delayed: ${error.message}`
+          : "No new update from the local core yet. It will keep trying.",
       );
       render();
     } finally {
@@ -211,6 +257,21 @@ export function createRunSession(
     }
   };
 
+  /** The recorded frame on screen right now, whichever mode shows it. */
+  const displayedReplayFrame = (frames: readonly ReplayFrameV1[]): number => {
+    if (store.replayPaused) {
+      return store.replayFrameIndex;
+    }
+    const motion = store.championReplayMotion;
+    if (motion === undefined) {
+      return Math.max(0, frames.length - 1);
+    }
+    return loopingReplayFrameIndex(
+      frames,
+      ((window.performance.now() - motion.startedAt) / 1000) * motion.rate,
+    );
+  };
+
   const moveReplay = (action: "previous" | "next" | "restart"): void => {
     if (
       store.simulation.status !== "ready" ||
@@ -218,11 +279,37 @@ export function createRunSession(
     ) {
       return;
     }
+    const frames = store.simulation.snapshot.result.replay.frames;
     store.replayFrameIndex = replayFrameIndexAfterAction(
-      store.replayFrameIndex,
-      store.simulation.snapshot.result.replay.frames.length,
+      displayedReplayFrame(frames),
+      frames.length,
       action,
     );
+    if (action === "restart") {
+      // Restarting a playing replay keeps it playing from the first frame.
+      store.championReplayMotion = undefined;
+    } else {
+      store.replayPaused = true;
+    }
+    render();
+  };
+
+  const toggleReplay = (): void => {
+    if (
+      store.simulation.status !== "ready" ||
+      store.simulation.snapshot.result === null
+    ) {
+      return;
+    }
+    if (store.replayPaused) {
+      store.replayPaused = false;
+    } else {
+      store.replayFrameIndex = displayedReplayFrame(
+        store.simulation.snapshot.result.replay.frames,
+      );
+      store.replayPaused = true;
+    }
+    store.championReplayMotion = undefined;
     render();
   };
 
@@ -234,6 +321,7 @@ export function createRunSession(
     const requestVersion = ++store.runRequestVersion;
     store.simulation = { status: "loading" };
     store.generationTrails = [];
+    store.raceBuffer = undefined;
     store.replayFrameIndex = 0;
     dispatch({ type: "start-session" });
     try {
@@ -274,6 +362,7 @@ export function createRunSession(
     controlSession,
     handleVisibilityChange,
     moveReplay,
+    toggleReplay,
     review,
     scheduleObservation,
     startSession,

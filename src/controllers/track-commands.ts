@@ -44,13 +44,13 @@ function closureRepairMessage(response: TrackCommandResponse): string {
   const added = response.addedPieces?.length ?? 0;
   const removed = response.removedPieces ?? 0;
   if (removed > 0 && added > 0) {
-    return `Python removed ${String(removed)} trailing piece(s), added ${String(added)}, and verified the repaired loop.`;
+    return `Removed ${String(removed)} trailing piece(s), added ${String(added)}, and checked the repaired loop.`;
   }
   if (removed > 0) {
-    return `Python removed ${String(removed)} trailing piece(s) and restored the last valid loop.`;
+    return `Removed ${String(removed)} trailing piece(s) and restored the last valid loop.`;
   }
   if (added > 0) {
-    return `Python added ${String(added)} piece(s) and verified the closed loop.`;
+    return `Added ${String(added)} piece(s) and checked the closed loop.`;
   }
   return "The loop was already valid; no repair was needed.";
 }
@@ -98,11 +98,16 @@ export function syncGeneratorDraftPresentation(
   badge.classList.toggle("is-warning", inputsChanged);
   badge.classList.toggle("is-success", !inputsChanged && selectedMatches);
   badge.classList.toggle("is-info", !inputsChanged && !selectedMatches);
-  badge.textContent = inputsChanged
-    ? "Inputs changed"
+  // Update glyph and label together so state never relies on color alone.
+  const [glyph, label] = inputsChanged
+    ? ["!", "Inputs changed"]
     : selectedMatches
-      ? "Active experiment track"
-      : "Verified candidate";
+      ? ["✓", "Active track"]
+      : ["○", "Candidate, not active"];
+  const glyphElement = document.createElement("span");
+  glyphElement.setAttribute("aria-hidden", "true");
+  glyphElement.textContent = glyph;
+  badge.replaceChildren(glyphElement, ` ${label}`);
 
   const notice = root.querySelector<HTMLElement>("[data-track-builder-notice]");
   const noticeMessage = root.querySelector<HTMLElement>(
@@ -113,7 +118,7 @@ export function syncGeneratorDraftPresentation(
   }
   notice.className = `track-builder-notice is-${inputsChanged ? "warning" : workspace.notice.tone}`;
   noticeMessage.textContent = inputsChanged
-    ? "Generator inputs changed. Generate again to apply them; the preview still shows the last Python-verified result."
+    ? "Generator inputs changed. Generate again to apply them. The preview still shows the last checked candidate."
     : workspace.notice.message;
 }
 
@@ -190,10 +195,15 @@ export function createTrackCommands(context: AppContext) {
     render();
   }
 
-  const useCompiled = (compiled: CompiledTrackV1, message: string): void => {
+  const useCompiled = (
+    compiled: CompiledTrackV1,
+    message: string,
+    seed?: number,
+  ): void => {
     store.trackWorkspace = {
       ...store.trackWorkspace,
       selected: compiled,
+      selectedSeed: seed,
       notice: { tone: "success", message },
     };
     dispatch({ type: "select-custom-track", track: compiled.track });
@@ -236,8 +246,8 @@ export function createTrackCommands(context: AppContext) {
     setEditorDraft(
       editor,
       payload.source === "palette"
-        ? "Piece snapped into the circuit. Python is checking the new sequence."
-        : "Pieces reconnected. Python is checking the new sequence.",
+        ? "Piece snapped into the circuit. Checking the new sequence."
+        : "Pieces reconnected. Checking the new sequence.",
     );
   };
 
@@ -297,7 +307,7 @@ export function createTrackCommands(context: AppContext) {
           message:
             error instanceof Error
               ? error.message
-              : "The local Python core could not validate this draft.",
+              : "No response yet while checking this draft. Try again.",
         },
       };
     }
@@ -376,8 +386,7 @@ export function createTrackCommands(context: AppContext) {
             notice: shouldValidate
               ? {
                   tone: "info",
-                  message:
-                    "Checking the starter draft with the local Python core.",
+                  message: "Checking the starter draft.",
                 }
               : store.trackWorkspace.notice,
           };
@@ -462,8 +471,7 @@ export function createTrackCommands(context: AppContext) {
               ++store.trackImportRequestVersion;
             }
             const messages: Record<TrackBuilderTab, string> = {
-              build:
-                "Edit canonical pieces; Python previews and validates every draft.",
+              build: "Edit the pieces. Every change is previewed and checked.",
               generate:
                 "Choose a seed, length, and difficulty to create a verified layout.",
               library: "Saved and imported tracks stay on this computer.",
@@ -502,7 +510,7 @@ export function createTrackCommands(context: AppContext) {
           if (kind !== undefined) {
             setEditorDraft(
               addEditorPiece(store.trackWorkspace.editor, kind),
-              "Piece added. Python is checking the new sequence.",
+              "Piece added. Checking the new sequence.",
             );
           }
           return;
@@ -511,7 +519,7 @@ export function createTrackCommands(context: AppContext) {
           const index = Number(element.dataset.pieceIndex);
           setEditorDraft(
             deleteEditorPiece(store.trackWorkspace.editor, index),
-            "Piece removed. Python is checking the new sequence.",
+            "Piece removed. Checking the new sequence.",
           );
           return;
         }
@@ -519,7 +527,7 @@ export function createTrackCommands(context: AppContext) {
           const index = Number(element.dataset.pieceIndex);
           setEditorDraft(
             duplicateEditorPiece(store.trackWorkspace.editor, index),
-            "Piece duplicated. Python is checking the new sequence.",
+            "Piece duplicated. Checking the new sequence.",
           );
           return;
         }
@@ -528,26 +536,26 @@ export function createTrackCommands(context: AppContext) {
           const direction = Number(element.dataset.direction) === -1 ? -1 : 1;
           setEditorDraft(
             moveEditorPiece(store.trackWorkspace.editor, index, direction),
-            "Piece order changed. Python is checking the new sequence.",
+            "Piece order changed. Checking the new sequence.",
           );
           return;
         }
         case "editor-undo":
           setEditorDraft(
             undoEditor(store.trackWorkspace.editor),
-            "Change undone. Python is checking the restored sequence.",
+            "Change undone. Checking the restored sequence.",
           );
           return;
         case "editor-redo":
           setEditorDraft(
             redoEditor(store.trackWorkspace.editor),
-            "Change restored. Python is checking the sequence.",
+            "Change restored. Checking the sequence.",
           );
           return;
         case "editor-reset":
           setEditorDraft(
             resetEditor(store.trackWorkspace.editor),
-            "Editor reset to the safe starter loop. Python is checking it.",
+            "Editor reset to the starter loop. Checking it.",
           );
           return;
         case "editor-assist": {
@@ -558,7 +566,7 @@ export function createTrackCommands(context: AppContext) {
             pending: "assist",
             notice: {
               tone: "info",
-              message: "Python is searching for a safe closing sequence.",
+              message: "Searching for a safe closing sequence.",
             },
           };
           render();
@@ -622,20 +630,34 @@ export function createTrackCommands(context: AppContext) {
           ) {
             useCompiled(
               store.trackWorkspace.editorPreview,
-              "Custom track selected for this experiment.",
+              "This draft is now the active track.",
             );
           }
           return;
+        case "regenerate":
         case "generate": {
+          const sameSeedInputs =
+            action === "regenerate"
+              ? store.trackWorkspace.generatedInputs
+              : undefined;
+          const previousCandidate = sameSeedInputs
+            ? store.trackWorkspace.generatedPreview
+            : undefined;
           const seed =
+            sameSeedInputs?.seed ??
             root.querySelector<HTMLInputElement>("[data-generator-seed]")
-              ?.valueAsNumber ?? 0;
-          const length = root.querySelector<HTMLInputElement>(
-            'input[name="generator-length"]:checked',
-          )?.value as "short" | "medium" | "long" | undefined;
-          const difficulty = root.querySelector<HTMLInputElement>(
-            'input[name="generator-difficulty"]:checked',
-          )?.value as "easy" | "technical" | "hard" | undefined;
+              ?.valueAsNumber ??
+            0;
+          const length =
+            sameSeedInputs?.length ??
+            (root.querySelector<HTMLInputElement>(
+              'input[name="generator-length"]:checked',
+            )?.value as "short" | "medium" | "long" | undefined);
+          const difficulty =
+            sameSeedInputs?.difficulty ??
+            (root.querySelector<HTMLInputElement>(
+              'input[name="generator-difficulty"]:checked',
+            )?.value as "easy" | "technical" | "hard" | undefined);
           const generator = {
             seed,
             length: length ?? store.trackWorkspace.generator.length,
@@ -658,7 +680,7 @@ export function createTrackCommands(context: AppContext) {
             pending: "generate",
             notice: {
               tone: "info",
-              message: "Python is searching the bounded deterministic space.",
+              message: "Searching for a valid layout from this seed.",
             },
           };
           render();
@@ -675,17 +697,17 @@ export function createTrackCommands(context: AppContext) {
               generatedInputs: generator,
               generatedFeatures: response.features,
               generatedPreview: response.compiled,
-              selected: response.compiled,
               notice: {
                 tone: "success",
-                message: `Generated, verified, and selected ${String(response.compiled.track.pieces.length)} canonical pieces with generator v${String(response.generatorVersion ?? "?")} after ${String(response.candidateCount ?? 1)} candidate(s).`,
+                message:
+                  previousCandidate === undefined
+                    ? `Candidate ready: ${String(response.compiled.track.pieces.length)} pieces from seed ${String(generator.seed)} (generator v${String(response.generatorVersion ?? "?")}, ${String(response.candidateCount ?? 1)} layout(s) checked). It is not active until you choose Use this track.`
+                    : JSON.stringify(previousCandidate.track) ===
+                        JSON.stringify(response.compiled.track)
+                      ? `Same seed ${String(generator.seed)} returned the identical track.`
+                      : `Same seed ${String(generator.seed)} returned a different track. Treat earlier results from this seed as not comparable.`,
               },
             };
-            dispatch({
-              type: "select-custom-track",
-              track: response.compiled.track,
-            });
-            return;
           } else {
             store.trackWorkspace = {
               ...store.trackWorkspace,
@@ -707,7 +729,8 @@ export function createTrackCommands(context: AppContext) {
           if (store.trackWorkspace.generatedPreview !== undefined) {
             useCompiled(
               store.trackWorkspace.generatedPreview,
-              "Generated track selected for this experiment.",
+              "This candidate is now the active track.",
+              store.trackWorkspace.generatedInputs?.seed,
             );
           }
           return;
@@ -863,7 +886,7 @@ export function createTrackCommands(context: AppContext) {
           message:
             error instanceof Error
               ? error.message
-              : "The local Python track command could not be completed.",
+              : "No response yet from the local core. Try again.",
         },
       };
       render();
@@ -877,7 +900,7 @@ export function createTrackCommands(context: AppContext) {
       pending: "import",
       notice: {
         tone: "info",
-        message: "Reading TrackV1 and waiting for Python validation.",
+        message: "Reading the track file and checking it.",
       },
     };
     render();
@@ -917,8 +940,7 @@ export function createTrackCommands(context: AppContext) {
         editorValidation: { status: "valid", errors: [] },
         notice: {
           tone: "success",
-          message:
-            "Imported TrackV1 loaded into the editor after Python validation.",
+          message: "Imported track checked and loaded into the editor.",
         },
       };
       render();

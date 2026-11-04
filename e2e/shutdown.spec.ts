@@ -92,9 +92,13 @@ test("shutdown exposes pending state and the exact local failure before recoveri
   ).toHaveCount(0);
   await expect
     .poll(() => alerts)
-    .toContain("Application shutdown failed with status 503.");
+    .toContain(
+      "Application shutdown has no confirmed response yet (status 503). Try again.",
+    );
   await expect(
-    page.getByRole("heading", { name: "Start an AI racing experiment." }),
+    page.getByRole("heading", {
+      name: "AI cars learn to race by evolution, and you watch.",
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Exit application" }),

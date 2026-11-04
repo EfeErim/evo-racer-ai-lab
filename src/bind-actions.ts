@@ -18,6 +18,9 @@ export interface ActionHandlers {
   startSession: () => Promise<void>;
   controlSession: (command: "pause" | "resume" | "stop") => Promise<void>;
   moveReplay: (action: "previous" | "next" | "restart") => void;
+  toggleReplay: () => void;
+  reviewRecommended: () => void;
+  reviseSetup: () => void;
   handleRunAction: (
     action: "resume" | "open" | "delete" | "export",
     runId: string,
@@ -48,6 +51,9 @@ export function bindActions(
     startSession,
     controlSession,
     moveReplay,
+    toggleReplay,
+    reviewRecommended,
+    reviseSetup,
     handleRunAction,
     handleTrackAction,
     dropEditorPiece,
@@ -78,6 +84,15 @@ export function bindActions(
           break;
         case "review":
           void review();
+          break;
+        case "review-recommended":
+          reviewRecommended();
+          break;
+        case "revise-setup":
+          reviseSetup();
+          break;
+        case "replay-toggle":
+          toggleReplay();
           break;
         case "start-session":
           void startSession();
