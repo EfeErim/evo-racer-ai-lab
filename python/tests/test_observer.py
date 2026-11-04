@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -440,3 +441,46 @@ def test_active_observation_skips_run_library_scan_and_repeated_setup(
 
     resumed = manager.resume({"contractVersion": 1, "runId": run_id})
     assert "setup" in resumed
+
+
+def test_worker_failure_logs_its_cause_and_returns_a_stable_code(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def failing_advance(_session: RunSession) -> None:
+        raise RuntimeError("simulated generation failure")
+
+    monkeypatch.setattr(RunSession, "advance", failing_advance)
+    manager = RunManager(tmp_path)
+    started = manager.start(
+        {
+            "contractVersion": 1,
+            "trackPreset": "easy-oval",
+            "track": None,
+            "settings": {
+                "algorithm": "fixed-ga",
+                "populationSize": 10,
+                "generations": 1,
+                "episodeSeconds": 15,
+                "seed": 91,
+            },
+        }
+    )
+    snapshot = started["snapshot"]
+    assert isinstance(snapshot, dict)
+    payload = {"contractVersion": 1, "runId": snapshot["runId"]}
+
+    with caplog.at_level(logging.ERROR, logger="evo_racer.observer"):
+        deadline = time.monotonic() + 5
+        response = manager.observe(payload)
+        while response["valid"] and time.monotonic() < deadline:
+            time.sleep(0.01)
+            response = manager.observe(payload)
+
+    assert response["valid"] is False
+    errors = response["errors"]
+    assert isinstance(errors, list)
+    assert errors[0]["code"] == "RUN_ADVANCE_FAILED"
+    assert "simulated generation failure" not in json.dumps(response)
+    assert "simulated generation failure" in caplog.text

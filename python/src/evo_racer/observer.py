@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import math
 import statistics
 import uuid
@@ -57,6 +58,7 @@ from evo_racer.simulation import (
 )
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
+LOGGER: Final = logging.getLogger(__name__)
 OBSERVATION_CONTRACT_VERSION: Final = 1
 REPLAY_INTERVAL_STEPS: Final = 6
 GENERATION_TRAIL_LIMIT: Final = 8
@@ -747,6 +749,8 @@ class RunManager:
                     return
                 self._persist(session)
         except Exception as error:
+            # Worker boundary: the client only receives a stable error code, so keep the cause.
+            LOGGER.exception("Generation worker failed for run %s", session.run_id)
             with self._lock:
                 self._worker_errors[session.run_id] = type(error).__name__
         finally:

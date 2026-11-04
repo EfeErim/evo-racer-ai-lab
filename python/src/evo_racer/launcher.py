@@ -85,6 +85,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             open_browser=not args.no_browser,
         )
     except Exception as error:
+        # Last resort: the windowed EXE has no console to report an unexpected failure.
         _show_startup_error(str(error))
         raise
 
