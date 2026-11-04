@@ -1,3 +1,4 @@
+import { escapeHtml } from "./html";
 import { renderTrackSvg, type CompiledTrackV1 } from "./track-renderer";
 import {
   SEGMENT_DEFINITIONS,
@@ -539,13 +540,4 @@ function validationPresentation(status: EditorValidationState["status"]): {
 
 function formatNumber(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }

@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+import { safeFileName } from "../src/downloads";
 import {
   renderFitnessChart,
   renderTrainingCompletion,
-  safeFileName,
   showsBackgroundEvaluation,
-} from "../src/app";
+} from "../src/views/training";
 import {
   clampReplayFrameIndex,
   replayFrameIndexAfterAction,

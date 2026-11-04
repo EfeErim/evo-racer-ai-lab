@@ -1,3 +1,4 @@
+import { escapeHtml } from "./html";
 import { trackMarkerTransform } from "./live-motion";
 
 export type TrackPoint = readonly [number, number];
@@ -105,7 +106,7 @@ export function renderTrackSvg(
       class="track-geometry"
       viewBox="${formatNumber(minimumX)} ${formatNumber(minimumY)} ${formatNumber(width)} ${formatNumber(height)}"
       role="img"
-      aria-label="${escapeAttribute(compiled.track.name)} compiled track preview"
+      aria-label="${escapeHtml(compiled.track.name)} compiled track preview"
       preserveAspectRatio="xMidYMid meet"
     >
       <path class="track-road" d="${pathData(compiled.geometry.centerline)}" pathLength="100" />
@@ -116,7 +117,7 @@ export function renderTrackSvg(
             (trail, index) => `
               <path
                 class="generation-trail"
-                data-trail-candidate="${escapeAttribute(trail.candidateId)}"
+                data-trail-candidate="${escapeHtml(trail.candidateId)}"
                 d="${pathData(trail.points)}"
                 opacity="${trailOpacity(index, trails.length)}"
               />
@@ -133,7 +134,7 @@ export function renderTrackSvg(
           : `
             <path
               class="ideal-racing-line"
-              data-reference-method="${escapeAttribute(referenceLine.candidateId)}"
+              data-reference-method="${escapeHtml(referenceLine.candidateId)}"
               d="${pathData(referenceLine.points)}"
             />
           `
@@ -144,7 +145,7 @@ export function renderTrackSvg(
           : `
             <path
               class="current-generation-path"
-              data-current-candidate="${escapeAttribute(currentTrail.candidateId)}"
+              data-current-candidate="${escapeHtml(currentTrail.candidateId)}"
               d="${pathData(currentTrail.points)}"
             />
           `
@@ -222,14 +223,6 @@ function trackViewBox(
     height > 0
     ? [paddedMinimumX, paddedMinimumY, width, height]
     : undefined;
-}
-
-function escapeAttribute(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
 }
 
 function isCompiledTrack(value: unknown): boolean {
