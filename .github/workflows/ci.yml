@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24.13.0"
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      # setup.ps1 keeps an existing venv, so it uses the interpreter selected above.
+      - name: Create Python environment
+        run: python -m venv .venv
+      - name: Install locked dependencies with npm ci and pip
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium
+      - name: Run source checks
+        run: npm run check
+      - name: Run browser flows
+        run: npm run test:e2e
