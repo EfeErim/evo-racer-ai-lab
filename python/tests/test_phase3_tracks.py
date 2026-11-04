@@ -70,7 +70,7 @@ def test_generator_seed_and_difficulty_change_the_canonical_shape_family() -> No
         hard = _generate(seed=seed, length="medium", difficulty="hard")
 
         for response in (easy, technical, hard):
-            assert response["generatorVersion"] == 4
+            assert response["generatorVersion"] == 5
             compiled = response["compiled"]
             assert isinstance(compiled, dict)
             track = compiled["track"]
@@ -91,7 +91,7 @@ def test_generator_v4_uses_asymmetric_non_template_layouts() -> None:
     for difficulty in ("easy", "technical", "hard"):
         response = _generate(seed=731, length="long", difficulty=difficulty)
         assert response["valid"] is True
-        assert response["generatorVersion"] == 4
+        assert response["generatorVersion"] == 5
         pieces = response["compiled"]["track"]["pieces"]
         kinds = [piece["kind"] for piece in pieces]
         first_half = kinds[: len(kinds) // 2]
@@ -126,6 +126,19 @@ def test_generator_v4_medium_technical_seed_corpus_is_unique() -> None:
         identifiers.add(track_id)
 
     assert len(identifiers) == 12
+
+
+def test_generator_seeds_vary_short_track_layouts() -> None:
+    # Generator v4 produced only ~28 layouts across 200 seeds for short technical tracks.
+    layouts: set[tuple[str, ...]] = set()
+    for seed in range(16):
+        for difficulty in ("technical", "hard"):
+            response = _generate(seed=seed, length="short", difficulty=difficulty)
+            assert response["valid"] is True
+            pieces = response["compiled"]["track"]["pieces"]
+            layouts.add(tuple(piece["kind"] for piece in pieces))
+
+    assert len(layouts) >= 24
 
 
 def test_invalid_editor_draft_keeps_a_python_derived_open_preview() -> None:

@@ -358,15 +358,15 @@ try {
         }
     }
     if ($generated.valid -ne $true -or
-        $generated.generatorVersion -ne 4 -or
+        $generated.generatorVersion -ne 5 -or
         @($generated.compiled.track.pieces).Count -ne 24 -or
         $generatedHairpins.Count -eq 0 -or
         $generatedChicanes.Count -eq 0 -or
         $generated.features.layout -ne "asymmetric" -or
         $halfDifferences -lt 2) {
-        throw "The packaged generator v4 did not produce the expected asymmetric hard layout."
+        throw "The packaged generator v5 did not produce the expected asymmetric hard layout."
     }
-    Write-Host "Packaged Track Builder: open preview, repair, and generator v4 verified."
+    Write-Host "Packaged Track Builder: open preview, repair, and generator v5 verified."
 
     $startPayload = @{
         contractVersion = 1
