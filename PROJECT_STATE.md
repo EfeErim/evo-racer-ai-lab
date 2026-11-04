@@ -5,9 +5,30 @@
 - Current phase: `Post-release v1.1.1 game and interface hardening`
 - Status: `Generator v4 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
 - Active milestone: `None`
-- Last verified: `2026-08-10`
+- Last verified: `2026-11-04`
 
 ## Unreleased v1.1.1 game and interface hardening
+
+- Dependency and line-ending hygiene is committed as `dd05a89` on `main`
+  (pushed to `origin/main` on `2026-11-04`):
+  - `.gitattributes` marks CSS, HTML, and JavaScript as LF so Windows checkouts
+    pass Prettier `format:check`.
+  - `vite` `8.3.5` and `vitest` `4.1.12` replace `8.1.5` and `4.1.10`. npm
+    `overrides` pin transitive `brace-expansion` `5.0.12`, `minimatch` `11.0.1`,
+    `nanoid` `3.3.18`, and `source-map-js` `1.2.2`.
+  - `npm audit` reported `17` advisories (`13` moderate, `4` high) before this
+    change and `0` after it. The zero-vulnerability entry near the end of this
+    section describes the previous lock and is superseded.
+  - `scripts/setup.ps1` completed. `npm run check` passed every step: Prettier,
+    ESLint, TypeScript type-check, `111` Vitest tests, Ruff format and lint,
+    strict mypy, `146` pytest tests, and the Vite build. `npm run test:e2e`
+    passed all `15` Chromium flows.
+  - The current frontend bundle is `index-CgjvDcyE.js` (`130.02 kB`) with
+    `index-BeHh3psU.css` (`50.95 kB`). The package hashes recorded below
+    (`index-CK54fsu9.js` and the release ZIP SHA-256) describe the previous
+    build. A new release requires rebuilding and re-verifying the packaged EXE.
+  - Repository review findings that remain open are listed in
+    `docs/prompts/evo-racer-cleanup.md`.
 
 - The extracted Windows application now starts from the root-level
   `EvoRacer.exe`; no `EvoRacer.cmd`, installed Python, or installed Node.js is
