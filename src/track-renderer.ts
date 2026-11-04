@@ -174,6 +174,24 @@ export function renderTrackSvg(
   `;
 }
 
+/** Display-only measure of the centerline Python compiled; never fed back. */
+export function trackLengthMeters(compiled: CompiledTrackV1): number {
+  const points = compiled.geometry.centerline;
+  const first = points[0];
+  const last = points.at(-1);
+  let length = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    if (from !== undefined && to !== undefined) {
+      length += Math.hypot(to[0] - from[0], to[1] - from[1]);
+    }
+  }
+  return first === undefined || last === undefined
+    ? length
+    : length + Math.hypot(first[0] - last[0], first[1] - last[1]);
+}
+
 function trailOpacity(index: number, total: number): string {
   if (total <= 1) {
     return "0.28";

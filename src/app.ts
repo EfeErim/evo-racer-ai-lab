@@ -2,6 +2,7 @@ import {
   type AppContext,
   type ApplicationLifecycle,
   createAppStore,
+  motionIsReduced,
   type RunLibraryNotice,
 } from "./app-store";
 import { bindActions } from "./bind-actions";
@@ -16,6 +17,7 @@ import {
 } from "./controllers/track-commands";
 import { shutdownApplication } from "./ipc";
 import { type AppAction, type AppState, transition } from "./onboarding";
+import { raceStage } from "./race-buffer";
 import {
   captureRenderState,
   restoreDisclosures,
@@ -61,12 +63,26 @@ export function mountApp(root: HTMLElement): AppController {
     controlSession,
     handleVisibilityChange,
     moveReplay,
+    toggleReplay,
     review,
     scheduleObservation,
     startSession,
   } = createRunSession(context, (notice) => refreshRuns(notice));
   const { handleRunAction, refreshRuns, retryRunLibrary } =
     createRunLibraryController(context, applyRunResponse);
+
+  const resetRunPresentation = (): void => {
+    store.runRequestVersion += 1;
+    if (store.observationTimer !== undefined) {
+      window.clearTimeout(store.observationTimer);
+      store.observationTimer = undefined;
+    }
+    store.simulation = { status: "idle" };
+    store.generationTrails = [];
+    store.replayFrameIndex = 0;
+    store.replayPaused = false;
+    store.trackWorkspace = { ...store.trackWorkspace, toolsOpen: false };
+  };
 
   const dispatch = (action: AppAction): void => {
     const previousRoute = store.state.route;
@@ -145,15 +161,11 @@ export function mountApp(root: HTMLElement): AppController {
       }
     }
     if (action.type === "new-setup") {
-      store.runRequestVersion += 1;
-      if (store.observationTimer !== undefined) {
-        window.clearTimeout(store.observationTimer);
-        store.observationTimer = undefined;
-      }
-      store.simulation = { status: "idle" };
-      store.generationTrails = [];
+      resetRunPresentation();
+    }
+    if (routeChanged && store.state.route === "results") {
       store.replayFrameIndex = 0;
-      store.trackWorkspace = { ...store.trackWorkspace, toolsOpen: false };
+      store.replayPaused = false;
     }
     if (enteredWelcome) {
       if (store.runLibrary.status === "ready") {
@@ -253,10 +265,33 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
+  let pointerPressed = false;
+  let renderDeferred = false;
+  const releasePointer = (): void => {
+    pointerPressed = false;
+    if (renderDeferred) {
+      // The click from this release fires first, then the waiting render runs.
+      window.setTimeout(() => {
+        render();
+      }, 0);
+    }
+  };
+  root.addEventListener("pointerdown", () => {
+    pointerPressed = true;
+  });
+  window.addEventListener("pointerup", releasePointer);
+  window.addEventListener("pointercancel", releasePointer);
+
   const render = (focusHeading = false): void => {
     if (store.applicationLifecycle !== "active") {
       return;
     }
+    // Replacing a pressed button would lose its click, so a poll waits for release.
+    if (pointerPressed && !focusHeading) {
+      renderDeferred = true;
+      return;
+    }
+    renderDeferred = false;
     const renderState = focusHeading ? undefined : captureRenderState(root);
     const focusSnapshot = renderState?.focus ?? store.deferredFocus;
     root.innerHTML = renderShell(
@@ -265,10 +300,21 @@ export function mountApp(root: HTMLElement): AppController {
       store.trackWorkspace,
       store.simulation,
       store.runLibrary,
-      store.replayFrameIndex,
+      {
+        frameIndex: store.replayFrameIndex,
+        paused: store.replayPaused,
+      },
       store.generationTrails,
-      reducedMotionQuery.matches || store.reducedMotionOverride,
+      motionIsReduced(store, reducedMotionQuery),
       reducedMotionQuery.matches,
+      store.simulation.status === "ready"
+        ? raceStage(
+            store.raceBuffer,
+            store.simulation.snapshot,
+            motionIsReduced(store, reducedMotionQuery),
+            window.performance.now(),
+          )
+        : { mode: "none" },
     );
     syncLiveMarkerMotion();
     bindActions(root, store.state, {
@@ -277,6 +323,15 @@ export function mountApp(root: HTMLElement): AppController {
       startSession,
       controlSession,
       moveReplay,
+      toggleReplay,
+      reviewRecommended: () => {
+        dispatch({ type: "use-recommended" });
+        void review();
+      },
+      reviseSetup: () => {
+        resetRunPresentation();
+        dispatch({ type: "revise-setup" });
+      },
       handleRunAction,
       handleTrackAction,
       dropEditorPiece,
@@ -285,7 +340,11 @@ export function mountApp(root: HTMLElement): AppController {
       retryRunLibrary,
       exitApplication,
       toggleReducedMotion: () => {
-        store.reducedMotionOverride = !store.reducedMotionOverride;
+        if (reducedMotionQuery.matches) {
+          store.systemMotionOptIn = !store.systemMotionOptIn;
+        } else {
+          store.reducedMotionOverride = !store.reducedMotionOverride;
+        }
         render();
       },
       updateEditor: (name, roadWidth) => {
@@ -305,18 +364,6 @@ export function mountApp(root: HTMLElement): AppController {
 
     if (renderState !== undefined) {
       restoreDisclosures(root, renderState.disclosures);
-    }
-
-    const progressRail = root.querySelector<HTMLElement>(".sidebar");
-    const activeProgress = root.querySelector<HTMLElement>(
-      ".progress-item.is-active",
-    );
-    if (progressRail !== null && activeProgress !== null) {
-      progressRail.scrollLeft = Math.max(
-        0,
-        activeProgress.offsetLeft -
-          (progressRail.clientWidth - activeProgress.clientWidth) / 2,
-      );
     }
 
     if (focusHeading) {

@@ -60,7 +60,7 @@ build will be static local assets served by the packaged launcher.
 ## Phase 1 onboarding boundary
 
 The TypeScript shell owns route state, presentation-only range feedback,
-accessible interaction, and rendering for Welcome, Track, Training Settings,
+accessible interaction, and rendering for Welcome, Track, Settings,
 Review, Training, and Results. It cannot enter Training until a versioned
 validation response from Python is valid and the user explicitly presses Start.
 After Start, setup transitions and field mutations are rejected so the reviewed
@@ -269,6 +269,18 @@ or serialize its frames. TypeScript merges that transport delta with only the
 same run's cached replay; a new candidate replaces it and a new run cannot
 inherit it. Python still sends `generationReplay: null` before any replay exists,
 so absence has the narrow meaning of "the acknowledged replay is unchanged."
+
+Training evaluates a complete episode in roughly 50–130 ms on the development
+machine, so one `250 ms` position sample usually belongs to a different car than
+the last. The two-second race buffer therefore does not stitch those samples
+together. Every two seconds, the browser sets `includeRaceClip: true` on one
+observe command, and Python answers with a transient `raceClip`: the recorded
+frames of the most recently finished episode, or `null` if none has finished.
+Python never builds this field otherwise, and it is omitted from persisted run
+documents. The browser plays the clip fitted into two seconds, at no less than
+real speed, and retains it only for the same run. Requesting clips cannot select
+or alter a candidate; `python/tests/test_race_clip.py` compares run documents
+with and without requests.
 
 Python samples each generation champion's telemetry to at most 64 recorded
 `(x, y)` points and keeps a bounded history of eight paths in the versioned

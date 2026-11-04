@@ -15,10 +15,12 @@
 
 - Use English product copy.
 - Open on Welcome/Setup and never auto-start a race or training run.
-- Offer a recommended `Easy Oval + Quick start` path from Welcome directly to
+- Offer a recommended `Easy Oval + Quick check` path from Welcome directly to
   Review, plus the full
-  `Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results`
+  `Welcome -> Track -> Settings -> Review -> Start -> Training -> Results`
   customization flow.
+- Treat a generated track as a candidate until the user presses `Use this track`.
+  Only that action makes it the active track submitted by Review and Start.
 - Explain parameters in plain language, show safe validation, and keep the saved
   run library, custom-track tools, and exact training controls collapsed by
   default.
@@ -27,11 +29,14 @@
   generation-boundary control behavior and queued pause/stop commands explicit.
 - When a run becomes terminal, surface its Results action with the completion
   status instead of requiring a page-length scroll through telemetry.
-- While training, render the currently evaluated Python candidate moving on the
-  Python-compiled track from versioned position and heading telemetry.
-- After the first completed generation, continuously render the latest Python
-  generation-champion replay. Browser interpolation may fill presentation frames
-  only; it must not predict, advance, or otherwise alter the Python simulation.
+- While training with motion enabled, render a two-second race buffer: every two
+  seconds, play the complete recorded run of the car that most recently finished
+  in the previous two seconds, fitted into the next two seconds and never slower
+  than real speed. Browser interpolation may fill presentation frames only; it
+  must not predict, advance, or otherwise alter the Python simulation.
+- When no cars are racing, or when motion is reduced, render the latest Python
+  generation-champion replay. Reduced motion follows the Windows preference by
+  default; the user may explicitly opt in to race motion for the current session.
 - Provide no vehicle-driving controls. Pointer and keyboard interaction are UI-only.
 - Freeze run configuration after Start. Visualization-only controls may not alter simulation outcomes.
 

@@ -37,18 +37,22 @@ test("Track recovers failed preset and local-library startup reads without reloa
   await page.goto("/");
   await expect.poll(() => presetRequests).toBe(1);
   await expect.poll(() => trackLibraryRequests).toBe(1);
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
 
   await expect.poll(() => presetRequests).toBe(2);
   await expect.poll(() => trackLibraryRequests).toBe(2);
   await expect(
-    page.getByText("Preset track request failed with status 503."),
+    page.getByText(
+      "Preset track request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
   const builder = page.getByTestId("track-builder");
   await builder.getByRole("tab", { name: /Library/ }).click();
   await expect(
-    builder.getByText("Track library request failed with status 503."),
+    builder.getByText(
+      "Track library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
   await expect(
     builder.getByText("Loading local library…", { exact: true }),
@@ -60,7 +64,9 @@ test("Track recovers failed preset and local-library startup reads without reloa
   await expect.poll(() => trackLibraryRequests).toBe(3);
   await expect(page.locator(".choice-card .track-geometry")).toHaveCount(3);
   await expect(
-    builder.getByText("Track library request failed with status 503."),
+    builder.getByText(
+      "Track library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toHaveCount(0);
   await expect(
     builder.getByText("Loading local library…", { exact: true }),
@@ -121,18 +127,22 @@ test("Saved runs recovers a failed startup read without reload", async ({
   const savedRuns = page.locator("details.saved-runs-panel");
   await expect(savedRuns).toHaveAttribute("open", "");
   await expect(
-    page.getByText("Run library request failed with status 503."),
+    page.getByText(
+      "Run library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Retry saved runs" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Customize setup" }).click();
-  await page.getByRole("button", { name: "01 Welcome" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "1 Welcome" }).click();
   await expect.poll(() => runLibraryRequests).toBe(2);
   await expect(savedRuns).toHaveAttribute("open", "");
   await expect(
-    page.getByText("Run library request failed with status 503."),
+    page.getByText(
+      "Run library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Retry saved runs" }).click();
@@ -143,6 +153,8 @@ test("Saved runs recovers a failed startup read without reload", async ({
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
   await expect(
-    page.getByText("Run library request failed with status 503."),
+    page.getByText(
+      "Run library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toHaveCount(0);
 });

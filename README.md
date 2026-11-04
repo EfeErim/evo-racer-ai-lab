@@ -43,7 +43,7 @@ saved runs, offline behavior, and troubleshooting.
 The locked user flow is:
 
 ```text
-Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
+Welcome -> Track -> Settings -> Review -> Start -> Training -> Results
 ```
 
 The application includes:
@@ -106,7 +106,7 @@ acceptance.
 Phase 1 provides the complete local shell flow:
 
 ```text
-Welcome -> Track -> Training Settings -> Review -> Start -> Training -> Results
+Welcome -> Track -> Settings -> Review -> Start -> Training -> Results
 ```
 
 - Welcome explains the offline, observer-only workflow and requires an explicit

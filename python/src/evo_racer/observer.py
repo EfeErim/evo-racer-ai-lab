@@ -104,6 +104,7 @@ class RunSession:
         self._active_candidate_id: str | None = None
         self._active_candidate_index: int | None = None
         self._live_telemetry: TelemetrySnapshot | None = None
+        self._latest_race_clip: tuple[int, int, EpisodeResult] | None = None
         self._pending_command: Literal["pause", "stop"] | None = None
         self._fixed_ga: FixedGA | None = None
         self._neat_population: Any | None = None
@@ -203,6 +204,7 @@ class RunSession:
         *,
         include_live: bool = True,
         known_generation_replay_candidate_id: str | None = None,
+        include_race_clip: bool = False,
     ) -> dict[str, object]:
         """Return the current versioned observer value."""
         with self._lock:
@@ -274,6 +276,8 @@ class RunSession:
                             _replay_frame(frame) for frame in self.current_episode.telemetry
                         ],
                     }
+                if include_race_clip:
+                    response["raceClip"] = self._race_clip_payload()
             return response
 
     def to_run_document(self) -> dict[str, object]:
@@ -360,6 +364,23 @@ class RunSession:
         with self._lock:
             self._live_telemetry = snapshot
 
+    def _publish_race_clip(self, index: int, episode: EpisodeResult) -> None:
+        """Keep the latest finished episode for presentation; evolution never reads it."""
+        with self._lock:
+            self._latest_race_clip = (len(self.reports) + 1, index, episode)
+
+    def _race_clip_payload(self) -> dict[str, object] | None:
+        if self._latest_race_clip is None:
+            return None
+        generation, index, episode = self._latest_race_clip
+        return {
+            "candidateId": episode.telemetry[0].selected_car_id,
+            "candidateIndex": index,
+            "populationSize": self.settings.population_size,
+            "generation": generation,
+            "frames": [_replay_frame(frame) for frame in episode.telemetry],
+        }
+
     def _advance_fixed_ga(
         self,
     ) -> tuple[GenerationReport, dict[str, EpisodeResult]]:
@@ -382,6 +403,7 @@ class RunSession:
                 telemetry_callback=self._publish_live_telemetry,
             )
             episodes[candidate.candidate_id] = episode
+            self._publish_race_clip(candidate_index, episode)
             return episode_fitness(
                 episode,
                 round(self.settings.episode_seconds / FIXED_TIME_STEP),
@@ -438,6 +460,7 @@ class RunSession:
                 )
                 raw_value.fitness = evaluation.fitness
                 episodes[candidate.candidate_id] = episode
+                self._publish_race_clip(candidate_index, episode)
                 scored.append(NEATScoredCandidate(candidate, evaluation))
             ranked = _ranked(tuple(scored))
             values = [item.evaluation.fitness for item in scored]
@@ -613,6 +636,13 @@ class RunManager:
                 "knownGenerationReplayCandidateId",
                 "Known generation replay candidate id must be a non-empty string.",
             )
+        include_race_clip = payload.get("includeRaceClip", False)
+        if not isinstance(include_race_clip, bool):
+            return _run_error(
+                "INCLUDE_RACE_CLIP_INVALID",
+                "includeRaceClip",
+                "includeRaceClip must be a boolean.",
+            )
         with self._lock:
             worker_error = self._worker_errors.get(session.run_id)
             worker = self._workers.get(session.run_id)
@@ -635,7 +665,10 @@ class RunManager:
                 "runId",
                 "The local core could not advance this generation.",
             )
-        snapshot = session.snapshot(known_generation_replay_candidate_id=known_replay)
+        snapshot = session.snapshot(
+            known_generation_replay_candidate_id=known_replay,
+            include_race_clip=include_race_clip,
+        )
         if snapshot["result"] is not None and worker is not None and worker.is_alive():
             worker.join()
             with self._lock:
@@ -646,7 +679,10 @@ class RunManager:
                     "runId",
                     "The local core could not persist this generation.",
                 )
-            snapshot = session.snapshot(known_generation_replay_candidate_id=known_replay)
+            snapshot = session.snapshot(
+                known_generation_replay_candidate_id=known_replay,
+                include_race_clip=include_race_clip,
+            )
         return self._response(session, snapshot=snapshot)
 
     def command(self, payload: object) -> dict[str, object]:

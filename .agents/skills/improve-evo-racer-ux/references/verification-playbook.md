@@ -28,7 +28,7 @@ Do not preserve a poor baseline merely because existing E2E tests encode it. Upd
 ### Custom experiment
 
 - Preset selection remains active through Review and Start.
-- Generated track becomes active without hidden secondary work.
+- Generated track stays a candidate until the user presses `Use this track`, then becomes active without hidden secondary work.
 - Edited/imported track reports exact actionable validation.
 - Settings preset and advanced edits show their consequence and evaluation budget.
 - Leaving and returning does not silently replace valid choices.

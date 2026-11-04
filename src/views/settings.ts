@@ -2,6 +2,7 @@ import {
   type AlgorithmId,
   type AppState,
   type NumericSetting,
+  type TrainingSettings,
   TRAINING_PRESETS,
   canRequestReview,
   getPresentationIssues,
@@ -9,16 +10,21 @@ import {
 } from "../onboarding";
 import { pageHeader, renderActions } from "./shared";
 
-export function renderSettings(state: AppState): string {
-  const maximumEpisodes = maximumCandidateEpisodes(state.draft.settings);
-  const selectedPreset = TRAINING_PRESETS.find(
+export function selectedTrainingPreset(settings: TrainingSettings) {
+  return TRAINING_PRESETS.find(
     (preset) =>
-      preset.settings.algorithm === state.draft.settings.algorithm &&
-      preset.settings.populationSize === state.draft.settings.populationSize &&
-      preset.settings.generations === state.draft.settings.generations &&
-      preset.settings.episodeSeconds === state.draft.settings.episodeSeconds &&
-      preset.settings.seed === state.draft.settings.seed,
+      preset.settings.algorithm === settings.algorithm &&
+      preset.settings.populationSize === settings.populationSize &&
+      preset.settings.generations === settings.generations &&
+      preset.settings.episodeSeconds === settings.episodeSeconds &&
+      preset.settings.seed === settings.seed,
   );
+}
+
+export function renderSettings(state: AppState): string {
+  const { settings } = state.draft;
+  const maximumEpisodes = maximumCandidateEpisodes(settings);
+  const selectedPreset = selectedTrainingPreset(settings);
   const presets = TRAINING_PRESETS.map((preset) => {
     const selected = preset.id === selectedPreset?.id;
     return `
@@ -28,60 +34,55 @@ export function renderSettings(state: AppState): string {
         data-training-preset="${preset.id}"
         aria-pressed="${String(selected)}"
       >
-        <strong>${preset.name}</strong>
-        <span>${preset.description}</span>
+        <span class="preset-title">
+          <strong>${preset.name}</strong>
+          <span class="preset-check" aria-hidden="true">${selected ? "✓ Selected" : ""}</span>
+        </span>
+        <span>${preset.outcome}</span>
+        <span class="preset-budget">Up to ${String(maximumCandidateEpisodes(preset.settings))} candidate evaluations</span>
       </button>
     `;
   }).join("");
 
   const issues = getPresentationIssues(state.draft);
   const invalidFields = new Set(issues.map((issue) => issue.field));
+  const budgetIsKnown = Number.isFinite(maximumEpisodes);
 
   return `
     <section class="page" aria-labelledby="page-title">
       ${pageHeader(
-        "Setup / Training",
-        "Choose a training plan.",
-        "Quick start is recommended for a first run. Pick a preset and continue, or open Customize only when you need exact controls.",
+        "Choose a training plan",
+        "Longer plans give evolution more chances to improve, and cost more compute.",
       )}
 
-      <section aria-labelledby="preset-title">
-        <div class="section-heading">
-          <div>
-            <p class="section-kicker">Pick one</p>
-            <h2 id="preset-title">Training plan</h2>
-          </div>
-        </div>
-        <div class="preset-grid">${presets}</div>
-      </section>
+      <div class="preset-grid" role="group" aria-label="Training plan">${presets}</div>
 
-      <p class="workload-note plan-summary">
-        Selected: <strong>${selectedPreset?.name ?? "Custom settings"}</strong> ·
-        maximum <strong>${String(maximumEpisodes)} candidate episodes</strong>.
-        Episodes can end early after a collision or completed lap.
+      <p class="budget-note" role="status">
+        ${
+          budgetIsKnown
+            ? `<strong>${selectedPreset?.name ?? "Custom settings"}: up to ${String(maximumEpisodes)} candidate evaluations.</strong>
+        That is ${String(settings.populationSize)} cars × ${String(settings.generations)} generations. One evaluation is one car attempting the track for up to ${String(settings.episodeSeconds)} simulated seconds, and it can end early after a crash or a finished lap.`
+            : "<strong>Enter valid numbers to see the evaluation budget.</strong>"
+        }
       </p>
 
-      <details class="settings-panel settings-customizer" ${selectedPreset === undefined ? "open" : ""}>
+      <details class="disclosure settings-customizer" ${selectedPreset === undefined ? "open" : ""} ${issues.length > 0 ? 'data-force-open="true" open' : ""}>
         <summary>
-          <span>
-            <strong>Customize training</strong>
-            <small>Optional algorithm and compute controls</small>
-          </span>
-          <span aria-hidden="true">＋</span>
+          <h2>Exact settings</h2>
+          <span class="disclosure-hint">Optional</span>
         </summary>
-        <div class="settings-customizer-content">
-          <div class="field-grid">
+        <div class="disclosure-body field-grid">
           ${renderSelectField(
             "algorithm",
-            "Algorithm",
-            "The evolution strategy used to create each new generation.",
-            state.draft.settings.algorithm,
+            "Network type",
+            "How each new generation is built. Fixed keeps one network shape. Growing can add connections (NEAT).",
+            settings.algorithm,
           )}
           ${renderNumberField(
             "populationSize",
-            "Population",
-            "Candidates evaluated in every generation.",
-            state.draft.settings.populationSize,
+            "Cars per generation",
+            "Also called the population.",
+            settings.populationSize,
             10,
             500,
             invalidFields.has("populationSize"),
@@ -89,43 +90,30 @@ export function renderSettings(state: AppState): string {
           ${renderNumberField(
             "generations",
             "Generations",
-            "Maximum number of evolution cycles.",
-            state.draft.settings.generations,
+            "The most evolution cycles this run can use.",
+            settings.generations,
             1,
             1000,
             invalidFields.has("generations"),
           )}
           ${renderNumberField(
             "episodeSeconds",
-            "Episode length",
-            "Maximum simulated seconds available to each candidate.",
-            state.draft.settings.episodeSeconds,
+            "Seconds per attempt",
+            "Simulated time each car gets.",
+            settings.episodeSeconds,
             15,
             300,
             invalidFields.has("episodeSeconds"),
           )}
-          </div>
-
-          <details class="advanced-settings">
-          <summary>
-            <span>
-              <strong>Advanced controls</strong>
-              <small>Optional reproducibility settings</small>
-            </span>
-            <span aria-hidden="true">＋</span>
-          </summary>
-          <div class="advanced-content">
-            ${renderNumberField(
-              "seed",
-              "Random seed",
-              "Repeating a seed helps reproduce deterministic work in later phases.",
-              state.draft.settings.seed,
-              0,
-              2_147_483_647,
-              invalidFields.has("seed"),
-            )}
-          </div>
-          </details>
+          ${renderNumberField(
+            "seed",
+            "Random seed",
+            "The same seed and settings repeat the same result.",
+            settings.seed,
+            0,
+            2_147_483_647,
+            invalidFields.has("seed"),
+          )}
         </div>
       </details>
 
@@ -134,6 +122,9 @@ export function renderSettings(state: AppState): string {
         "review",
         "Review experiment",
         !canRequestReview(state),
+        issues.length > 0
+          ? "Fix the highlighted setting to continue."
+          : "Next you check the setup. Nothing starts yet.",
         true,
       )}
     </section>
@@ -148,13 +139,10 @@ function renderSelectField(
 ): string {
   return `
     <div class="field">
-      <div class="field-label">
-        <label for="${id}">${label}</label>
-        <span class="help-marker" aria-hidden="true">?</span>
-      </div>
+      <label for="${id}">${label}</label>
       <select id="${id}" name="${id}" data-algorithm aria-describedby="${id}-help">
-        <option value="fixed-ga" ${value === "fixed-ga" ? "selected" : ""}>Fixed GA</option>
-        <option value="neat" ${value === "neat" ? "selected" : ""}>NEAT</option>
+        <option value="fixed-ga" ${value === "fixed-ga" ? "selected" : ""}>Fixed network</option>
+        <option value="neat" ${value === "neat" ? "selected" : ""}>Growing network</option>
       </select>
       <p id="${id}-help" class="field-help">${help}</p>
     </div>
@@ -170,12 +158,10 @@ function renderNumberField(
   maximum: number,
   invalid: boolean,
 ): string {
+  const range = `${String(minimum)} to ${String(maximum)}`;
   return `
     <div class="field">
-      <div class="field-label">
-        <label for="${id}">${label}</label>
-        <span class="help-marker" aria-hidden="true">?</span>
-      </div>
+      <label for="${id}">${label}</label>
       <input
         id="${id}"
         name="${id}"
@@ -183,12 +169,16 @@ function renderNumberField(
         min="${String(minimum)}"
         max="${String(maximum)}"
         step="1"
-        value="${String(value)}"
+        value="${Number.isFinite(value) ? String(value) : ""}"
         data-number-setting="${id}"
         aria-describedby="${id}-help"
         ${invalid ? 'aria-invalid="true"' : ""}
       />
-      <p id="${id}-help" class="field-help">${help} Range: ${String(minimum)}–${String(maximum)}.</p>
+      <p id="${id}-help" class="field-help ${invalid ? "is-error" : ""}">${
+        invalid
+          ? `<span aria-hidden="true">! </span>Enter a whole number from ${range}.`
+          : `${help} Range: ${range}.`
+      }</p>
     </div>
   `;
 }

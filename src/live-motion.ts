@@ -109,6 +109,36 @@ export function loopingReplayTrackMarker(
   return replayTrackMarkerAt(frames, first.simulatedSeconds + offset);
 }
 
+/** The recorded frame on screen after looping playback for `elapsedSeconds`. */
+export function loopingReplayFrameIndex(
+  frames: readonly TimedTrackMarker[],
+  elapsedSeconds: number,
+): number {
+  const first = frames[0];
+  const last = frames.at(-1);
+  if (
+    first === undefined ||
+    last === undefined ||
+    !Number.isFinite(elapsedSeconds)
+  ) {
+    return 0;
+  }
+  const duration = last.simulatedSeconds - first.simulatedSeconds;
+  if (duration <= 0) {
+    return 0;
+  }
+  const target =
+    first.simulatedSeconds + (Math.max(0, elapsedSeconds) % duration);
+  let index = 0;
+  while (
+    index + 1 < frames.length &&
+    (frames[index + 1]?.simulatedSeconds ?? Number.POSITIVE_INFINITY) <= target
+  ) {
+    index += 1;
+  }
+  return index;
+}
+
 function formatNumber(value: number): string {
   return Number(value.toFixed(3)).toString();
 }

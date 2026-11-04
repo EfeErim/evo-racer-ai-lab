@@ -57,11 +57,15 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
 
   await page.goto("/");
   await expect.poll(() => runLibraryRequests).toBe(1);
-  await page.getByRole("button", { name: "Review recommended setup" }).click();
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review recommended experiment" })
+    .click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
-    page.getByText("Run start failed with status 503."),
+    page.getByText(
+      "Run start has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
 
   await page.getByRole("button", { name: "Welcome and Saved runs" }).click();
@@ -69,21 +73,25 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: "Back" }).click();
   await expect.poll(() => runLibraryRequests).toBe(3);
   await expect(
-    page.getByText("Run library request failed with status 503."),
+    page.getByText(
+      "Run library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Retry saved runs" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: "Back" }).click();
   await expect.poll(() => runLibraryRequests).toBe(4);
   await expect(
-    page.getByText("Run library request failed with status 503."),
+    page.getByText(
+      "Run library request has no confirmed response yet (status 503). Try again.",
+    ),
   ).toHaveCount(0);
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
@@ -94,8 +102,10 @@ test("reduced-motion Training shows the displayed champion's complete recorded p
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await page.getByRole("button", { name: "Review recommended setup" }).click();
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review recommended experiment" })
+    .click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
   const currentPath = page.locator(".current-generation-path");
@@ -120,15 +130,116 @@ test("reduced-motion Training shows the displayed champion's complete recorded p
     });
   expect(pathIdentity.candidateId).toBeTruthy();
   await expect(
-    page.getByRole("heading", {
-      name: pathIdentity.candidateId ?? "missing candidate",
-      exact: true,
-    }),
+    page
+      .locator(".live-race-panel")
+      .getByText(pathIdentity.candidateId ?? "missing candidate", {
+        exact: true,
+      }),
   ).toBeVisible();
   expect(pathIdentity.lastPoint).toBeTruthy();
   expect(pathIdentity.markerTransform).toContain(
     `translate(${pathIdentity.lastPoint ?? "missing point"})`,
   );
+});
+
+test("Training shows the car from the previous two seconds on a two-second cadence", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  const clipRequestTimes: number[] = [];
+  page.on("request", (request) => {
+    if (
+      request.url().endsWith("/v1/runs/observe") &&
+      request.postData()?.includes('"includeRaceClip":true') === true
+    ) {
+      clipRequestTimes.push(Date.now());
+    }
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Continue to settings" }).click();
+  await page.locator('[data-training-preset="balanced"]').click();
+  await page.getByRole("button", { name: "Review experiment" }).click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await page.getByRole("button", { name: /Start training/ }).click();
+
+  const stage = page.locator(".live-race-stage");
+  await expect(page.getByText("Buffering 2 s")).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(stage.locator(".track-replay-marker")).toHaveCount(0);
+
+  const marker = stage.locator(".track-replay-marker");
+  await expect(marker).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Displayed car")).toBeVisible();
+  await expect(page.getByText("Raced in the previous 2 seconds")).toBeVisible();
+
+  const heading = page.locator("#live-race-title");
+  const firstCar = await heading.innerText();
+  const distinctPositions = await page.evaluate(
+    () =>
+      new Promise<number>((resolve) => {
+        const seen = new Set<string | null | undefined>();
+        const startedAt = performance.now();
+        const sample = (): void => {
+          seen.add(
+            document
+              .querySelector(".live-race-stage .track-replay-marker")
+              ?.getAttribute("transform"),
+          );
+          if (performance.now() - startedAt < 1000) {
+            requestAnimationFrame(sample);
+          } else {
+            resolve(seen.size);
+          }
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
+  expect(distinctPositions).toBeGreaterThan(20);
+  await expect
+    .poll(() => heading.innerText(), { timeout: 5000 })
+    .not.toBe(firstCar);
+
+  await expect.poll(() => clipRequestTimes.length).toBeGreaterThan(2);
+  const intervals = clipRequestTimes
+    .slice(1)
+    .map((time, index) => time - (clipRequestTimes[index] ?? time));
+  for (const interval of intervals) {
+    expect(interval).toBeGreaterThanOrEqual(1900);
+    expect(interval).toBeLessThan(2400);
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth ===
+        document.documentElement.clientWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("button", { name: /Stop after generation/ }).click();
+});
+
+test("Windows reduced motion stays the default until the user shows race motion", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page
+    .getByRole("button", { name: "Review recommended experiment" })
+    .click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await page.getByRole("button", { name: /Start training/ }).click();
+  await expect(page.locator(".live-race-panel")).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText("Buffering 2 s")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Show race motion" }).click();
+  await expect(
+    page.getByRole("button", { name: "Race motion on" }),
+  ).toBeFocused();
 });
 
 test("recommended offline run reaches results without starting automatically", async ({
@@ -227,64 +338,72 @@ test("recommended offline run reaches results without starting automatically", a
   await page.goto("/");
   await initialRunLibraryCaptured;
   await expect(
-    page.getByRole("heading", { name: "Start an AI racing experiment." }),
+    page.getByRole("heading", {
+      name: "AI cars learn to race by evolution, and you watch.",
+    }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "05 Training", exact: true }),
+    page.getByRole("button", { name: "5 Training", exact: true }),
   ).toBeDisabled();
 
-  await page.getByRole("button", { name: "Review recommended setup" }).click();
+  await page
+    .getByRole("button", { name: "Review recommended experiment" })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Review the setup." }),
+    page.getByRole("heading", { name: "Review and start" }),
   ).toBeVisible();
   await initialValidationCaptured;
-  const editTrack = page.locator('.review-card [data-route="track"]');
+  const editTrack = page.locator('.review-summary [data-route="track"]');
   await editTrack.click();
   await expect(
-    page.getByRole("heading", { name: "Choose a track." }),
+    page.getByRole("heading", { name: "Choose a track" }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Continue to settings" }).click();
   await page.getByRole("button", { name: "Review experiment" }).click();
   await expect(
-    page.getByRole("heading", { name: "Review the setup." }),
+    page.getByRole("heading", { name: "Review and start" }),
   ).toBeVisible();
-  const refreshedEditTrack = page.locator('.review-card [data-route="track"]');
+  const refreshedEditTrack = page.locator(
+    '.review-summary [data-route="track"]',
+  );
   await refreshedEditTrack.focus();
   await expect(refreshedEditTrack).toBeFocused();
-  await expect(page.getByText("Checking with the local core")).toBeVisible();
+  await expect(page.getByText("Checking the setup")).toBeVisible();
   releaseInitialValidation?.();
   await page.waitForTimeout(200);
-  await expect(page.getByText("Checking with the local core")).toBeVisible();
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await expect(page.getByText("Checking the setup")).toBeVisible();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
   await expect(refreshedEditTrack).toBeFocused();
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
     page
-      .getByRole("alert", { name: "Training did not open" })
+      .getByRole("alert", { name: "Training did not start" })
       .getByText("The local core rejected this reviewed setup."),
   ).toBeVisible();
   await expect(
     page.getByText(
-      "The local core rejected the setup and no run was created. Validate again after reviewing the reported issue.",
+      "No run was created. Fix the reported issue, then check the setup again.",
     ),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Start training/ }),
   ).toBeDisabled();
-  await page.getByRole("button", { name: "Validate again" }).click();
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Review the setup." }),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Run start failed with status 503."),
+    page.getByRole("heading", { name: "Review and start" }),
   ).toBeVisible();
   await expect(
     page.getByText(
-      "The start result is unknown. Check Saved runs before retrying if the local core may have accepted the request.",
+      "Run start has no confirmed response yet (status 503). Try again.",
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "A run may or may not have started. Check Saved runs first, then press Start training again if it is not listed.",
     ),
   ).toBeVisible();
   await expect(
@@ -292,7 +411,7 @@ test("recommended offline run reaches results without starting automatically", a
   ).toBeEnabled();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Training workspace" }),
+    page.getByRole("heading", { name: "Training", exact: true }),
   ).toBeVisible();
   const telemetryDetails = page.locator("details.telemetry-disclosure");
   await expect(telemetryDetails).toBeVisible({ timeout: 15_000 });
@@ -315,11 +434,11 @@ test("recommended offline run reaches results without starting automatically", a
   await page.getByRole("button", { name: /Open results/ }).click();
 
   await expect(
-    page.getByRole("heading", { name: "What did the AI achieve?" }),
+    page.getByRole("heading", { name: /best fitness|Too early/ }),
   ).toBeVisible();
-  await expect(page.getByText("Ideal-line match")).toBeVisible();
+  await expect(page.getByText(/Ideal-line match/)).toBeVisible();
   await expect(page.getByText("Champion vs baselines")).toBeVisible();
-  await expect(page.getByText("Smooth replay · 1×")).toBeVisible();
+  await expect(page.getByText("Playing at 1× speed")).toBeVisible();
   await expect(page.locator(".current-generation-path")).toBeVisible();
   await expect(page.locator(".ideal-racing-line")).toBeVisible();
   await expect(page.locator(".ideal-racing-line")).toHaveAttribute(
@@ -343,8 +462,7 @@ test("recommended offline run reaches results without starting automatically", a
   ).toBe(true);
   expect(
     await page
-      .locator(".result-verdict-copy > p:not(.section-kicker)")
-      .first()
+      .locator(".results-title .page-lead")
       .evaluate((element) =>
         Number.parseFloat(getComputedStyle(element).fontSize),
       ),
@@ -355,7 +473,7 @@ test("recommended offline run reaches results without starting automatically", a
       .evaluate((element) => element.scrollWidth - element.clientWidth),
   ).toBe(0);
 
-  await page.getByRole("button", { name: "Create another setup" }).click();
+  await page.getByRole("button", { name: "Start a new run" }).click();
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Open results" }).first(),
@@ -387,21 +505,25 @@ test("recommended offline run reaches results without starting automatically", a
   );
   await page.getByRole("button", { name: "Open results" }).first().click();
   await savedOpenCaptured;
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await expect(
-    page.getByRole("heading", { name: "Choose a track." }),
+    page.getByRole("heading", { name: "Choose a track" }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Back/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Start an AI racing experiment." }),
+    page.getByRole("heading", {
+      name: "AI cars learn to race by evolution, and you watch.",
+    }),
   ).toBeVisible();
   releaseSavedOpen?.();
   await page.waitForTimeout(1000);
   await expect(
-    page.getByRole("heading", { name: "Start an AI racing experiment." }),
+    page.getByRole("heading", {
+      name: "AI cars learn to race by evolution, and you watch.",
+    }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "What did the AI achieve?" }),
+    page.getByRole("heading", { name: /best fitness|Too early/ }),
   ).toBeHidden();
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(
@@ -446,16 +568,16 @@ test("recommended offline run reaches results without starting automatically", a
   ).toBeEnabled();
   await page.getByRole("button", { name: "Open results" }).first().click();
   await expect(
-    page.getByRole("heading", { name: "What did the AI achieve?" }),
+    page.getByRole("heading", { name: /best fitness|Too early/ }),
   ).toBeVisible();
-  await expect(page.getByText("Ideal-line match")).toBeVisible();
+  await expect(page.getByText(/Ideal-line match/)).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: "Champion and ideal racing line" }),
+    page.getByRole("heading", { name: "Champion replay" }),
   ).toBeVisible();
   await expect(page.locator(".current-generation-path")).toBeVisible();
   await expect(page.locator(".ideal-racing-line")).toBeVisible();
 
-  await page.getByRole("button", { name: "Create another setup" }).click();
+  await page.getByRole("button", { name: "Start a new run" }).click();
   await page.getByText("Saved runs", { exact: true }).click();
   await page.route("**/v1/runs/library/*/export", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -554,17 +676,19 @@ test("a transient run-command failure preserves controls and recovers", async ({
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Review recommended setup" }).click();
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await page
+    .getByRole("button", { name: "Review recommended experiment" })
+    .click();
+  await expect(page.getByText("Setup is valid")).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
   const recovery = page.getByRole("heading", {
-    name: "Keeping the last verified run state",
+    name: "Keeping the last confirmed run state",
   });
   await expect(recovery).toBeVisible();
   await expect(
     page.getByText(
-      "Telemetry update failed: Run observation failed with status 503.",
+      "Telemetry update delayed: Run observation has no confirmed response yet (status 503). Try again.",
     ),
   ).toBeVisible();
   await expect(page.getByLabel("Live run status")).toBeVisible();
@@ -580,7 +704,9 @@ test("a transient run-command failure preserves controls and recovers", async ({
 
   await expect(recovery).toBeVisible();
   await expect(
-    page.getByText("Run command failed with status 503."),
+    page.getByText(
+      "Run command has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
   await expect(stop).toBeFocused();
   await expect(page.getByLabel("Live run status")).toBeVisible();

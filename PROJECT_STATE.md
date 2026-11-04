@@ -47,6 +47,46 @@ is recorded here, and documentation matches behavior.
 
 ## Latest verification
 
+Recorded on `2026-11-04` for the uncommitted UI redesign, which sits on top of the
+uncommitted race buffer below. Findings and measurements are in
+[`docs/verification/ui-redesign.md`](docs/verification/ui-redesign.md).
+
+- `npm run check` passed: `135` Vitest and `158` pytest tests.
+- `scripts/test-e2e.ps1 -Port 8798`: all `27` Chromium flows passed, including the
+  two `e2e/track-builder.spec.ts` flows recorded as failing below.
+- `npm run build:release` and `npm run test:release` passed. The ZIP is
+  `9,464,880` bytes with SHA-256
+  `28c1cd97620ba0c188ea8a9caa7da88d89334554a0168c4c3977641124935186`. This build
+  replaced the `9241c104...` archive below and includes the redesign.
+- Human usability testing, 200% zoom, a screen reader, a click-through of the
+  packaged EXE, and a clean Windows machine with its network adapters disabled were
+  not tested.
+
+Recorded on `2026-11-04` for the uncommitted two-second race buffer.
+
+- `npm run test:release` passed against the archive below, including run
+  `run-ea5028c8295642b5bcd939faac50e1ac`, with loopback-only traffic and no
+  external Node.js or Python process. It does not exercise the race clip or the
+  buffered Training view, and it did not run on a clean Windows machine with its
+  network adapters disabled.
+- `npm run build:release` produced `release\EvoRacer\EvoRacer.exe` at `17:55:24`
+  and `release\EvoRacer-Windows-x64.zip` with SHA-256
+  `9241c10400a8143815294ec21c81625aad02b6ed2e289adaa4264bf124687f47`. Later
+  concurrent UI edits in the working tree are not in this build.
+- Over HTTP on port `8799`, that EXE bound only `127.0.0.1`, served the new bundle,
+  returned `4` distinct race clips of `61` frames when requested, omitted the clip
+  otherwise, and rejected a non-boolean request. The packaged page was not opened
+  in a browser. One early smoke attempt reported no exit within `20 s` after
+  shutdown; the cause is unknown, and `13` later attempts exited in under `1 s`.
+- `npm run check` reached the production build with `158` pytest tests passing,
+  including `python/tests/test_race_clip.py`.
+- `scripts/test-e2e.ps1 -Port 8799`: `15` of `17` Chromium flows passed, including
+  the new buffer flows. The two failures are in `e2e/track-builder.spec.ts`, which
+  still expects `generator v4` after `c84f321` moved to generator version `5`.
+- A real Balanced run changed cars at `2166`, `4252`, `6403`, and `8507 ms`, about
+  every `2.1 s`. Stopping it let the car on screen finish before the champion
+  replay returned.
+
 Recorded on `2026-11-04` for the repository cleanup on branch
 `chore/review-cleanup`:
 

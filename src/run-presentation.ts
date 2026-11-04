@@ -135,7 +135,7 @@ export function runControls(
       pauseLabel: "Resume",
       stopDisabled: pending === "stop",
       stopLabel: pending === "stop" ? "Stop queued" : "Stop",
-      note: "Paused safely at a generation boundary.",
+      note: "Paused between generations. Nothing is lost.",
     };
   }
   if (pending === "pause") {
@@ -145,7 +145,7 @@ export function runControls(
       pauseLabel: "Pause queued",
       stopDisabled: false,
       stopLabel: "Stop after generation",
-      note: "Pause is queued for the current generation boundary.",
+      note: "Pause is queued. It takes effect when this generation finishes.",
     };
   }
   if (pending === "stop") {
@@ -155,7 +155,7 @@ export function runControls(
       pauseLabel: "Pause after generation",
       stopDisabled: true,
       stopLabel: "Stop queued",
-      note: "Stop is queued for the current generation boundary.",
+      note: "Stop is queued. It takes effect when this generation finishes.",
     };
   }
   return {
@@ -164,7 +164,7 @@ export function runControls(
     pauseLabel: "Pause after generation",
     stopDisabled: false,
     stopLabel: "Stop after generation",
-    note: "Run controls apply at deterministic generation boundaries.",
+    note: "Pause and stop take effect when the current generation finishes.",
   };
 }
 
@@ -183,11 +183,11 @@ export function runCompletion(
   if (snapshot.status === "completed") {
     return {
       title: "Training complete",
-      message: `All ${String(snapshot.totalGenerations)} generations finished. Results and the final champion replay are ready.`,
+      message: `All ${String(snapshot.totalGenerations)} generations finished.`,
     };
   }
   return {
     title: "Run stopped",
-    message: `Stopped safely after ${String(snapshot.generation)} of ${String(snapshot.totalGenerations)} generations. Results for the completed work are ready.`,
+    message: `Stopped after ${String(snapshot.generation)} of ${String(snapshot.totalGenerations)} generations. Results cover the finished generations.`,
   };
 }

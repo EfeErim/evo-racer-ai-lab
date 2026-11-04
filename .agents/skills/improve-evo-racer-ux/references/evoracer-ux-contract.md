@@ -97,7 +97,7 @@ Success means no late response resurrects dismissed UI, no transient failure era
 
 ## Copy rules
 
-- Name the user outcome: `Generate & use track`, not `Submit`.
+- Name the user outcome: `Use this track`, not `Submit`.
 - Use sentence case and direct verbs.
 - Explain unfamiliar terms at first use; never expose internal error categories as the only message.
 - State what happened, what remains safe, and what the user can do next.

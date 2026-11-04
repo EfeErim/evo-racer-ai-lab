@@ -53,9 +53,9 @@ test("track builder previews invalid drafts, repairs them, and generates technic
 
   await page.goto("/");
   await initialTrackLibraryCaptured;
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await expect(
-    page.getByRole("heading", { name: "Choose a track." }),
+    page.getByRole("heading", { name: "Choose a track" }),
   ).toBeVisible();
   await expect(
     page.getByRole("radio", {
@@ -74,7 +74,7 @@ test("track builder previews invalid drafts, repairs them, and generates technic
     builder.getByRole("heading", { name: "Track Builder", exact: true }),
   ).toBeFocused();
 
-  const buildTab = builder.getByRole("tab", { name: /Build/ });
+  const buildTab = builder.getByRole("tab", { name: /Editor/ });
   const generateTab = builder.getByRole("tab", { name: /Generate/ });
   const libraryTab = builder.getByRole("tab", { name: /Library/ });
   await expect(buildTab).toHaveAttribute("tabindex", "0");
@@ -109,7 +109,9 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   await expect(builder.locator(".sequence-piece").nth(2)).toContainText(
     "Short straight",
   );
-  await expect(builder.getByText("Needs changes")).toBeVisible();
+  await expect(builder.locator(".validation-badge")).toHaveText(
+    /Needs changes/,
+  );
   await expect(
     builder.locator(".builder-canvas .track-geometry"),
   ).toBeVisible();
@@ -122,8 +124,8 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   await builder.locator('[data-editor-drag-kind="straight-short"]').click();
   await expect(builder.getByText("LOOP_NOT_CLOSED")).toBeVisible();
 
-  await builder.getByRole("button", { name: "Assist closure" }).click();
-  await expect(builder.getByText("Python verified")).toBeVisible();
+  await builder.getByRole("button", { name: "Close the loop" }).click();
+  await expect(builder.locator(".validation-badge.is-success")).toBeVisible();
   await expect(builder.getByText(/restored the last valid loop/)).toBeVisible();
 
   await builder.getByRole("tab", { name: /Generate/ }).click();
@@ -132,36 +134,52 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   await builder
     .locator('input[name="generator-difficulty"][value="hard"]')
     .check();
-  await builder.getByRole("button", { name: "Generate & use track" }).click();
+  await builder.getByRole("button", { name: "Generate track" }).click();
   await expect(
-    builder.getByText("Track generation failed with status 503."),
+    builder.getByText(
+      "Track generation has no confirmed response yet (status 503). Try again.",
+    ),
   ).toBeVisible();
-  await builder.getByRole("button", { name: "Generate & use track" }).click();
-  await expect(builder.getByText(/generator v4/)).toBeVisible();
+  await builder.getByRole("button", { name: "Generate track" }).click();
+  await expect(builder.getByText(/generator v5/)).toBeVisible();
   await expect(
     builder.locator(".generated-preview .track-geometry"),
   ).toBeVisible();
   await expect(
-    builder.getByText("Active experiment track", { exact: true }),
-  ).toBeVisible();
-  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
-  await expect(builder.getByText("Asymmetric")).toBeVisible();
+    builder.locator(".generated-preview .validation-badge"),
+  ).toHaveText(/Candidate, not active/);
   await expect(
-    page.getByRole("region", { name: "Selected custom track" }),
+    page.getByRole("region", { name: "Active track" }),
+  ).toContainText("Easy Oval");
+  await expect(builder.getByText(/Asymmetric/)).toBeVisible();
+  await builder.getByRole("button", { name: "Use this track" }).click();
+  await expect(
+    builder.locator(".generated-preview .validation-badge"),
+  ).toHaveText(/Active track/);
+  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Active track" }),
   ).toContainText("Hard Long 731");
+  await expect(
+    page.getByRole("region", { name: "Active track" }),
+  ).toContainText("731");
+  await builder.getByRole("button", { name: "Regenerate seed 731" }).click();
+  await expect(
+    builder.getByText("Same seed 731 returned the identical track."),
+  ).toBeVisible();
 
   await builder.locator("[data-generator-seed]").fill("732");
   await expect(
-    builder.getByText("Inputs changed", { exact: true }),
-  ).toBeVisible();
+    builder.locator(".generated-preview .validation-badge"),
+  ).toHaveText(/Inputs changed/);
   await builder
     .locator('input[name="generator-length"][value="medium"]')
     .check();
   await builder.getByRole("tab", { name: /Library/ }).click();
   await builder.getByRole("tab", { name: /Generate/ }).click();
   await expect(
-    builder.getByText("Inputs changed", { exact: true }),
-  ).toBeVisible();
+    builder.locator(".generated-preview .validation-badge"),
+  ).toHaveText(/Inputs changed/);
   await expect(builder.locator(".generated-preview dl")).toContainText(
     "Seed731",
   );
@@ -270,7 +288,7 @@ test("placed track pieces can be dragged to a new connector", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await expect(page.locator(".track-preview .track-geometry")).toHaveCount(3);
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
@@ -307,14 +325,14 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
   await builder.getByRole("tab", { name: /Generate/ }).click();
-  await builder.getByRole("button", { name: "Generate & use track" }).click();
+  await builder.getByRole("button", { name: "Generate track" }).click();
   await generationCaptured;
-  await expect(builder.getByText("Generating…", { exact: true })).toBeVisible();
+  await expect(builder.locator(".generator-submit")).toHaveText("Generating…");
 
   await page.locator('.progress-list [data-route="settings"]').click();
   releaseGeneration?.();
@@ -326,18 +344,18 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
     0,
   );
   await expect(
-    page.getByRole("heading", { name: "Waiting for inputs" }),
+    page.getByRole("heading", { name: "No candidate yet" }),
   ).toBeVisible();
   await expect(
     page.getByText("Track generation response ignored after leaving Track."),
   ).toBeVisible();
 });
 
-test("a generated track becomes the active reviewed setup without a second selection", async ({
+test("a generated track stays a candidate until Use this track, then reaches Start", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
@@ -347,15 +365,19 @@ test("a generated track becomes the active reviewed setup without a second selec
   await builder
     .locator('input[name="generator-difficulty"][value="technical"]')
     .check();
-  await builder.getByRole("button", { name: "Generate & use track" }).click();
+  await builder.getByRole("button", { name: "Generate track" }).click();
 
-  await expect(builder.getByText(/generator v4/)).toBeVisible();
+  await expect(builder.getByText(/generator v5/)).toBeVisible();
   await expect(
-    page.getByRole("region", { name: "Selected custom track" }),
+    page.getByRole("region", { name: "Active track" }),
+  ).toContainText("Easy Oval");
+  await builder.getByRole("button", { name: "Use this track" }).click();
+  await expect(
+    page.getByRole("region", { name: "Active track" }),
   ).toContainText("Technical Long 90210");
   await expect(
-    builder.getByText("Active experiment track", { exact: true }),
-  ).toBeVisible();
+    page.getByRole("region", { name: "Active track" }),
+  ).toContainText("90210");
   await expect(builder.getByText("Active for Review and Start")).toBeVisible();
 
   await builder.getByRole("button", { name: "Close Track Builder" }).click();
@@ -371,10 +393,11 @@ test("a generated track becomes the active reviewed setup without a second selec
 
   await page.getByRole("button", { name: "Continue to settings" }).click();
   await page.getByRole("button", { name: "Review experiment" }).click();
-  await expect(
-    page.getByRole("region", { name: "Technical Long 90210" }),
-  ).toContainText("24 canonical pieces");
-  await expect(page.getByText("Configuration valid")).toBeVisible();
+  await expect(page.locator(".review-summary")).toContainText(
+    "Technical Long 90210",
+  );
+  await expect(page.locator(".review-summary")).toContainText("24 pieces");
+  await expect(page.getByText("Setup is valid")).toBeVisible();
 
   let submittedTrackName = "";
   let submittedPieceCount = 0;
@@ -403,7 +426,7 @@ test("a generated track becomes the active reviewed setup without a second selec
   await page.getByRole("button", { name: "Start training" }).click();
   await expect(
     page
-      .getByLabel("Training did not open")
+      .getByLabel("Training did not start")
       .getByText("Generated track start payload captured."),
   ).toBeVisible();
   expect(submittedTrackName).toBe("Technical Long 90210");
@@ -434,15 +457,15 @@ test("a dismissed track save refreshes the Python-owned library without taking o
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
-  await expect(builder.getByText("Python verified")).toBeVisible();
+  await expect(builder.locator(".validation-badge.is-success")).toBeVisible();
   const trackName = builder.getByLabel("Track name");
   await trackName.fill("Dismissed save recovery track");
   await trackName.press("Tab");
-  await expect(builder.getByText("Python verified")).toBeVisible();
+  await expect(builder.locator(".validation-badge.is-success")).toBeVisible();
   await builder.getByRole("button", { name: "Save locally" }).click();
   await saveCaptured;
 

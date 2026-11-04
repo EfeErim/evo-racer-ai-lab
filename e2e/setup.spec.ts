@@ -7,15 +7,9 @@ test("Welcome explains the racing loop and provides a local motion control", asy
   await page.goto("/");
 
   const journey = page.locator('[aria-label="How EvoRacer works"]');
-  await expect(
-    journey.getByText("Choose a track", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    journey.getByText("Watch evolution", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    journey.getByText("Compare the champion", { exact: true }),
-  ).toBeVisible();
+  await expect(journey.getByText("Set up", { exact: true })).toBeVisible();
+  await expect(journey.getByText("Watch", { exact: true })).toBeVisible();
+  await expect(journey.getByText("Compare", { exact: true })).toBeVisible();
 
   const motion = page.getByRole("button", { name: "Reduce motion" });
   await expect(motion).toHaveAttribute("aria-pressed", "false");
@@ -26,33 +20,34 @@ test("Welcome explains the racing loop and provides a local motion control", asy
   ).toHaveAttribute("aria-pressed", "true");
 
   const recommended = page.getByRole("button", {
-    name: "Review recommended setup",
+    name: "Review recommended experiment",
   });
   const recommendedBox = await recommended.boundingBox();
   expect(recommendedBox?.height).toBeGreaterThanOrEqual(44);
 
   await page.emulateMedia({ reducedMotion: "reduce" });
-  const systemMotion = page.getByRole("button", {
-    name: "Motion reduced by Windows",
-  });
-  await expect(systemMotion).toBeDisabled();
-  await expect(systemMotion).toHaveAttribute("aria-pressed", "true");
+  const showMotion = page.getByRole("button", { name: "Show race motion" });
+  await expect(showMotion).toBeEnabled();
+  await expect(showMotion).toHaveAttribute("aria-pressed", "false");
+  await showMotion.click();
+  await expect(
+    page.getByRole("button", { name: "Race motion on" }),
+  ).toHaveAttribute("aria-pressed", "true");
 });
 
 test("custom settings retain disclosure state and keyboard focus", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Customize setup" }).click();
+  await page.getByRole("button", { name: "Choose track and settings" }).click();
   await page.getByRole("button", { name: "Continue to settings" }).click();
 
   const customizer = page.locator("details.settings-customizer");
-  const advanced = page.locator("details.advanced-settings");
+  await expect(customizer).not.toHaveAttribute("open", "");
   await customizer.locator(":scope > summary").click();
-  await advanced.locator(":scope > summary").click();
 
   const seed = page.getByLabel("Random seed");
-  await expect(page.getByLabel("Algorithm")).toHaveAttribute(
+  await expect(page.getByLabel("Network type")).toHaveAttribute(
     "aria-describedby",
     "algorithm-help",
   );
@@ -63,6 +58,5 @@ test("custom settings retain disclosure state and keyboard focus", async ({
   });
 
   await expect(customizer).toHaveAttribute("open", "");
-  await expect(advanced).toHaveAttribute("open", "");
   await expect(seed).toBeFocused();
 });

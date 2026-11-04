@@ -62,7 +62,9 @@ describe("truthful local IPC failures", () => {
 
     await expect(
       generateTrack({ seed: 42, length: "medium", difficulty: "technical" }),
-    ).rejects.toThrow("Track generation failed with status 503.");
+    ).rejects.toThrow(
+      "Track generation has no confirmed response yet (status 503). Try again.",
+    );
   });
 
   it("rejects track and run deletion responses that deleted nothing", async () => {
@@ -152,7 +154,7 @@ describe("truthful local IPC failures", () => {
     );
 
     await expect(openRun("run-terminal")).rejects.toThrow(
-      "Saved results failed with status 503.",
+      "Saved results has no confirmed response yet (status 503). Try again.",
     );
   });
 

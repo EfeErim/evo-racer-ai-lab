@@ -1,4 +1,8 @@
-import type { AppContext, LiveMarkerMotion } from "../app-store";
+import {
+  type AppContext,
+  type LiveMarkerMotion,
+  motionIsReduced,
+} from "../app-store";
 import {
   CHAMPION_REPLAY_RATE,
   interpolateTrackMarker,
@@ -9,6 +13,12 @@ import {
   shouldAnimateReplay,
   trackMarkerTransform,
 } from "../live-motion";
+import {
+  raceClipFinished,
+  raceClipMarkerAt,
+  raceStage,
+  type RaceStage,
+} from "../race-buffer";
 import type { GenerationReplayV1 } from "../simulation";
 import type { TrackMarker } from "../track-renderer";
 
@@ -19,7 +29,17 @@ const MAX_MARKER_TWEEN_MS = 240;
 const MARKER_TWEEN_SCALE = 1.25;
 
 export function createMarkerMotion(context: AppContext) {
-  const { root, store, reducedMotionQuery } = context;
+  const { root, store, reducedMotionQuery, render } = context;
+
+  const trainingRaceStage = (now: number): RaceStage =>
+    store.state.route !== "training" || store.simulation.status !== "ready"
+      ? { mode: "none" }
+      : raceStage(
+          store.raceBuffer,
+          store.simulation.snapshot,
+          motionIsReduced(store, reducedMotionQuery),
+          now,
+        );
 
   const cancelLiveMarkerFrame = (): void => {
     if (store.liveMarkerFrame !== undefined) {
@@ -54,6 +74,27 @@ export function createMarkerMotion(context: AppContext) {
 
   const animateLiveMarker = (now: number): void => {
     store.liveMarkerFrame = undefined;
+    const stage = trainingRaceStage(now);
+    if (stage.mode === "clip") {
+      const marker = raceClipMarkerAt(stage.playing, now);
+      if (marker !== undefined) {
+        paintLiveMarker(marker);
+      }
+      if (!raceClipFinished(stage.playing, now)) {
+        store.liveMarkerFrame = window.requestAnimationFrame(animateLiveMarker);
+      }
+      return;
+    }
+    if (
+      stage.mode === "none" &&
+      store.raceBuffer?.playing !== undefined &&
+      store.state.route === "training"
+    ) {
+      // The final clip of a stopped run just ended: bring the champion back.
+      store.raceBuffer = { ...store.raceBuffer, playing: undefined };
+      render();
+      return;
+    }
     if (store.championReplayMotion !== undefined) {
       const firstFrame = store.championReplayMotion.frames[0];
       const lastFrame = store.championReplayMotion.frames.at(-1);
@@ -155,24 +196,49 @@ export function createMarkerMotion(context: AppContext) {
       resetLiveMarkerMotion();
       return;
     }
-    const reducedMotion =
-      reducedMotionQuery.matches || store.reducedMotionOverride;
+    const stage = trainingRaceStage(window.performance.now());
+    if (stage.mode !== "none") {
+      store.liveMarkerMotion = undefined;
+      store.championReplayMotion = undefined;
+      cancelLiveMarkerFrame();
+      if (stage.mode === "clip") {
+        const marker = raceClipMarkerAt(
+          stage.playing,
+          window.performance.now(),
+        );
+        if (marker !== undefined) {
+          paintLiveMarker(marker);
+        }
+        requestLiveMarkerFrame();
+      }
+      return;
+    }
+    const reducedMotion = motionIsReduced(store, reducedMotionQuery);
     const replay = availableChampionReplay();
     if (replay !== null) {
-      if (!shouldAnimateReplay(reducedMotion, replay.replay.frames.length)) {
+      const onResults = store.state.route === "results";
+      if (
+        !shouldAnimateReplay(
+          reducedMotion || (onResults && store.replayPaused),
+          replay.replay.frames.length,
+        )
+      ) {
         cancelLiveMarkerFrame();
         store.liveMarkerMotion = undefined;
         store.championReplayMotion = undefined;
         return;
       }
+      const rate = onResults ? RESULTS_REPLAY_RATE : CHAMPION_REPLAY_RATE;
+      // Playback resumes from the frame the player last held on Results.
+      const heldSeconds = onResults
+        ? (replay.replay.frames[store.replayFrameIndex]?.simulatedSeconds ??
+            0) - (replay.replay.frames[0]?.simulatedSeconds ?? 0)
+        : 0;
       const nextReplay = {
         key: `${store.state.route}:${replay.key}`,
         frames: replay.replay.frames,
-        startedAt: window.performance.now(),
-        rate:
-          store.state.route === "results"
-            ? RESULTS_REPLAY_RATE
-            : CHAMPION_REPLAY_RATE,
+        startedAt: window.performance.now() - (heldSeconds / rate) * 1000,
+        rate,
       };
       if (store.championReplayMotion?.key !== nextReplay.key) {
         store.championReplayMotion = nextReplay;
@@ -181,7 +247,7 @@ export function createMarkerMotion(context: AppContext) {
           store.championReplayMotion.frames,
           ((window.performance.now() - store.championReplayMotion.startedAt) /
             1000) *
-            CHAMPION_REPLAY_RATE,
+            store.championReplayMotion.rate,
         );
         if (marker !== undefined) {
           paintLiveMarker(marker);
