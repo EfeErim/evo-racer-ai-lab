@@ -6,7 +6,7 @@ $reportPath = Join-Path $repoRoot ".runtime_tmp\thorough\acceptance.json"
 
 Push-Location -LiteralPath $repoRoot
 try {
-    & $pythonPath -m evo_racer.hardening --thorough-report $reportPath
+    & $pythonPath python/tools/hardening.py --thorough-report $reportPath
     if ($LASTEXITCODE -ne 0) {
         throw "Thorough preset acceptance failed."
     }

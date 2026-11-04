@@ -35,12 +35,13 @@ evo_racer = ["config/*.ini"]
 
 [tool.pytest.ini_options]
 addopts = ["--strict-config", "--strict-markers"]
+pythonpath = ["python/tools"]
 testpaths = ["python/tests"]
 
 [tool.ruff]
 line-length = 100
 required-version = "==0.16.0"
-src = ["python/src", "python/tests"]
+src = ["python/src", "python/tests", "python/tools"]
 target-version = "py313"
 
 [tool.ruff.lint]
