@@ -50,11 +50,11 @@ health at `127.0.0.1:8765`.
   telemetry.
 - The Pure Pursuit baseline completed every canonical preset without collision:
 
-  | Preset | Steps | Simulated time | Progress | Collisions |
-  | --- | ---: | ---: | ---: | ---: |
-  | Easy Oval | 1322 | 22.033333 s | 1.0 | 0 |
-  | Technical Circuit | 1557 | 25.950000 s | 1.0 | 0 |
-  | Chicane Challenge | 2065 | 34.416667 s | 1.0 | 0 |
+  | Preset            | Steps | Simulated time | Progress | Collisions |
+  | ----------------- | ----: | -------------: | -------: | ---------: |
+  | Easy Oval         |  1322 |    22.033333 s |      1.0 |          0 |
+  | Technical Circuit |  1557 |    25.950000 s |      1.0 |          0 |
+  | Chicane Challenge |  2065 |    34.416667 s |      1.0 |          0 |
 
 The Pure Pursuit lookahead design was checked against R. Craig Coulter's
 [original CMU technical report](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm).
