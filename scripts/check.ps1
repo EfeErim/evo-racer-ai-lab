@@ -21,6 +21,7 @@ Push-Location -LiteralPath $repoRoot
 
 try {
     Invoke-Check "TypeScript formatting" { npm run format:check --silent }
+    Invoke-Check "Documentation references" { npm run check:docs --silent }
     Invoke-Check "TypeScript lint" { npm run lint --silent }
     Invoke-Check "TypeScript type-check" { npm run typecheck --silent }
     Invoke-Check "TypeScript tests" { npm run test --silent }

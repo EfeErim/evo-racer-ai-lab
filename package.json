@@ -12,6 +12,7 @@
     "build": "tsc -b --pretty false && vite build",
     "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
     "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
+    "check:docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-doc-links.ps1",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "dev:frontend": "vite --host 127.0.0.1",
     "dev:service": ".venv\\Scripts\\python.exe -m evo_racer.service",
