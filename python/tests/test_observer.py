@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 from pathlib import Path
-from typing import Any
+from threading import Thread
+from typing import Any, cast
 
 import pytest
 
@@ -484,3 +486,89 @@ def test_worker_failure_logs_its_cause_and_returns_a_stable_code(
     assert errors[0]["code"] == "RUN_ADVANCE_FAILED"
     assert "simulated generation failure" not in json.dumps(response)
     assert "simulated generation failure" in caplog.text
+
+
+def _neat_settings(seed: int) -> RunSettings:
+    return RunSettings("neat", 10, 3, 15.0, seed)
+
+
+def _easy_oval() -> dict[str, object]:
+    preset = next(track for track in PRESET_TRACKS if track.track_id == "easy-oval")
+    return compile_track_payload(preset.to_payload())
+
+
+def _best_fitness_history(session: RunSession) -> list[float]:
+    return [report.best_fitness for report in session.reports]
+
+
+def test_a_second_neat_run_cannot_change_the_first_runs_results() -> None:
+    track = _easy_oval()
+    solo = RunSession(run_id="solo", compiled_track=track, settings=_neat_settings(7))
+    for _ in range(3):
+        solo.advance()
+
+    first = RunSession(run_id="first", compiled_track=track, settings=_neat_settings(7))
+    first.advance()
+    second = RunSession(run_id="second", compiled_track=track, settings=_neat_settings(99))
+    for _ in range(2):
+        second.advance()
+        first.advance()
+
+    assert _best_fitness_history(first) == _best_fitness_history(solo)
+
+
+def test_neat_runs_leave_the_process_random_state_alone() -> None:
+    random.seed(123)
+    expected = random.getstate()
+
+    session = RunSession(run_id="quiet", compiled_track=_easy_oval(), settings=_neat_settings(7))
+    session.advance()
+
+    assert random.getstate() == expected
+
+
+def test_concurrent_neat_runs_can_both_be_resumed_after_restart(tmp_path: Path) -> None:
+    manager = RunManager(tmp_path)
+
+    def start(seed: int) -> str:
+        response = manager.start(
+            {
+                "contractVersion": 1,
+                "trackPreset": "easy-oval",
+                "settings": {
+                    "algorithm": "neat",
+                    "populationSize": 10,
+                    "generations": 4,
+                    "episodeSeconds": 15,
+                    "seed": seed,
+                },
+            }
+        )
+        return cast(str, response["snapshot"]["runId"])  # type: ignore[index]
+
+    run_ids = (start(7), start(8))
+
+    def drive(run_id: str) -> None:
+        while True:
+            response = manager.observe({"contractVersion": 1, "runId": run_id})
+            if cast(dict[str, Any], response["snapshot"])["generation"] >= 2:
+                return
+            time.sleep(0.01)
+
+    workers = [Thread(target=drive, args=(run_id,)) for run_id in run_ids]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    for run_id in run_ids:
+        manager.command({"contractVersion": 1, "runId": run_id, "command": "pause"})
+    deadline = time.monotonic() + 60
+    while any(manager._sessions[run_id].is_advancing() for run_id in run_ids):
+        assert time.monotonic() < deadline
+        time.sleep(0.01)
+    for run_id in run_ids:
+        manager._persist(manager._sessions[run_id])
+
+    restarted = RunManager(tmp_path)
+    for run_id in run_ids:
+        assert restarted.resume({"contractVersion": 1, "runId": run_id})["valid"] is True

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import argparse
+import http.client
+import json
 import os
 import signal
 import sys
@@ -37,7 +39,19 @@ def run_launcher(
     if not index_path.is_file():
         raise FileNotFoundError(f"Production frontend is missing: {index_path}")
 
-    server = create_server(port=port, data_root=data_root, static_root=resolved_static_root)
+    try:
+        server = create_server(port=port, data_root=data_root, static_root=resolved_static_root)
+    except OSError as error:
+        if not _evoracer_is_serving(port):
+            raise RuntimeError(
+                f"Port {port} is in use by another program. Close that program, "
+                "then open EvoRacer again."
+            ) from error
+        # A windowless copy keeps running after its tab closes; reuse it instead of a second one.
+        if open_browser:
+            webbrowser.open_new_tab(f"http://{LOOPBACK_HOST}:{port}/")
+        return
+
     _install_signal_handlers(server)
     app_url = f"http://{LOOPBACK_HOST}:{server.server_port}/"
     if open_browser:
@@ -47,6 +61,24 @@ def run_launcher(
         server.serve_forever()
     finally:
         server.server_close()
+
+
+def _evoracer_is_serving(port: int) -> bool:
+    """Ask the loopback port directly whether it answers as the EvoRacer core."""
+    connection = http.client.HTTPConnection(LOOPBACK_HOST, port, timeout=2.0)
+    try:
+        connection.request("GET", "/health")
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+    except (OSError, http.client.HTTPException, ValueError):
+        return False
+    finally:
+        connection.close()
+    return (
+        response.status == 200
+        and isinstance(payload, dict)
+        and payload.get("service") == "evo-racer-core"
+    )
 
 
 def _install_signal_handlers(server: EvoRacerServer) -> None:

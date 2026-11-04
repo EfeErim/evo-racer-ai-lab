@@ -156,8 +156,9 @@ settings stays open while its values are edited.
 
 The bundled presets expose their maximum workload directly:
 
-- **Quick check** is the default visual demo: 10 candidates, 8 generations,
-  and 15 simulated seconds per episode.
+- **Quick check** is the default demo, using NEAT: 16 candidates, 10 generations,
+  and 30 simulated seconds per episode. In a saved test it finished an Easy Oval
+  lap with 8 of 10 seeds. Harder tracks need a longer preset.
 - **Balanced** is a longer Fixed GA run: 24 candidates, 20 generations, and 30
   simulated seconds per episode.
 - **Thorough** is an extended NEAT experiment: 48 candidates, 40 generations,
@@ -321,14 +322,16 @@ generation correctly shows **No results** instead.
 
 ## Exit and troubleshoot
 
-Use **Exit application** in the top bar for graceful shutdown.
+Use **Exit application** in the top bar for graceful shutdown. Closing the browser
+tab leaves EvoRacer running in the background. Opening `EvoRacer.exe` again opens
+that running copy in a new tab.
 
 If the application does not open:
 
 1. Confirm the full extracted `EvoRacer` directory is intact.
-2. Check whether another process already uses local port `8765`.
-3. Close a previously running EvoRacer instance and try again.
-4. Keep the application in a user-writable folder and retry.
+2. If EvoRacer reports that port `8765` is in use, close the other program using
+   it, then open EvoRacer again.
+3. Keep the application in a user-writable folder and retry.
 
 The release is designed for offline use. If a firewall prompt appears, public
 or private network access is not required because the service binds only to
