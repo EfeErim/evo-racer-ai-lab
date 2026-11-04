@@ -28,7 +28,7 @@ evidence lives in
 | M9        | Windows offline package          | `complete` | `docs/verification/phase9-windows-offline-package.md` |
 | M10       | Hardening and portfolio release  | `complete` | `docs/verification/phase10-hardening.md`              |
 | M11       | Public binary publication        | `complete` | `docs/verification/phase11-publication.md`            |
-| M12       | Personal offline v1.1.0          | `complete` | `docs/verification/personal-offline-hardening.md`     |
+| M12       | Personal offline v1.1.0          | `complete` | `docs/verification/release-hardening-audits.md`       |
 
 ## Gate definitions
 

@@ -20,7 +20,7 @@ The measured matrix completed in `77.613886 s`; its median case time was
 `3.863451 s`. The ignored machine-readable report was written to
 `.runtime_tmp/phase10/performance.json` with regression SHA-256
 `88a77019558f77947536d50b3f61c6badb9234713555f7ea4ef20d38086e8d64`.
-These are local smoke timings, not end-user training-performance claims.
+These are local smoke timings, not end-user training-presentation claims.
 
 ## Algorithm comparison
 

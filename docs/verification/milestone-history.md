@@ -119,13 +119,13 @@ Verified milestone evidence and repository facts moved verbatim from
   `v1.0.0` tag or its public assets. Its SHA-256 is
   `a064939f1097cc135880efd7e52f1df87bc784440b1d9f7bd7eb12791a40e8f3`.
 - Detailed evidence is saved in
-  `docs/verification/live-training-observer.md` and
-  `docs/verification/training-performance.md`, with the smooth-presentation
-  correction in `docs/verification/smooth-training-replay.md` and the simplified
-  setup audit in `docs/verification/setup-experience.md`. The complete Track
+  `docs/verification/training-presentation.md` and
+  `docs/verification/training-presentation.md`, with the smooth-presentation
+  correction in `docs/verification/training-presentation.md` and the simplified
+  setup audit in `docs/verification/ux-and-accessibility.md`. The complete Track
   Builder redesign audit is in
-  `docs/verification/track-builder-redesign.md`; personal offline hardening is
-  recorded in `docs/verification/personal-offline-hardening.md`.
+  `docs/verification/track-tools.md`; personal offline hardening is
+  recorded in `docs/verification/release-hardening-audits.md`.
 
 ## Verified repository facts
 
@@ -604,27 +604,27 @@ Latest verification evidence recorded on `2026-08-04` for the unreleased
   extracted copy started successfully; no `EvoRacer.cmd` exists.
 - Detailed evidence is saved in
   `docs/verification/phase9-windows-offline-package.md` for the original v1.0.0
-  package, `docs/verification/personal-offline-hardening.md` for published
-  `v1.1.0`, and `docs/verification/executable-package-correction.md` for the
-  current local correction, and `docs/verification/track-builder-generator-v2.md`
+  package, `docs/verification/release-hardening-audits.md` for published
+  `v1.1.0`, and `docs/verification/release-hardening-audits.md` for the
+  current local correction, and `docs/verification/track-tools.md`
   for the Track Builder hotfix. The latest run-recovery browser and package
-  evidence is in `docs/verification/post-release-run-recovery.md`; the latest
+  evidence is in `docs/verification/recovery-and-errors.md`; the latest
   keyboard/interface-state evidence is in
-  `docs/verification/post-release-keyboard-state-hardening.md`; the latest
+  `docs/verification/ui-state-ownership.md`; the latest
   library/IPC error evidence is in
-  `docs/verification/post-release-library-error-hardening.md`; the latest
+  `docs/verification/recovery-and-errors.md`; the latest
   Start-recovery evidence is in
-  `docs/verification/post-release-start-recovery.md`; terminal Saved results
+  `docs/verification/recovery-and-errors.md`; terminal Saved results
   recovery is in
-  `docs/verification/post-release-saved-results-recovery.md`; ordered-library
+  `docs/verification/recovery-and-errors.md`; ordered-library
   response evidence is in
-  `docs/verification/post-release-library-refresh-ownership.md`; replay
+  `docs/verification/ui-state-ownership.md`; replay
   contract and Results navigation evidence is in
-  `docs/verification/post-release-replay-integrity.md`; late Saved-action route
+  `docs/verification/recovery-and-errors.md`; late Saved-action route
   ownership evidence is in
-  `docs/verification/post-release-run-action-ownership.md`; Track import
+  `docs/verification/ui-state-ownership.md`; Track import
   concurrency and close/route ownership evidence is in
-  `docs/verification/post-release-track-import-ownership.md`.
+  `docs/verification/ui-state-ownership.md`.
 - `git diff --check` passed.
 
 ### M10 - Hardening and Portfolio Release
