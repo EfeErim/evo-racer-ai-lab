@@ -1,9 +1,20 @@
+import type { GenerationTrail } from "./generation-trails";
+import {
+  type AppAction,
+  type AppState,
+  createInitialState,
+} from "./onboarding";
+import type { FocusSnapshot } from "./render-state";
 import type { RunCommand } from "./run-presentation";
 import type {
   ObservationSnapshotV1,
   ReplayFrameV1,
   RunLibraryResponseV1,
 } from "./simulation";
+import {
+  createTrackWorkspaceState,
+  type TrackWorkspaceState,
+} from "./track-builder";
 import type { CompiledTrackV1, TrackMarker } from "./track-renderer";
 
 export interface LiveMarkerMotion {
@@ -55,4 +66,70 @@ export type RunLibraryAction = "resume" | "open" | "delete" | "export";
 export interface RunLibraryNotice {
   tone: "neutral" | "info" | "success" | "error";
   message: string;
+}
+
+export interface AppStore {
+  applicationLifecycle: ApplicationLifecycle;
+  reducedMotionOverride: boolean;
+  state: AppState;
+  presetGeometry: PresetGeometryState;
+  simulation: SimulationState;
+  observationTimer: number | undefined;
+  observationPending: boolean;
+  liveMarkerFrame: number | undefined;
+  liveMarkerMotion: LiveMarkerMotion | undefined;
+  championReplayMotion: ChampionReplayMotion | undefined;
+  generationTrails: GenerationTrail[];
+  replayFrameIndex: number;
+  runLibrary: RunLibraryState;
+  trackValidationRequest: number;
+  presetGeometryRequestVersion: number;
+  trackImportRequestVersion: number;
+  trackCommandRequestVersion: number;
+  setupValidationRequestVersion: number;
+  trackLibraryRequestVersion: number;
+  runLibraryRequestVersion: number;
+  runLibraryActionVersion: number;
+  runRequestVersion: number;
+  deferredFocus: FocusSnapshot | undefined;
+  trackWorkspace: TrackWorkspaceState;
+}
+
+export interface AppContext {
+  root: HTMLElement;
+  store: AppStore;
+  reducedMotionQuery: MediaQueryList;
+  render: (focusHeading?: boolean) => void;
+  dispatch: (action: AppAction) => void;
+}
+
+export function createAppStore(): AppStore {
+  return {
+    applicationLifecycle: "active",
+    reducedMotionOverride: false,
+    state: createInitialState(),
+    presetGeometry: { status: "loading" },
+    simulation: { status: "idle" },
+    observationTimer: undefined,
+    observationPending: false,
+    liveMarkerFrame: undefined,
+    liveMarkerMotion: undefined,
+    championReplayMotion: undefined,
+    generationTrails: [],
+    replayFrameIndex: 0,
+    runLibrary: { status: "loading" },
+    trackValidationRequest: 0,
+    presetGeometryRequestVersion: 0,
+    trackImportRequestVersion: 0,
+    trackCommandRequestVersion: 0,
+    setupValidationRequestVersion: 0,
+    trackLibraryRequestVersion: 0,
+    runLibraryRequestVersion: 0,
+    runLibraryActionVersion: 0,
+    runRequestVersion: 0,
+    deferredFocus: undefined,
+    trackWorkspace: createTrackWorkspaceState(
+      `custom-${Date.now().toString(36)}`,
+    ),
+  };
 }
