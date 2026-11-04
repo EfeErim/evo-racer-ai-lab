@@ -1,5 +1,8 @@
+import type { SelectedCarTelemetryV1 } from "./simulation";
 import type { TrackMarker } from "./track-renderer";
 
+export const CHAMPION_REPLAY_RATE = 2;
+export const RESULTS_REPLAY_RATE = 1;
 const FULL_TURN = Math.PI * 2;
 
 export interface TimedTrackMarker extends TrackMarker {
@@ -108,4 +111,21 @@ export function loopingReplayTrackMarker(
 
 function formatNumber(value: number): string {
   return Number(value.toFixed(3)).toString();
+}
+
+export function liveTrackMarker(
+  telemetry: SelectedCarTelemetryV1,
+): { x: number; y: number; heading: number } | undefined {
+  if (
+    telemetry.x === undefined ||
+    telemetry.y === undefined ||
+    telemetry.heading === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    x: telemetry.x,
+    y: telemetry.y,
+    heading: telemetry.heading,
+  };
 }
