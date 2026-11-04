@@ -55,6 +55,7 @@ class EvoRacerServer(ThreadingHTTPServer):
     data_root: Path | None
     run_manager: RunManager
     static_root: Path | None
+    allowed_origins: frozenset[str]
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -244,13 +245,18 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
-        return origin is None or origin in ALLOWED_DEVELOPMENT_ORIGINS or origin == self._origin()
+        return origin is None or origin == self._origin() or origin in self._allowed_origins()
 
     def _send_cors_headers(self) -> None:
         origin = self.headers.get("Origin")
-        if origin in ALLOWED_DEVELOPMENT_ORIGINS or origin == self._origin():
+        if origin == self._origin() or origin in self._allowed_origins():
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
+
+    def _allowed_origins(self) -> frozenset[str]:
+        server = self.server
+        assert isinstance(server, EvoRacerServer)
+        return server.allowed_origins
 
     def _origin(self) -> str:
         server = self.server
@@ -327,18 +333,25 @@ def create_server(
     port: int = DEFAULT_PORT,
     data_root: Path | None = None,
     static_root: Path | None = None,
+    allow_development_origins: bool = False,
 ) -> EvoRacerServer:
-    """Create a service that cannot bind beyond the IPv4 loopback interface."""
+    """Create a service that cannot bind beyond the IPv4 loopback interface.
+
+    Only the development service entrypoint enables the Vite origins; the launcher does not.
+    """
     server = EvoRacerServer((LOOPBACK_HOST, port), HealthHandler)
     server.data_root = data_root
     server.run_manager = RunManager(data_root)
     server.static_root = static_root.resolve() if static_root is not None else None
+    server.allowed_origins = (
+        ALLOWED_DEVELOPMENT_ORIGINS if allow_development_origins else frozenset()
+    )
     return server
 
 
 def run(port: int = DEFAULT_PORT) -> None:
-    """Run the local service until interrupted."""
-    server = create_server(port)
+    """Run the development service until interrupted."""
+    server = create_server(port, allow_development_origins=True)
     print(f"EvoRacer local service listening on http://{LOOPBACK_HOST}:{port}")
     try:
         server.serve_forever()

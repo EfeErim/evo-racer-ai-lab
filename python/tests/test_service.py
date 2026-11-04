@@ -11,9 +11,10 @@ from urllib.request import Request, urlopen
 
 import pytest
 
+import evo_racer.launcher as launcher_module
 from evo_racer.observer import RunSession, RunSettings
 from evo_racer.run_library import save_run_document
-from evo_racer.service import LOOPBACK_HOST, create_server
+from evo_racer.service import LOOPBACK_HOST, EvoRacerServer, create_server
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 
@@ -25,7 +26,7 @@ def test_production_frontend_and_assets_are_served_from_the_loopback_core(
     assets_root.mkdir(parents=True)
     (static_root / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
     (assets_root / "app.js").write_text("export {};", encoding="utf-8")
-    server = create_server(port=0, static_root=static_root)
+    server = create_server(allow_development_origins=True, port=0, static_root=static_root)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -56,7 +57,7 @@ def test_production_frontend_and_assets_are_served_from_the_loopback_core(
 
 
 def test_production_origin_can_request_graceful_shutdown() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -83,7 +84,7 @@ def test_production_origin_can_request_graceful_shutdown() -> None:
 
 
 def test_health_contract_is_served_on_loopback() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -111,7 +112,7 @@ def test_health_contract_is_served_on_loopback() -> None:
 
 
 def test_setup_validation_contract_does_not_start_a_run() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -156,7 +157,7 @@ def test_setup_validation_contract_does_not_start_a_run() -> None:
 
 
 def test_valid_json_null_receives_a_versioned_validation_response() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -206,7 +207,7 @@ def test_valid_json_null_receives_a_versioned_validation_response() -> None:
     ],
 )
 def test_setup_validation_accepts_supported_loopback_ui_origins(origin: str) -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -247,7 +248,7 @@ def test_setup_validation_accepts_supported_loopback_ui_origins(origin: str) -> 
 
 
 def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -283,7 +284,7 @@ def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
 def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
     tmp_path: Path,
 ) -> None:
-    server = create_server(port=0, data_root=tmp_path)
+    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -363,7 +364,7 @@ def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
 
 
 def test_phase_four_preview_is_served_on_the_versioned_loopback_contract() -> None:
-    server = create_server(port=0)
+    server = create_server(allow_development_origins=True, port=0)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -413,7 +414,7 @@ def test_phase_four_preview_is_served_on_the_versioned_loopback_contract() -> No
 def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
     tmp_path: Path,
 ) -> None:
-    server = create_server(port=0, data_root=tmp_path)
+    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -515,7 +516,7 @@ def test_phase_eight_run_library_resume_export_and_delete_survive_restart(
     session.advance()
     save_run_document(session.to_run_document(), tmp_path)
 
-    server = create_server(port=0, data_root=tmp_path)
+    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
     address = server.server_address
     host = address[0]
     port = address[1]
@@ -587,3 +588,55 @@ def test_phase_eight_run_library_resume_export_and_delete_survive_restart(
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+@pytest.mark.parametrize(
+    "origin",
+    ["http://127.0.0.1:4173", "http://localhost:5173", "http://example.test"],
+)
+def test_packaged_default_rejects_development_and_foreign_origins(origin: str) -> None:
+    server = create_server(port=0)
+    address = server.server_address
+    host = address[0]
+    port = address[1]
+    assert isinstance(host, str)
+    assert isinstance(port, int)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    request = Request(  # noqa: S310
+        f"http://{host}:{port}/v1/setup/validate",
+        method="POST",
+        headers={"Content-Type": "application/json", "Origin": origin},
+        data=b"{}",
+    )
+
+    try:
+        with pytest.raises(HTTPError) as error:
+            urlopen(request, timeout=2)  # noqa: S310
+        assert error.value.code == HTTPStatus.FORBIDDEN
+        assert error.value.headers["Access-Control-Allow-Origin"] is None
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_launcher_uses_the_packaged_origin_policy(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    created: list[EvoRacerServer] = []
+    original_create_server = create_server
+
+    def recording_create_server(**kwargs: Any) -> EvoRacerServer:
+        server = original_create_server(**{**kwargs, "port": 0})
+        created.append(server)
+        server.serve_forever = lambda *_args: None  # type: ignore[method-assign]
+        return server
+
+    monkeypatch.setattr(launcher_module, "create_server", recording_create_server)
+    (tmp_path / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
+
+    launcher_module.run_launcher(static_root=tmp_path, data_root=tmp_path, open_browser=False)
+
+    assert created[0].allowed_origins == frozenset()
