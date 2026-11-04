@@ -12,32 +12,54 @@ export type EditorDragPayload =
   | { source: "palette"; kind: SegmentKind }
   | { source: "sequence"; pieceIndex: number };
 
-export function bindActions(
-  root: HTMLElement,
-  state: AppState,
-  dispatch: (action: AppAction) => void,
-  review: () => Promise<void>,
-  startSession: () => Promise<void>,
-  controlSession: (command: "pause" | "resume" | "stop") => Promise<void>,
-  moveReplay: (action: "previous" | "next" | "restart") => void,
+export interface ActionHandlers {
+  dispatch: (action: AppAction) => void;
+  review: () => Promise<void>;
+  startSession: () => Promise<void>;
+  controlSession: (command: "pause" | "resume" | "stop") => Promise<void>;
+  moveReplay: (action: "previous" | "next" | "restart") => void;
   handleRunAction: (
     action: "resume" | "open" | "delete" | "export",
     runId: string,
-  ) => Promise<void>,
-  handleTrackAction: (action: string, element: HTMLElement) => Promise<void>,
-  dropEditorPiece: (payload: EditorDragPayload, insertionIndex: number) => void,
-  importTrack: (file: File) => Promise<void>,
-  retryPresetTracks: () => void,
-  retryRunLibrary: () => void,
-  exitApplication: () => Promise<void>,
-  toggleReducedMotion: () => void,
-  updateEditor: (name: string, roadWidth: number) => void,
+  ) => Promise<void>;
+  handleTrackAction: (action: string, element: HTMLElement) => Promise<void>;
+  dropEditorPiece: (payload: EditorDragPayload, insertionIndex: number) => void;
+  importTrack: (file: File) => Promise<void>;
+  retryPresetTracks: () => void;
+  retryRunLibrary: () => void;
+  exitApplication: () => Promise<void>;
+  toggleReducedMotion: () => void;
+  updateEditor: (name: string, roadWidth: number) => void;
   updateGenerator: (
     seed: number,
     length: "short" | "medium" | "long",
     difficulty: "easy" | "technical" | "hard",
-  ) => void,
+  ) => void;
+}
+
+export function bindActions(
+  root: HTMLElement,
+  state: AppState,
+  handlers: ActionHandlers,
 ): void {
+  const {
+    dispatch,
+    review,
+    startSession,
+    controlSession,
+    moveReplay,
+    handleRunAction,
+    handleTrackAction,
+    dropEditorPiece,
+    importTrack,
+    retryPresetTracks,
+    retryRunLibrary,
+    exitApplication,
+    toggleReducedMotion,
+    updateEditor,
+    updateGenerator,
+  } = handlers;
+
   root.querySelectorAll<HTMLElement>("[data-route]").forEach((element) => {
     element.addEventListener("click", (event) => {
       event.preventDefault();
