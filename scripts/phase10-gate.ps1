@@ -18,7 +18,8 @@ function Invoke-GateStep {
 
 $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 $reportPath = Join-Path $repoRoot ".runtime_tmp\phase10\performance.json"
-$python = Join-Path $repoRoot ".venv\Scripts\python.exe"
+. (Join-Path $PSScriptRoot "venv-python.ps1")
+$python = Resolve-VenvPython $repoRoot
 
 Push-Location -LiteralPath $repoRoot
 try {

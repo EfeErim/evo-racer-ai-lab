@@ -5,10 +5,11 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
+. (Join-Path $PSScriptRoot "venv-python.ps1")
+$pythonPath = Resolve-VenvPython $repoRoot
 $vitePath = Join-Path $repoRoot "node_modules\vite\bin\vite.js"
 
-if (-not (Test-Path -LiteralPath $pythonPath) -or -not (Test-Path -LiteralPath $vitePath)) {
+if (-not (Test-Path -LiteralPath $vitePath)) {
     throw "Development dependencies are missing. Run ./scripts/setup.ps1 first."
 }
 

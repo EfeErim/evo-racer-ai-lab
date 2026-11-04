@@ -1,5 +1,7 @@
 $ErrorActionPreference = "Stop"
 
+. (Join-Path $PSScriptRoot "venv-python.ps1")
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repoRoot
 
@@ -11,12 +13,14 @@ try {
         }
     }
 
-    & ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r requirements-dev.lock
+    $python = Resolve-VenvPython $repoRoot
+
+    & $python -m pip install --disable-pip-version-check -r requirements-dev.lock
     if ($LASTEXITCODE -ne 0) {
         throw "Locked Python dependency installation failed."
     }
 
-    & ".venv\Scripts\python.exe" -m pip install --disable-pip-version-check --no-deps --no-build-isolation -e .
+    & $python -m pip install --disable-pip-version-check --no-deps --no-build-isolation -e .
     if ($LASTEXITCODE -ne 0) {
         throw "Editable EvoRacer Python package installation failed."
     }
