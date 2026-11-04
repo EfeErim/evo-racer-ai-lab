@@ -35,12 +35,13 @@ function Assert-PortAvailable {
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
+. (Join-Path $PSScriptRoot "venv-python.ps1")
+$pythonPath = Resolve-VenvPython $repoRoot
 $vitePath = Join-Path $repoRoot "node_modules\vite\bin\vite.js"
 $frontendUri = "http://127.0.0.1:4173"
 $serviceUri = "http://127.0.0.1:8765/health"
 
-if (-not (Test-Path -LiteralPath $pythonPath) -or -not (Test-Path -LiteralPath $vitePath)) {
+if (-not (Test-Path -LiteralPath $vitePath)) {
     throw "Development dependencies are missing. Run ./scripts/setup.ps1 first."
 }
 

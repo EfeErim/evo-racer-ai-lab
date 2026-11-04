@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
-$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
+. (Join-Path $PSScriptRoot "venv-python.ps1")
+$pythonPath = Resolve-VenvPython $repoRoot
 $reportPath = Join-Path $repoRoot ".runtime_tmp\thorough\acceptance.json"
 
 Push-Location -LiteralPath $repoRoot
