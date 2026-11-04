@@ -80,4 +80,5 @@ npm run smoke:m0
 git diff --check
 ```
 
-The final phase-level counts and outcomes are recorded in `PROJECT_STATE.md`.
+The final phase-level counts and outcomes are recorded in
+`docs/verification/milestone-history.md`.

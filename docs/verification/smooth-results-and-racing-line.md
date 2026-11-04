@@ -101,6 +101,6 @@ champion.
   not-matched verdict, zero document overflow, no external resource, and no
   warning or error log.
 
-Full source and journey gates are recorded in `PROJECT_STATE.md` after their
+Full source and journey gates are recorded in `docs/releases/v1.1.1.md` after their
 successful completion. The local Windows package is verified but remains
 unsigned and unpublished.
