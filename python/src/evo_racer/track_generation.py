@@ -6,6 +6,7 @@ import hashlib
 import itertools
 import json
 import random
+from collections.abc import Iterator
 from dataclasses import replace
 from typing import Final, Literal, cast
 
@@ -117,9 +118,9 @@ def generate_track_payload(payload: object) -> dict[str, object]:
     assert length in LENGTH_TARGETS
     assert difficulty in DIFFICULTY_WIDTHS
     target = LENGTH_TARGETS[length]
-    candidates = _search_candidates(seed, length, difficulty, target)
-
-    for candidate_count, pieces in enumerate(candidates, start=1):
+    candidate_count = 0
+    for pieces in _search_candidates(seed, length, difficulty, target):
+        candidate_count += 1
         track = TrackV1(
             schema_version=1,
             track_id=_generated_id(seed, length, difficulty, pieces),
@@ -158,7 +159,7 @@ def generate_track_payload(payload: object) -> dict[str, object]:
                 f"No valid track was found within {MAX_GENERATOR_CANDIDATES} candidates.",
             )
         ],
-        "candidateCount": min(len(candidates), MAX_GENERATOR_CANDIDATES),
+        "candidateCount": candidate_count,
     }
 
 
@@ -237,8 +238,12 @@ def _search_candidates(
     length: TrackLength,
     difficulty: TrackDifficulty,
     target: int,
-) -> list[tuple[TrackPieceV1, ...]]:
-    candidates = _balanced_loop_candidates(seed, length, difficulty, target)
+) -> Iterator[tuple[TrackPieceV1, ...]]:
+    """Yield up to the candidate limit in rank order, doing only the work a caller consumes."""
+    seen: set[tuple[str, ...]] = set()
+    for candidate in _balanced_loop_candidates(seed, length, difficulty, target):
+        seen.add(_piece_key(candidate))
+        yield candidate
 
     fallbacks = _varied_rectangle_candidates(difficulty, target)
     if difficulty == "hard":
@@ -248,14 +253,12 @@ def _search_candidates(
         {_piece_key(candidate): candidate for candidate in fallbacks}.values(),
         key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
-    seen = {_piece_key(candidate) for candidate in candidates}
     for fallback in ranked_fallbacks:
-        if len(candidates) >= MAX_GENERATOR_CANDIDATES:
+        if len(seen) >= MAX_GENERATOR_CANDIDATES:
             break
         if _piece_key(fallback) not in seen:
-            candidates.append(fallback)
             seen.add(_piece_key(fallback))
-    return candidates
+            yield fallback
 
 
 def _balanced_loop_candidates(
@@ -263,7 +266,7 @@ def _balanced_loop_candidates(
     length: TrackLength,
     difficulty: TrackDifficulty,
     target: int,
-) -> list[tuple[TrackPieceV1, ...]]:
+) -> Iterator[tuple[TrackPieceV1, ...]]:
     """Pair distinct compatible half laps into closed, asymmetric circuits."""
     half_target = target // 2
     target_turn = 180 if _rank(seed, length, difficulty, ("turn-direction",))[0] % 2 == 0 else -180
@@ -296,11 +299,14 @@ def _balanced_loop_candidates(
         {_piece_key(candidate): candidate for candidate in paired}.values(),
         key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
-    paired = [candidate for candidate in paired if _compiles(candidate)]
-    if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
-        return paired[:_DESIGNED_CANDIDATE_BUDGET]
+    seen: set[tuple[str, ...]] = set()
+    for candidate in paired:
+        if _compiles(candidate):
+            seen.add(_piece_key(candidate))
+            yield candidate
+            if len(seen) >= _DESIGNED_CANDIDATE_BUDGET:
+                return
 
-    seen = {_piece_key(candidate) for candidate in paired}
     mirrored = sorted(
         (
             _pieces(
@@ -311,12 +317,11 @@ def _balanced_loop_candidates(
         key=lambda candidate: _rank(seed, length, difficulty, _piece_key(candidate)),
     )
     for candidate in mirrored:
-        if len(paired) >= _DESIGNED_CANDIDATE_BUDGET:
+        if len(seen) >= _DESIGNED_CANDIDATE_BUDGET:
             break
         if _piece_key(candidate) not in seen:
-            paired.append(candidate)
             seen.add(_piece_key(candidate))
-    return paired
+            yield candidate
 
 
 def _compiles(pieces: tuple[TrackPieceV1, ...]) -> bool:
@@ -356,8 +361,8 @@ def _sample_half_lap(
         options = [
             kind
             for kind in allowed
-            if _prefix_accepts(prefix, kind)
-            and abs(target_turn - (turn_total + _TURN_DEGREES[kind])) <= 180 * (slots_left - 1)
+            if abs(target_turn - (turn_total + _TURN_DEGREES[kind])) <= 180 * (slots_left - 1)
+            and _prefix_accepts(prefix, kind)
         ]
         if not options:
             return None
@@ -443,7 +448,7 @@ def _prefix_accepts(prefix: tuple[str, ...], kind: str) -> bool:
     if kind.startswith("hairpin-") and prefix[-1].startswith("hairpin-"):
         return False
     if _TURN_DEGREES[kind] == 0 and len(prefix) >= 2:
-        if all(_TURN_DEGREES.get(previous, 0) == 0 for previous in prefix[-2:]):
+        if _TURN_DEGREES.get(prefix[-1], 0) == 0 and _TURN_DEGREES.get(prefix[-2], 0) == 0:
             return False
     return True
 

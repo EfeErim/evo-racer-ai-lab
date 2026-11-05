@@ -1,7 +1,8 @@
 # First run, run isolation, and CI repair
 
 Recorded on `2026-11-04` and `2026-11-05`. GitHub CI run `41912431292` passed on
-commit `bcbf4e2`, including source checks and browser flows.
+commit `bcbf4e2`, which landed on `main` as `1b8ed53` with the same content, including
+source checks and browser flows.
 
 ## CI
 

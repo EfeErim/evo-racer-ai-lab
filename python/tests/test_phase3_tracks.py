@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import pytest
 from evo_racer.track_generation import (
     LENGTH_TARGETS,
     MAX_GENERATOR_CANDIDATES,
+    _search_candidates,
     assist_track_closure_payload,
     generate_track_payload,
 )
@@ -139,6 +141,37 @@ def test_generator_seeds_vary_short_track_layouts() -> None:
             layouts.add(tuple(piece["kind"] for piece in pieces))
 
     assert len(layouts) >= 24
+
+
+@pytest.mark.parametrize(
+    ("seed", "length", "difficulty", "expected"),
+    [
+        (
+            3,
+            "short",
+            "technical",
+            "3e7d9e650f502bb714a7588d34414a225ee38375b4f65ab2f7fc38a038a9d1fe",
+        ),
+        (7, "medium", "easy", "c395038bcf6649d11e4a7a3a58b72cb478a9547c6bc2c37c625af012b763ec2b"),
+        (11, "long", "hard", "f1c3d2d4551bcf6aac4db72e4ccd7f536d6032b58c17818c1110797993637f9d"),
+    ],
+)
+def test_generator_output_is_pinned_for_a_given_generator_version(
+    seed: int, length: str, difficulty: str, expected: str
+) -> None:
+    # A speedup must not move a saved seed to a different track.
+    response = _generate(seed=seed, length=length, difficulty=difficulty)
+    canonical = json.dumps(response, separators=(",", ":"), sort_keys=True)
+
+    assert hashlib.sha256(canonical.encode()).hexdigest() == expected
+
+
+def test_candidate_search_stays_within_its_limit_without_repeats() -> None:
+    candidates = list(_search_candidates(3, "short", "technical", LENGTH_TARGETS["short"]))
+    layouts = [tuple(piece.kind for piece in candidate) for candidate in candidates]
+
+    assert 0 < len(layouts) <= MAX_GENERATOR_CANDIDATES
+    assert len(set(layouts)) == len(layouts)
 
 
 def test_invalid_editor_draft_keeps_a_python_derived_open_preview() -> None:

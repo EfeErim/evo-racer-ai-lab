@@ -48,8 +48,25 @@ is recorded here, and documentation matches behavior.
 
 ## Latest verification
 
+Recorded on `2026-11-05` for the faster track generator and test suite, on the
+uncommitted `test/faster-suite` working tree on top of `254ba2a`.
+
+- The generator compiled every paired candidate before using the first. It now produces
+  candidates on demand. Over `216` inputs (seeds `0` to `23`, `3` lengths, `3`
+  difficulties, all in parallel) every response hash is identical to the earlier code;
+  total generation time fell from `1667 s` to `195 s`, median from `4.45 s` to `0.91 s`,
+  and maximum from `28.7 s` to `2.1 s`. The generator version is unchanged.
+- pytest fell from `439 s` to `120 s`, with no test removed. `npm run check` passed in
+  `145 s` with `139` Vitest and `175` pytest tests, and `npm run test:e2e` passed all
+  `27` Chromium flows.
+- `npm run build:release` and `npm run test:release` passed, including run
+  `run-9c48bf46e20e427fad41868c21cf057e`. The ZIP is `9,471,385` bytes with SHA-256
+  `25fee3ca0711ef8652a206438bbc9751c0c4ece168d02b6dbd22b7cb88ec66ab`. The learning
+  benchmark was not rerun, because presets do not use the generator. CI has not run on
+  this change.
+
 Recorded on `2026-11-05` for the corrected Pure Pursuit reference and the learning
-benchmark. Findings and limits are in
+benchmark. The archive hash in this entry describes an earlier build. Findings and limits are in
 [`docs/verification/learning-benchmark.md`](docs/verification/learning-benchmark.md).
 
 These results are for the uncommitted working tree on `fix/learning-benchmark`, on top
@@ -78,8 +95,9 @@ of `e3027dc`.
 - `npm run test:phase10` was not run as one command. Its source checks, browser flows,
   matrix, smoke, build, release acceptance, and `git diff --check` were run individually.
   A clean Windows machine with its network adapters disabled was not tested.
-- `npm run smoke:m0` passed after commit `b833259`, which contains these results. CI
-  runs only on pushes to `main` and on pull requests, so that branch has no CI run.
+- `npm run smoke:m0` passed after commit `b833259`, which contains these results.
+- GitHub CI run `42046802452` passed on `254ba2a` on `main` in about `10` minutes,
+  including source checks and browser flows.
 
 Recorded on `2026-11-04` and `2026-11-05` for the CI repair, NEAT run isolation, port
 ownership, and new Quick check budget. Causes and measurements are in
@@ -97,7 +115,8 @@ ownership, and new Quick check budget. Causes and measurements are in
 - The packaged EXE was clicked through Review, Start, Training, and Results. The Quick
   check on Easy Oval with seed `42` finished a lap. A second launch exited and left one
   listening process.
-- GitHub CI run `41912431292` passed on `bcbf4e2`, including source checks and browser
+- GitHub CI run `41912431292` passed on `bcbf4e2`, which landed on `main` as `1b8ed53`
+  with the same content, including source checks and browser
   flows. Every earlier recorded run on `main` failed.
 
 Recorded on `2026-11-04` for the UI redesign, since committed in `0c12cf6` with the
@@ -178,8 +197,8 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Use the saved learning benchmark as the before-and-after measure for any physics or
-evolution change. Remaining open checks are human usability testing, 200% zoom, a screen
+Make braking worthwhile in racing, using the saved learning benchmark as the
+before-and-after measure for any physics or evolution change. Remaining open checks are human usability testing, 200% zoom, a screen
 reader, and a clean Windows machine with its network adapters disabled.
 Push, tag, publish, or apply the optional trusted-signing path only on explicit
 request. Preserve the immutable
