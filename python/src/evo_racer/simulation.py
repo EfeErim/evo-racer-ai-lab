@@ -490,7 +490,7 @@ class PurePursuitBaseline:
     """Lookahead path tracker based on Coulter's Pure Pursuit method."""
 
     def __init__(self, lookahead_base: float = 5.0, lookahead_speed_gain: float = 0.3) -> None:
-        self._parameters = (lookahead_base, lookahead_speed_gain)
+        self._parameters: tuple[float, ...] = (lookahead_base, lookahead_speed_gain)
 
     @property
     def name(self) -> str:
@@ -515,6 +515,66 @@ class PurePursuitBaseline:
         throttle = _clamp(speed_error / 6.0, 0.0, 1.0)
         brake = _clamp(-speed_error / 8.0, 0.0, 1.0)
         return Controls(steering=steering, throttle=throttle, brake=brake)
+
+
+class SetupAwarePurePursuit(PurePursuitBaseline):
+    """Pure Pursuit steering with a speed policy fitted to one vehicle setup.
+
+    Evolved setups can turn far less sharply than the default car, so fixed speed
+    targets crash a reference that was never given the chance to drive that car.
+    This policy brakes for upcoming curvature using the setup's own turn rate.
+    `caution` scales the radius it plans for: lower is slower and safer.
+    """
+
+    def __init__(self, setup: VehicleSetup, caution: float) -> None:
+        super().__init__()
+        self._setup = setup
+        self._caution = caution
+        self._parameters = (*self._parameters, caution)
+
+    def _corner_speed(self, curvature: float) -> float:
+        """Speed at which this setup's full-lock turn matches the planned radius."""
+        reach = (self._caution / curvature) * self._setup.steering_agility
+        remainder = 1.0 - 1.3 * reach / self._setup.max_speed
+        if remainder <= 0.0:
+            return self._setup.max_speed
+        return min(self._setup.max_speed, 0.2 * reach / remainder)
+
+    def control(self, observation: Observation, geometry: TrackGeometry) -> Controls:
+        speed = observation.state.forward_speed
+        progress = observation.progress_distance
+        target = geometry.point_at(progress + 5.0 + 0.3 * speed)
+        heading_error = _signed_heading_delta(
+            math.atan2(target[1] - observation.state.y, target[0] - observation.state.x),
+            observation.state.heading,
+        )
+        steering = _clamp(heading_error * 1.8, -1.0, 1.0)
+
+        braking = max(1.0, self._setup.brake_strength * 0.6)
+        horizon = speed * speed / (2.0 * braking) + 6.0
+        limit = self._setup.max_speed
+        sample = 3.0
+        before = geometry.point_at(progress)
+        current = geometry.point_at(progress + sample)
+        heading = math.atan2(current[1] - before[1], current[0] - before[0])
+        ahead = 0.0
+        while ahead < horizon:
+            following = geometry.point_at(progress + ahead + 2.0 * sample)
+            next_heading = math.atan2(following[1] - current[1], following[0] - current[0])
+            curvature = abs(_signed_heading_delta(next_heading, heading)) / sample
+            if curvature > 1e-4:
+                corner = max(2.5, self._corner_speed(curvature))
+                limit = min(limit, math.sqrt(corner * corner + 2.0 * braking * ahead))
+            heading, current = next_heading, following
+            ahead += sample
+
+        target_speed = max(2.5, limit * (1.0 - 0.5 * abs(steering)))
+        speed_error = target_speed - speed
+        return Controls(
+            steering=steering,
+            throttle=_clamp(speed_error / 4.0, 0.0, 1.0),
+            brake=_clamp(-speed_error / 4.0, 0.0, 1.0),
+        )
 
 
 class RandomNetworkBaseline:

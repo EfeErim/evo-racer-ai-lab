@@ -7,7 +7,11 @@ import {
 } from "../src/onboarding";
 import type { RunResultV1 } from "../src/simulation";
 import { type CompiledTrackV1, trackLengthMeters } from "../src/track-renderer";
-import { fitnessVerdict } from "../src/views/results";
+import {
+  compareAnswer,
+  fitnessVerdict,
+  outcomeLabel,
+} from "../src/views/results";
 import { trackIdentity } from "../src/views/shared";
 import { renderFitnessChart } from "../src/views/training";
 
@@ -178,6 +182,90 @@ describe("Results verdict", () => {
 
     expect(verdict.headline).toContain("only one generation finished");
     expect(verdict.tone).toBe("info");
+  });
+});
+
+describe("Results baseline comparison", () => {
+  type Comparison = RunResultV1["baselineComparisons"][number];
+
+  function comparison(
+    label: string,
+    fitness: number,
+    outcome: Pick<Comparison, "finished" | "collisionCount">,
+  ): Comparison {
+    return {
+      label,
+      controller: label,
+      fitness,
+      progress: 0.5,
+      steps: 100,
+      ...outcome,
+    };
+  }
+
+  function resultAgainst(
+    championFitness: number,
+    references: Comparison[],
+  ): RunResultV1 {
+    return {
+      champion: { fitness: championFitness },
+      baselineComparisons: [
+        comparison("Champion", championFitness, {
+          finished: false,
+          collisionCount: 0,
+        }),
+        ...references,
+      ],
+    } as unknown as RunResultV1;
+  }
+
+  const crashedOut = { finished: false, collisionCount: 1 };
+  const timedOut = { finished: false, collisionCount: 0 };
+
+  it("names the outcome instead of a generic did-not-finish", () => {
+    expect(
+      outcomeLabel(
+        comparison("Pure Pursuit", 1, { finished: true, collisionCount: 0 }),
+      ),
+    ).toBe("Finished");
+    expect(outcomeLabel(comparison("Pure Pursuit", 1, crashedOut))).toBe(
+      "Crashed",
+    );
+    expect(outcomeLabel(comparison("Pure Pursuit", 1, timedOut))).toBe(
+      "Ran out of time",
+    );
+  });
+
+  it("names a crashed reference only when the champion beat it", () => {
+    const answer = compareAnswer(
+      resultAgainst(50, [
+        comparison("Seeded random network", 10, crashedOut),
+        comparison("Pure Pursuit", 90, timedOut),
+      ]),
+    );
+
+    expect(answer).toContain("Ahead of 1 of 2 references");
+    expect(answer).toContain(
+      "Beating a reference that crashed says little: Seeded random network.",
+    );
+  });
+
+  it("does not discount a win over references that did not crash", () => {
+    const answer = compareAnswer(
+      resultAgainst(50, [comparison("Pure Pursuit", 10, timedOut)]),
+    );
+
+    expect(answer).toContain("Ahead of every reference");
+    expect(answer).not.toContain("says little");
+  });
+
+  it("does not mention a crashed reference that still scored higher", () => {
+    const answer = compareAnswer(
+      resultAgainst(50, [comparison("Pure Pursuit", 90, crashedOut)]),
+    );
+
+    expect(answer).toContain("Behind every reference");
+    expect(answer).not.toContain("says little");
   });
 });
 

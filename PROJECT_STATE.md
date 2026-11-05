@@ -43,9 +43,42 @@ is recorded here, and documentation matches behavior.
   `docs/releases/v1.1.1.md`
 - v1.1.0 hardening, verified repository facts, and milestone gate results:
   `docs/verification/milestone-history.md`
+- Learning benchmark results: `contracts/learning-benchmark.json`
 - Phase and theme verification notes: `docs/verification/`
 
 ## Latest verification
+
+Recorded on `2026-11-05` for the corrected Pure Pursuit reference and the learning
+benchmark. Findings and limits are in
+[`docs/verification/learning-benchmark.md`](docs/verification/learning-benchmark.md).
+
+These results are for the uncommitted working tree on `fix/learning-benchmark`, on top
+of `e3027dc`.
+
+- `npm run check` passed formatting, docs, lint, types, `139` Vitest and `171` pytest
+  tests, and the production build. `npm run test:e2e` passed all `27` Chromium flows.
+- `npm run test:learning` reproduced all `30` saved cases in `243 s`.
+  `python/tools/hardening.py --fixture contracts/phase10-regression.json` verified all
+  `18` cases in `33.9 s` with regression SHA-256
+  `38f226ca983982f2263ee734bcde9c3fb6cf7a06ba360ad9015493932cde7105`. A field-by-field
+  comparison with `HEAD` found only `pursuitFitness`, `pursuitProgress`, and
+  `resultSha256` changed, in `15` cases.
+- `npm run build:release` and `npm run test:release` passed, including run
+  `run-7df49f3b943541108b830d2985a71cb4`. The ZIP is `9,470,281` bytes with SHA-256
+  `fe89e829cd215674fbd32c52f800675187829a1bf7693d687e4da86e427c8c29`.
+- The packaged EXE, run with a temporary data folder, was driven through Review, Start,
+  Training, and Results for the recommended Quick check. Its champion finished the lap
+  at fitness `2259.3`, Pure Pursuit finished at `2282.5`, and the random network read
+  **Crashed**. The console had no errors and every request went to `127.0.0.1:8765`.
+- Exit was not confirmed in that session because the hidden browser pane dismissed the
+  confirmation, so the process was stopped directly. `npm run test:release` covers
+  packaged startup and acceptance; this entry does not add a new check of the Exit
+  button. The **Ran out of time** label is covered by Vitest only, since no packaged run
+  produced it.
+- `npm run test:phase10` was not run as one command. Its source checks, browser flows,
+  matrix, build, release acceptance, and `git diff --check` were run individually;
+  `npm run smoke:m0` was not. A clean Windows machine with its network adapters disabled
+  was not tested.
 
 Recorded on `2026-11-04` and `2026-11-05` for the CI repair, NEAT run isolation, port
 ownership, and new Quick check budget. Causes and measurements are in
@@ -144,8 +177,9 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Save a repeatable learning benchmark and correct the Pure Pursuit comparison before
-changing physics.
+Use the saved learning benchmark as the before-and-after measure for any physics or
+evolution change. Remaining open checks are human usability testing, 200% zoom, a screen
+reader, and a clean Windows machine with its network adapters disabled.
 Push, tag, publish, or apply the optional trusted-signing path only on explicit
 request. Preserve the immutable
 `v1.0.0` and `v1.1.0` tags, published

@@ -50,11 +50,14 @@ from evo_racer.run_library import (
 from evo_racer.simulation import (
     FIXED_TIME_STEP,
     SIMULATION_CONTRACT_VERSION,
+    Controller,
     EpisodeResult,
     PurePursuitBaseline,
     RandomNetworkBaseline,
+    SetupAwarePurePursuit,
     TelemetrySnapshot,
     TrackGeometry,
+    VehicleSetup,
     evaluate_episode,
 )
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
@@ -64,6 +67,7 @@ OBSERVATION_CONTRACT_VERSION: Final = 1
 REPLAY_INTERVAL_STEPS: Final = 6
 GENERATION_TRAIL_LIMIT: Final = 8
 GENERATION_TRAIL_POINT_LIMIT: Final = 64
+PURE_PURSUIT_CAUTION_LEVELS: Final = (1.5, 1.0, 0.6, 0.35)
 type RunStatus = Literal["running", "paused", "stopped", "completed"]
 type GenerationReportValue = GenerationReport | NEATGenerationReport
 type ScoredCandidateValue = ScoredCandidate | NEATScoredCandidate
@@ -507,12 +511,10 @@ class RunSession:
             max_seconds=self.settings.episode_seconds,
             selected_car_id="random-network-baseline",
         )
-        pursuit_episode = evaluate_episode(
+        pursuit_episode = best_pure_pursuit_episode(
             self.geometry,
-            PurePursuitBaseline(),
             candidate.setup,
             max_seconds=self.settings.episode_seconds,
-            selected_car_id="pure-pursuit-baseline",
         )
         track = cast(dict[str, object], self.compiled_track["track"])
         track_json = json.dumps(track, separators=(",", ":"), sort_keys=True)
@@ -945,6 +947,40 @@ def _ranked(
 
 def _candidate_sort_key(candidate: ScoredCandidateValue) -> tuple[float, str]:
     return (-candidate.evaluation.fitness, candidate.candidate.candidate_id)
+
+
+def best_pure_pursuit_episode(
+    geometry: TrackGeometry,
+    setup: VehicleSetup,
+    *,
+    max_seconds: float,
+) -> EpisodeResult:
+    """Return the highest-scoring Pure Pursuit drive for this car and time limit.
+
+    The fixed-speed tracker is fast but can crash on an evolved setup, and a careful
+    one can miss a short time limit, so neither alone is a fair reference. Ties keep
+    the earlier controller, which makes the choice deterministic.
+    """
+    max_steps = round(max_seconds / FIXED_TIME_STEP)
+    controllers: tuple[Controller, ...] = (
+        PurePursuitBaseline(),
+        *(SetupAwarePurePursuit(setup, caution) for caution in PURE_PURSUIT_CAUTION_LEVELS),
+    )
+    best: EpisodeResult | None = None
+    best_fitness = -math.inf
+    for controller in controllers:
+        episode = evaluate_episode(
+            geometry,
+            controller,
+            setup,
+            max_seconds=max_seconds,
+            selected_car_id="pure-pursuit-baseline",
+        )
+        fitness = episode_fitness(episode, max_steps).fitness
+        if fitness > best_fitness:
+            best, best_fitness = episode, fitness
+    assert best is not None
+    return best
 
 
 def _comparison_payload(

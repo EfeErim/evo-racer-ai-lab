@@ -140,7 +140,7 @@ population evolution, controller execution, and episode evaluation. Compile
 networks into a versioned runtime-neutral representation consumed by the
 canonical Python evaluator.
 
-Use identical physics, sensors, episode termination, and fitness for both algorithms. Use random-network and Pure Pursuit baselines with the champion's vehicle parameters when comparing controllers.
+Use identical physics, sensors, episode termination, and fitness for both algorithms. Use random-network and Pure Pursuit baselines with the champion's vehicle parameters when comparing controllers. Report Pure Pursuit as the best of its fixed-speed controller and its setup-aware caution levels, so the reference is not handicapped by a setup it was never tuned for.
 
 ## Runtime responsibility boundary
 
