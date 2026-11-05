@@ -35,13 +35,13 @@ and only one generation, so these numbers say only that the reviewed code paths
 completed with the saved deterministic outputs. They are too small to support a
 general claim of algorithm superiority or learning quality.
 
-The stronger learning evidence currently belongs to a separate controlled
-Fixed GA fixture: its median fitness rose from `0.000000` to `99.599264` over
-seven generations, and its champion beat a seeded random network using
-identical vehicle genes. The NEAT gate proves multi-generation completion,
-shared evaluation, immutable active-episode parameters, and deterministic
-checkpoint continuation; it does not yet claim an equivalent improvement
-study.
+The stronger learning evidence is the
+[learning benchmark](verification/learning-benchmark.md). It compares each evolved run
+with the same evaluation budget spent without selection, on all three presets across
+five seeds. Evolution beat that control in `11 / 15` Fixed GA cases and `13 / 15` NEAT
+cases. NEAT finished `9 / 15` laps and Fixed GA `0 / 15`, at `16` cars, `10`
+generations, and `30 s`. That is one budget and a small sample, so it does not establish
+a general ranking of the algorithms.
 
 ## How to choose
 

@@ -304,7 +304,10 @@ fixed six-step sampling interval. Each frame carries position, heading, motion,
 controls, and progress; the replay also carries the unchanged controller
 parameters and vehicle setup. The seeded random network and Pure Pursuit
 baselines run on the same track, episode limit, physics, fitness, and champion
-vehicle setup.
+vehicle setup. Because evolved setups can turn less sharply than the default car,
+the Pure Pursuit value is the best of its fixed-speed controller and four
+setup-aware caution levels. See
+[the learning benchmark note](verification/learning-benchmark.md).
 
 At terminal result construction, `python/src/evo_racer/racing_line.py` also
 builds a deterministic geometric reference from the closed Python centerline.

@@ -80,10 +80,28 @@ function championAnswer(result: RunResultV1): string {
   `;
 }
 
-function compareAnswer(result: RunResultV1): string {
+type BaselineComparison = RunResultV1["baselineComparisons"][number];
+
+function crashed(item: BaselineComparison): boolean {
+  return !item.finished && item.collisionCount > 0;
+}
+
+export function outcomeLabel(item: BaselineComparison): string {
+  return item.finished
+    ? "Finished"
+    : crashed(item)
+      ? "Crashed"
+      : "Ran out of time";
+}
+
+export function compareAnswer(result: RunResultV1): string {
   const champion = result.champion.fitness;
   const references = result.baselineComparisons.slice(1);
   const ahead = references.filter((item) => champion > item.fitness);
+  const weakBars = ahead
+    .filter(crashed)
+    .map((item) => escapeHtml(item.label))
+    .join(", ");
   const headline =
     references.length === 0
       ? "No reference controllers"
@@ -98,7 +116,7 @@ function compareAnswer(result: RunResultV1): string {
       .map((item) => `${escapeHtml(item.label)}: ${item.fitness.toFixed(1)}`)
       .join(
         ". ",
-      )}${references.length === 0 ? "" : "."} Champion: ${champion.toFixed(1)}.</p>
+      )}${references.length === 0 ? "" : "."} Champion: ${champion.toFixed(1)}.${weakBars === "" ? "" : ` Beating a reference that crashed says little: ${weakBars}.`}</p>
   `;
 }
 
@@ -157,7 +175,7 @@ export function renderResults(
           <th scope="row">${escapeHtml(item.label)}</th>
           <td>${item.fitness.toFixed(1)}</td>
           <td>${(item.progress * 100).toFixed(1)}%</td>
-          <td>${item.finished ? "Finished" : "Did not finish"}</td>
+          <td>${outcomeLabel(item)}</td>
         </tr>
       `,
     )
@@ -240,7 +258,7 @@ export function renderResults(
           </section>
           <section class="panel" aria-labelledby="baseline-title">
             <h2 id="baseline-title">Champion vs baselines</h2>
-            <p class="field-help">Same track and car setup. The seeded random network is untrained, and Pure Pursuit is a hand-written steering reference.</p>
+            <p class="field-help">Same track and car setup. The seeded random network is untrained. Pure Pursuit is a hand-written driver, shown at its best of several caution levels for this car.</p>
             <div class="table-scroll" tabindex="0" role="region" aria-label="Champion and baseline table">
               <table><thead><tr><th>Driver</th><th>Fitness</th><th>Lap</th><th>Outcome</th></tr></thead><tbody>${comparisons}</tbody></table>
             </div>

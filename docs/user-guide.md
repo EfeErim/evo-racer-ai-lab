@@ -258,7 +258,8 @@ setup, and **Start a new run** returns to Welcome. Results also contain:
   minimum-curvature reference calculated by Python;
 - a fitness-over-generations chart with labeled axes and a legend, plus the
   champion compared with a seeded random network and Pure Pursuit using the
-  champion's vehicle setup;
+  champion's vehicle setup. Pure Pursuit shows its best of several caution levels
+  for that car, and the table says if a reference crashed;
 - run identity, algorithm, seed, track hash, and completed generation count
   under **Run details**; and
 - earlier saved champions only when their track, population, generation budget,

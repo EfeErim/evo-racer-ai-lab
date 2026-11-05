@@ -175,6 +175,9 @@ Phase 4 adds the deterministic Python evaluator shared by future algorithms:
   and brake outputs change during an episode.
 - Seeded random-network and Pure Pursuit baselines use the same physics,
   sensors, progress, termination, and telemetry path.
+- `npm run test:learning` reruns the saved
+  [learning benchmark](docs/verification/learning-benchmark.md), which compares
+  evolution with the same evaluation budget spent without selection.
 - The browser consumes version 1 selected-car telemetry from
   `POST /v1/simulation/preview`; it does not reproduce simulation rules.
 
