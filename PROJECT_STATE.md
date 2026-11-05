@@ -76,9 +76,10 @@ of `e3027dc`.
   button. The **Ran out of time** label is covered by Vitest only, since no packaged run
   produced it.
 - `npm run test:phase10` was not run as one command. Its source checks, browser flows,
-  matrix, build, release acceptance, and `git diff --check` were run individually;
-  `npm run smoke:m0` was not. A clean Windows machine with its network adapters disabled
-  was not tested.
+  matrix, smoke, build, release acceptance, and `git diff --check` were run individually.
+  A clean Windows machine with its network adapters disabled was not tested.
+- `npm run smoke:m0` passed after commit `b833259`, which contains these results. CI
+  runs only on pushes to `main` and on pull requests, so that branch has no CI run.
 
 Recorded on `2026-11-04` and `2026-11-05` for the CI repair, NEAT run isolation, port
 ownership, and new Quick check budget. Causes and measurements are in
