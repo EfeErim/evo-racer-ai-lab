@@ -8,7 +8,7 @@ evidence lives in
 ## Current position
 
 - Current phase: `Post-release v1.1.1 game and interface hardening`
-- Status: `Generator v4 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
+- Status: `Generator v5 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
 - Active milestone: `None`
 - Last verified: `2026-11-05`
 
@@ -63,8 +63,8 @@ ownership, and new Quick check budget. Causes and measurements are in
 - The packaged EXE was clicked through Review, Start, Training, and Results. The Quick
   check on Easy Oval with seed `42` finished a lap. A second launch exited and left one
   listening process.
-- CI has not run on GitHub with these changes. Every earlier recorded run on `main`
-  failed.
+- GitHub CI run `41912431292` passed on `bcbf4e2`, including source checks and browser
+  flows. Every earlier recorded run on `main` failed.
 
 Recorded on `2026-11-04` for the UI redesign, since committed in `0c12cf6` with the
 race buffer below. Findings and measurements are in
@@ -131,8 +131,8 @@ Recorded on `2026-11-04` for the repository cleanup on branch
   `typescript-eslint` `8.65.0`, according to its installed `peerDependencies`
   and <https://typescript-eslint.io/users/dependency-versions/>. `npm run lint`
   passes.
-- `.github/workflows/ci.yml` parses as YAML through Prettier but has not run on
-  GitHub.
+- `.github/workflows/ci.yml` parsed as YAML through Prettier. It had not run on
+  GitHub at that time.
 - Release acceptance blocks outbound traffic with unreachable proxies. A clean
   Windows machine with its network adapters disabled was not tested.
 
@@ -144,8 +144,8 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Confirm CI on GitHub. The workflow runs only on pull requests and pushes to `main`, so
-the pushed `feat/ui-redesign` branch needs a pull request or a merge to start it.
+Save a repeatable learning benchmark and correct the Pure Pursuit comparison before
+changing physics.
 Push, tag, publish, or apply the optional trusted-signing path only on explicit
 request. Preserve the immutable
 `v1.0.0` and `v1.1.0` tags, published

@@ -1,6 +1,7 @@
 # First run, run isolation, and CI repair
 
-Recorded on `2026-11-04` and `2026-11-05`. CI has not run on GitHub with these changes.
+Recorded on `2026-11-04` and `2026-11-05`. GitHub CI run `41912431292` passed on
+commit `bcbf4e2`, including source checks and browser flows.
 
 ## CI
 
@@ -85,5 +86,4 @@ copied value.
 
 ## Limits
 
-- CI on GitHub is unconfirmed until this is pushed. Those runners may be slower.
 - Clean Windows with network adapters disabled and human usability testing were not done.

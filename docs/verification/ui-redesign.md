@@ -1,8 +1,9 @@
 # UI redesign verification
 
 Recorded on `2026-11-04` for the redesign requested in
-[`docs/ui-redesign-prompt.md`](../ui-redesign-prompt.md). Nothing here is
-committed. It sits on top of the uncommitted two-second race buffer.
+[`docs/ui-redesign-prompt.md`](../ui-redesign-prompt.md). It was committed in
+`0c12cf6` together with the two-second race buffer. Build values below describe that
+build.
 
 ## Initial audit
 
