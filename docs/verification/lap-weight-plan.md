@@ -38,3 +38,35 @@ as in Stage 1. The same three criteria must hold. Stage 1 runs then count as dev
 evidence only.
 
 With three seeds per cell these counts are descriptive. They are not a significance test.
+
+## Result, 2026-11-07
+
+Stage 1 ran all `72` runs in `16.5 min`. Raw evidence:
+[per-run files](../../contracts/lap-weight-dev/) and
+[summary](../../contracts/lap-weight-dev-summary.json).
+
+| `W`  | Finished | Need brakes | Need varied brake | Median lap, paired finishes |
+| ---- | -------: | ----------: | ----------------: | --------------------------: |
+| 300  |  15 / 24 |           9 |                 2 |                     21.03 s |
+| 1500 |  15 / 24 |           9 |                 2 |                     21.03 s |
+| 3000 |  15 / 24 |           9 |                 2 |                     21.03 s |
+
+No weight meets criterion 1, so `W = 300` stays and Stage 2 did not run.
+
+The weight had no effect at all: in all `24` track, algorithm and seed combinations, the
+three weights produced the same champion with the same lap. Only the champion's fitness
+value changed. The patch was active; the same champion scored `2290.8`, `2654.2` and
+`3108.3` under the three weights.
+
+The cause is how candidates are ranked, which this plan should have checked first. A
+finisher always scores at least `2200` and a non-finisher at most `1200`, and among
+finishers fitness falls with lap time whatever `W` is. So any positive `W` gives the same
+order. Fixed GA selects only by order, through elitism and tournaments, so it cannot
+respond to `W`. NEAT uses the values for species offspring shares, but here produced the
+same champions too.
+
+This also corrects the
+[earlier explanation](physics-v2.md#why-a-constant-brake-is-enough): selection already
+prefers the faster of any two finishers, at every weight. A constant brake is not the
+result of lap time being underpaid. Varied braking is simply not found within these
+budgets.

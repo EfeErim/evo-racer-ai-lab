@@ -241,7 +241,10 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 Follow the ordered roadmap and its v1.2.0 success definition in
 [`docs/YAPILACAKLAR.md`](docs/YAPILACAKLAR.md). Step 1 is the predeclared lap-time weight
-experiment in [`docs/verification/lap-weight-plan.md`](docs/verification/lap-weight-plan.md).
+experiment in [`docs/verification/lap-weight-plan.md`](docs/verification/lap-weight-plan.md),
+now closed: raising the lap-time weight changed no champion in `24 / 24` cases because
+selection already orders finishers by lap time, so fitness stays unchanged. Step 2 is
+next: tie each training plan's copy and each preset to measured outcomes.
 Work directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human

@@ -38,17 +38,17 @@ Her adımın bir çıkış ölçütü var. Ölçüt sağlanmadan sonraki adıma 
 
 [Önceden kaydedilmiş deney](verification/lap-weight-plan.md) tur süresi ağırlığını `W = 300, 1500, 3000` ile yeni seed ve pistlerde karşılaştırıyor.
 
-- [ ] Aşama 1 sonucunu plandaki üç ölçütle değerlendir.
-- [ ] Bir ağırlık seçilirse aşama 2'yi taze seed'lerle çalıştır.
-- [ ] Onaylanırsa fitness'ı değiştir, `evolutionContractVersion`'ı 2 yap, eski kayıtları fizik v2'deki gibi okunur tut, fixture'ları yeniden üret. Onaylanmazsa `W = 300` kalır ve sonuç kaydedilir.
+- [x] Aşama 1 sonucunu plandaki üç ölçütle değerlendir. Sonuç: ağırlığın hiçbir etkisi olmadı. 24 vakanın 24'ünde üç ağırlık da aynı şampiyonu üretti, çünkü seçilim sıralamaya bakıyor ve bitirenleri her ağırlıkta zaten tur süresine göre sıralıyor. [Sonuç](verification/lap-weight-plan.md#result-2026-11-07)
+- [x] Karar: `W = 300` kalıyor, aşama 2 çalıştırılmadı, uygulama kodu değişmedi.
+- [x] Önceki "fitness tur süresine az ödüyor" açıklaması düzeltildi. Değişken fren her turda 4,4 saniyeye kadar kazandırıyor, ama evrim bu bütçelerde onu bulamıyor.
 
-**Çıkış:** Karar ve kanıtı `physics-v2.md`'de; tüm gate'ler geçiyor.
+**Çıkış:** Sağlandı. v1.2.0 için fren davranışı daha fazla zorlanmıyor. Değişken frenin bulunması 2. adımdaki daha uzun bütçelerde ölçülecek; bulunmazsa bu bir arama sınırı olarak dürüstçe raporlanacak.
 
 ### 2. Önerilen ayarları kanıta bağla
 
 [Togelius ve Lucas](https://arxiv.org/abs/cs/0611006) ile [Cardamone ve diğerleri](https://re.public.polimi.it/handle/11311/565272), pist zorluğunun ve değerlendirme süresinin evrilen sürücüyü belirlediğini gösteriyor. Ölçümler de aynı yönde: Chicane'de en iyi sabit hız 33,1 s sürüyor, yani 30 s sınırı bu pisti yapısal olarak zorlaştırıyor.
 
-- [ ] Önceden yazılı bir planla, ayar seçiminde kullanılmamış seed'lerle Quick check, Balanced ve Thorough'u üç presette ve iki algoritmada ölç. Duvar saati süresini de kaydet.
+- [ ] Önceden yazılı bir planla, ayar seçiminde kullanılmamış seed'lerle Quick check, Balanced ve Thorough'u üç presette ve iki algoritmada ölç. Duvar saati süresini ve şampiyonların değişken fren kullanımını da kaydet.
 - [ ] Ölçüm gerektirirse Chicane için en az 45 s deneme süresi öner, ya da hangi planın onu çözdüğünü arayüzde açıkça yaz.
 - [ ] Balanced açıklamasını gerçeğe uydur ("daha uzun deneme" yanlış). Fixed GA'nın Quick check'te zayıf olduğunu ölçüm doğrularsa, önerilen algoritmaları buna göre seç.
 
