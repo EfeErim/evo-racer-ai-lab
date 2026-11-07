@@ -22,7 +22,13 @@ SEEDS = (31013, 51031, 71053)
 
 
 def run_one(
-    track: dict[str, Any], algorithm: str, seed: int, population: int, generations: int, fixed: bool
+    track: dict[str, Any],
+    algorithm: str,
+    seed: int,
+    population: int,
+    generations: int,
+    fixed: bool,
+    episode_seconds: float = 30.0,
 ) -> dict[str, Any]:
     counts = {"episodes": 0, "trainingSteps": 0, "otherSteps": 0}
     evaluate = evaluate_episode
@@ -55,7 +61,7 @@ def run_one(
                 algorithm=cast(Any, algorithm),
                 population_size=population,
                 generations=generations,
-                episode_seconds=30.0,
+                episode_seconds=episode_seconds,
                 seed=seed,
             ),
         )
