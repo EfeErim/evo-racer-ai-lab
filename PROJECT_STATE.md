@@ -75,7 +75,11 @@ top of `dd65b40`, then on `main`. Findings and limits are in
   `contracts/training-plans-a-summary.json`. Quick check and Balanced finish Easy Oval and
   Technical Circuit with their shipped algorithms in `3 / 3` seeds but not Chicane
   Challenge. Thorough finishes all three presets with both algorithms in at least `2 / 3`.
-  Evolved champions scored higher than their control in `51 / 54` cases. The plan copy in `src/onboarding.ts` now reflects this.
+  Evolved champions scored higher than their control in `51 / 54` cases. The plan copy
+  in `src/onboarding.ts` now reflects this.
+- On `2026-11-07`, `npx playwright test e2e/accessibility.spec.ts` passed `4` tests: `18`
+  axe scans with no violations, and reflow checks at `320` and `640` px. `npm run
+test:e2e` passed all `35` Chromium flows.
 - The packaged EXE, run with a temporary data folder seeded with physics v1 records, was
   driven through Review, Start, Training, and Results on Quick check. The champion
   finished at fitness `2297.8` against Pure Pursuit `2267.5`. The completed v1 run opened
@@ -255,7 +259,12 @@ closed: the predeclared training-plan measurement in
 [`docs/verification/training-plan-plan.md`](docs/verification/training-plan-plan.md)
 ran `54` paired cases. Every preset has a shipped plan that finishes in at least `2 / 3`
 seeds and beats its control with both algorithms, and Chicane Challenge needs Thorough.
-The plan descriptions now state those outcomes. Step 3, accessibility, is next.
+The plan descriptions now state those outcomes. Step 3's automated part is closed in
+[`docs/verification/accessibility.md`](docs/verification/accessibility.md): axe reports
+no WCAG A/AA violations on nine surfaces in both color schemes, every surface reflows at
+`320` and `640` px, and the keyboard journey passes at `1280` and `320` px. The NVDA
+checklist in that file is the remaining manual item. Step 4, offline Windows Sandbox
+acceptance, needs the user to enable Windows Sandbox first.
 Work directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human

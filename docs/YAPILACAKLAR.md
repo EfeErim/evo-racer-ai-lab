@@ -13,7 +13,7 @@ Eksik olan özellik değil, **kanıt ve kalite**:
 | Öğrenme kalitesi             | Sağlandı. Her presette önerilen plan iki algoritmada da en az 2/3 tur bitiriyor ve kontrolü geçiyor; Chicane yalnızca Thorough ile. Fren hâlâ çoğunlukla sabit hız sınırlayıcı. | Kullanıcı her pist için çalışan bir plan seçebiliyor. |
 | Önerilen ayarların doğruluğu | Sağlandı. Üç plan açıklaması 54 eşli koşuluk ölçüme dayanıyor.                                                                                                                  | Ekrandaki vaat kanıta dayanıyor.                      |
 | Temiz Windows, ağ kapalı     | Hiç yapılmadı. M9 ve M10 gate'lerinin şartı.                                                                                                                                    | "Tamamen çevrimdışı" iddiasının tek eksik kanıtı.     |
-| Erişilebilirlik              | Otomatik tarama, %200 yakınlaştırma, ekran okuyucu yok.                                                                                                                         | WCAG 2.2 ölçütleri doğrulanmadı.                      |
+| Erişilebilirlik              | axe taraması, %200 ve %400 yeniden akış ve 320 px klavye akışı geçiyor. Ekran okuyucu (NVDA) kontrolü yok.                                                                      | Ekran okuyucu deneyimi doğrulanmadı.                  |
 | Kullanılabilirlik            | Gerçek kullanıcı testi yok.                                                                                                                                                     | "Kolay anlaşılır" iddiası kanıtsız.                   |
 | Yayın                        | v1.1.1 ve fizik v2 yayımlanmadı; sürüm hâlâ `1.1.1`.                                                                                                                            | Kullanıcılar eski `v1.1.0` paketini indiriyor.        |
 
@@ -60,12 +60,12 @@ Her adımın bir çıkış ölçütü var. Ölçüt sağlanmadan sonraki adıma 
 
 [Playwright'ın kendi belgesi](https://playwright.dev/docs/accessibility-testing) `@axe-core/playwright` ile taramayı öneriyor ve otomatik testlerin sorunların yalnızca bir kısmını bulduğunu açıkça söylüyor. Bu yüzden elle kontrol de gerekiyor.
 
-- [ ] Geliştirme bağımlılığı olarak `@axe-core/playwright` ekle; Welcome, Track, Settings, Review, Training ve Results'ı `wcag2a`, `wcag2aa`, `wcag22aa` etiketleriyle tara. Pakete girmez, çevrimdışı ürünü etkilemez.
-- [ ] Önerilen akışı yalnızca klavyeyle ve 320 CSS px genişlikte (%400'e denk yeniden akış) uçtan uca test et; yatay kaydırma olmamalı.
-- [ ] Bulunan ciddi ve kritik ihlalleri düzelt.
-- [ ] 🧑 NVDA ile 15 dakikalık kontrol listesini tamamla: Start, durum mesajları, Results tablosu okunuyor mu. Listeyi ben hazırlarım.
+- [x] `@axe-core/playwright` `4.14.0` geliştirme bağımlılığı olarak eklendi. Dokuz ekran iki renk temasında WCAG 2.0, 2.1 ve 2.2 A/AA etiketleriyle taranıyor. [Kanıt](verification/accessibility.md)
+- [x] Önerilen akış yalnızca klavyeyle 1280 ve 320 px'te uçtan uca test ediliyor. Dokuz ekran 320 px'te (%400) ve 640 px'te (%200) taşmasız.
+- [x] Bulunan tek ciddi ihlal düzeltildi: Review özetindeki `<dl>` yapısı. 320 px'teki 41 px'lik taşma da düzeltildi. Şimdi 18 taramanın hiçbirinde bulgu yok.
+- [ ] 🧑 NVDA ile 15 dakikalık [kontrol listesini](verification/accessibility.md#nvda-checklist) tamamla.
 
-**Çıkış:** Başarı tanımının 4. maddesi.
+**Çıkış:** Başarı tanımının 4. maddesinin otomatik kısmı sağlandı. Adım NVDA kontrolü bitince kapanır.
 
 ### 4. Temiz Windows'ta çevrimdışı kabul
 

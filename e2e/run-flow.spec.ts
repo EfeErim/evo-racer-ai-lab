@@ -60,7 +60,7 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
   await page
     .getByRole("button", { name: "Review recommended experiment" })
     .click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
     page.getByText(
@@ -105,7 +105,7 @@ test("reduced-motion Training shows the displayed champion's complete recorded p
   await page
     .getByRole("button", { name: "Review recommended experiment" })
     .click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
   const currentPath = page.locator(".current-generation-path");
@@ -160,7 +160,7 @@ test("Training shows the car from the previous two seconds on a two-second caden
   await page.getByRole("button", { name: "Continue to settings" }).click();
   await page.locator('[data-training-preset="balanced"]').click();
   await page.getByRole("button", { name: "Review experiment" }).click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
   const stage = page.locator(".live-race-stage");
@@ -229,7 +229,7 @@ test("Windows reduced motion stays the default until the user shows race motion"
   await page
     .getByRole("button", { name: "Review recommended experiment" })
     .click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(page.locator(".live-race-panel")).toBeVisible({
     timeout: 15_000,
@@ -372,7 +372,7 @@ test("recommended offline run reaches results without starting automatically", a
   releaseInitialValidation?.();
   await page.waitForTimeout(200);
   await expect(page.getByText("Checking the setup")).toBeVisible();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await expect(refreshedEditTrack).toBeFocused();
 
   await page.getByRole("button", { name: /Start training/ }).click();
@@ -390,7 +390,7 @@ test("recommended offline run reaches results without starting automatically", a
     page.getByRole("button", { name: /Start training/ }),
   ).toBeDisabled();
   await page.getByRole("button", { name: "Check again" }).click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
@@ -679,7 +679,7 @@ test("a transient run-command failure preserves controls and recovers", async ({
   await page
     .getByRole("button", { name: "Review recommended experiment" })
     .click();
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
   const recovery = page.getByRole("heading", {

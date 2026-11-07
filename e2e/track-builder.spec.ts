@@ -397,7 +397,7 @@ test("a generated track stays a candidate until Use this track, then reaches Sta
     "Technical Long 90210",
   );
   await expect(page.locator(".review-summary")).toContainText("24 pieces");
-  await expect(page.getByText("Setup is valid")).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
 
   let submittedTrackName = "";
   let submittedPieceCount = 0;
