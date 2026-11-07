@@ -1,0 +1,276 @@
+{
+  "algorithm": "fixed-ga",
+  "champion": {
+    "candidateId": "g0018-c0011",
+    "fitness": 3270.0,
+    "genome": {
+      "algorithm": "fixed-ga",
+      "contractVersion": 1,
+      "network": {
+        "activations": {
+          "brake": "sigmoid",
+          "hidden": "tanh",
+          "steering": "tanh",
+          "throttle": "sigmoid"
+        },
+        "contractVersion": 1,
+        "parameters": [
+          -0.6207282119054902,
+          -0.7872700434698455,
+          0.16615340428765757,
+          0.03613979195009477,
+          1.0004742640330837,
+          -0.04770821573468542,
+          0.9564699401860131,
+          0.1541490883796548,
+          1.0344738870343047,
+          0.7215829232531813,
+          -0.9050257189784056,
+          -0.6086776621483017,
+          -0.41266155875808785,
+          0.7932917683406511,
+          0.5845746224132098,
+          -0.25232139916567176,
+          -0.03603802132750533,
+          0.3987860357874825,
+          -0.7156177271953987,
+          -0.16416317005434444,
+          -0.812298289717384,
+          0.5371225458108451,
+          -0.6010291657665381,
+          0.11574300836273235,
+          0.21294620376899923,
+          -0.9981400000892111,
+          0.9676423245181536,
+          -0.3793233698273943,
+          0.1550239860369009,
+          0.4685652450264618,
+          -0.37772674949072194,
+          0.261108732991729,
+          -0.5337915923130603,
+          -0.025404540751245756,
+          0.8151890175594043,
+          -0.4273813959632576,
+          0.9969341834053502,
+          -1.32350710695397,
+          -0.13309728443481111,
+          -0.9435283621142077,
+          -0.32499999644563915,
+          -0.8042250118562728,
+          -1.1746352884742803,
+          1.2060638165573356,
+          -0.2564030618509651,
+          1.5299699772221886,
+          0.5015737895702814,
+          -0.05987538803191769,
+          0.00672881517661339,
+          1.363255688652433,
+          -0.9770474113346732,
+          -0.8669316822611428,
+          -0.013947544878733398,
+          0.10447681324539865,
+          -0.5131298520458815,
+          -0.33056412679968333,
+          1.8793108544016757,
+          -1.0591917073544557,
+          -0.7139896214073879,
+          0.48956694039292414,
+          -0.7792188914029725,
+          0.20059435232179393,
+          1.3123702943954805,
+          -0.3979079869351012,
+          0.6455578254422687,
+          0.19558801848742768,
+          -0.7031146777512762,
+          -0.2623225071556737,
+          0.8010734176805929,
+          -0.9213690154040797,
+          -0.9441755054151455,
+          -0.9528060315849152,
+          0.7387086323046829,
+          -0.9250930718064956,
+          -1.4079242714619027,
+          -0.6972026693140323,
+          1.3693996937491368,
+          1.0396569395023576,
+          -1.8193172001528333,
+          1.1989764843668558,
+          0.13318713601310583,
+          0.6915151457202002,
+          -0.984837220584326,
+          0.6431475307819663,
+          0.8277119135171909,
+          0.9915801374646693,
+          -1.0300597147754988
+        ],
+        "topology": {
+          "hiddenCount": 6,
+          "inputCount": 10,
+          "outputCount": 3
+        }
+      },
+      "vehicleGenes": {
+        "frontBrakeBias": 0.46596746499135133,
+        "frontDriveBias": 0.7348615674803309,
+        "performanceLogits": [
+          0.1356087023788899,
+          -0.814246096209071,
+          -0.8993677620868714,
+          1.136605138880327,
+          1.4873843220784089
+        ]
+      }
+    },
+    "progress": 1.0,
+    "vehicleSetup": {
+      "acceleration": 4.371594123072481,
+      "brakeStrength": 7.469249334318149,
+      "frontBrakeBias": 0.46596746499135133,
+      "frontDriveBias": 0.7348615674803309,
+      "gripRecovery": 4.7842965563326105,
+      "maxSpeed": 24.16156377019105,
+      "steeringAgility": 1.0594309422508428
+    }
+  },
+  "championFitness": 3270.0,
+  "constantMeanBrake": {
+    "brakeStdDev": 0.0,
+    "brakeSteeringCorrelation": null,
+    "brakingStepFraction": 1.0,
+    "finished": false,
+    "hardBrakingStepFraction": 0.0,
+    "lapSeconds": null,
+    "meanBrake": 0.05748323312434354,
+    "progress": 0.9856040598957733,
+    "termination": "collision"
+  },
+  "fitnessHistory": [
+    {
+      "bestFitness": 31.76356685,
+      "generation": 0,
+      "medianFitness": 0.0
+    },
+    {
+      "bestFitness": 40.08219283,
+      "generation": 1,
+      "medianFitness": 0.0
+    },
+    {
+      "bestFitness": 64.66628508,
+      "generation": 2,
+      "medianFitness": 0.0
+    },
+    {
+      "bestFitness": 64.66628508,
+      "generation": 3,
+      "medianFitness": 0.0
+    },
+    {
+      "bestFitness": 64.66628508,
+      "generation": 4,
+      "medianFitness": 0.11375725
+    },
+    {
+      "bestFitness": 296.21532364,
+      "generation": 5,
+      "medianFitness": 19.39496689
+    },
+    {
+      "bestFitness": 336.3631921,
+      "generation": 6,
+      "medianFitness": 0.64217059
+    },
+    {
+      "bestFitness": 376.79166528,
+      "generation": 7,
+      "medianFitness": 15.39389021
+    },
+    {
+      "bestFitness": 2860.0,
+      "generation": 8,
+      "medianFitness": 85.81054824
+    },
+    {
+      "bestFitness": 2860.0,
+      "generation": 9,
+      "medianFitness": 101.41321219
+    },
+    {
+      "bestFitness": 2860.0,
+      "generation": 10,
+      "medianFitness": 355.84593771
+    },
+    {
+      "bestFitness": 3183.33333333,
+      "generation": 11,
+      "medianFitness": 433.51481093
+    },
+    {
+      "bestFitness": 3183.33333333,
+      "generation": 12,
+      "medianFitness": 1046.53909076
+    },
+    {
+      "bestFitness": 3200.0,
+      "generation": 13,
+      "medianFitness": 1771.66666673
+    },
+    {
+      "bestFitness": 3201.66666667,
+      "generation": 14,
+      "medianFitness": 1758.27003649
+    },
+    {
+      "bestFitness": 3208.33333333,
+      "generation": 15,
+      "medianFitness": 761.89967144
+    },
+    {
+      "bestFitness": 3241.66666667,
+      "generation": 16,
+      "medianFitness": 638.45634539
+    },
+    {
+      "bestFitness": 3241.66666667,
+      "generation": 17,
+      "medianFitness": 1124.66750633
+    },
+    {
+      "bestFitness": 3270.0,
+      "generation": 18,
+      "medianFitness": 1715.06266076
+    },
+    {
+      "bestFitness": 3270.0,
+      "generation": 19,
+      "medianFitness": 1076.31534877
+    }
+  ],
+  "lapTimeWeight": 3000.0,
+  "seed": 9011,
+  "simulationContractVersion": 2,
+  "stage": "dev",
+  "trackId": "easy-oval",
+  "withBrake": {
+    "brakeStdDev": 0.01915552860744808,
+    "brakeSteeringCorrelation": -0.16282951400886694,
+    "brakingStepFraction": 0.6675302245250432,
+    "finished": true,
+    "hardBrakingStepFraction": 0.0,
+    "lapSeconds": 19.3,
+    "meanBrake": 0.05748323312434354,
+    "progress": 1.0,
+    "termination": "lap_complete"
+  },
+  "withoutBrake": {
+    "brakeStdDev": 0.0,
+    "brakeSteeringCorrelation": null,
+    "brakingStepFraction": 0.0,
+    "finished": false,
+    "hardBrakingStepFraction": 0.0,
+    "lapSeconds": null,
+    "meanBrake": 0.0,
+    "progress": 0.8944816634160854,
+    "termination": "collision"
+  }
+}

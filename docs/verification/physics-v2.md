@@ -236,8 +236,11 @@ within `60 s`. The grids are coarse, so the gaps are lower bounds.
   use, the best varied lap on Technical Circuit was slower than the same policy without
   brakes, and on the generated track a constant speed was fastest.
 
-These results suggest the reward, not the physics alone, keeps evolved drivers at a
-constant brake. They do not test that: no fitness or settings change was tried.
+These results first suggested that the reward keeps evolved drivers at a constant brake.
+The [lap-time weight experiment](lap-weight-plan.md#result-2026-11-07) refuted that.
+Raising the lap-time weight five- or tenfold left every champion unchanged, because
+selection already ranks any two finishers by lap time. Varied braking is worth up to
+`4.4 s` a lap, but evolution does not find it within these budgets.
 
 ## Outstanding verification
 
