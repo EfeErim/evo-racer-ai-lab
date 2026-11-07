@@ -10,7 +10,7 @@ evidence lives in
 - Current phase: `Post-release v1.1.1 game and interface hardening`
 - Status: `Physics v2 and its saved-run compatibility are on main and source-, CI-, Chromium-, and Windows-package-verified; evolved champions use the brake mainly as a constant speed limit; the rebuilt artifact remains unsigned and unpublished`
 - Active milestone: `None`
-- Last verified: `2026-11-06`
+- Last verified: `2026-11-07`
 
 ## Milestones
 
@@ -69,6 +69,13 @@ top of `dd65b40`, then on `main`. Findings and limits are in
   genomes and reproduced each saved step count, finish flag, and termination. Of `55`
   finishers, `36` fail without brakes, but `54` still finish with the brake held constant
   at its mean. This analysis is exploratory and was added after the matrix ran.
+- On `2026-11-07`, `scripts/run-python.ps1 python/tools/training_plan_study.py a` ran the
+  predeclared training-plan measurement: `54` paired cases on seeds `20011`, `22013`,
+  `24019`, saved in `contracts/training-plans-a/` and
+  `contracts/training-plans-a-summary.json`. Quick check and Balanced finish Easy Oval and
+  Technical Circuit with their shipped algorithms in `3 / 3` seeds but not Chicane
+  Challenge. Thorough finishes all three presets with both algorithms in at least `2 / 3`.
+  Evolved champions scored higher than their control in `51 / 54` cases. The plan copy in `src/onboarding.ts` now reflects this.
 - The packaged EXE, run with a temporary data folder seeded with physics v1 records, was
   driven through Review, Start, Training, and Results on Quick check. The champion
   finished at fitness `2297.8` against Pure Pursuit `2267.5`. The completed v1 run opened
@@ -244,7 +251,11 @@ Follow the ordered roadmap and its v1.2.0 success definition in
 experiment in [`docs/verification/lap-weight-plan.md`](docs/verification/lap-weight-plan.md),
 now closed: raising the lap-time weight changed no champion in `24 / 24` cases because
 selection already orders finishers by lap time, so fitness stays unchanged. Step 2 is
-next: tie each training plan's copy and each preset to measured outcomes.
+closed: the predeclared training-plan measurement in
+[`docs/verification/training-plan-plan.md`](docs/verification/training-plan-plan.md)
+ran `54` paired cases. Every preset has a shipped plan that finishes in at least `2 / 3`
+seeds and beats its control with both algorithms, and Chicane Challenge needs Thorough.
+The plan descriptions now state those outcomes. Step 3, accessibility, is next.
 Work directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human

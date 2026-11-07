@@ -103,7 +103,7 @@ export const TRAINING_PRESETS = [
     id: "quick",
     name: "Quick check",
     outcome:
-      "See the full loop work. The shortest run: usually enough for an Easy Oval lap, not for harder tracks.",
+      "The shortest run. In testing it usually completed a lap on Easy Oval and Technical Circuit, but not on Chicane Challenge.",
     description: "16 cars × 10 generations × 30 s",
     settings: {
       algorithm: "neat",
@@ -117,7 +117,7 @@ export const TRAINING_PRESETS = [
     id: "balanced",
     name: "Balanced",
     outcome:
-      "More cars and more time per attempt, for a longer look at progress.",
+      "More cars and generations with a fixed-size network. In testing it usually completed a lap on Easy Oval and Technical Circuit, but not on Chicane Challenge.",
     description: "24 cars × 20 generations × 30 s",
     settings: {
       algorithm: "fixed-ga",
@@ -131,7 +131,7 @@ export const TRAINING_PRESETS = [
     id: "thorough",
     name: "Thorough",
     outcome:
-      "The longest preset, using a network that can grow. It costs the most.",
+      "Use this for Chicane Challenge: the only plan that usually completed a lap there in testing. Longer attempts and a network that can grow make it by far the slowest.",
     description: "48 cars × 40 generations × 60 s",
     settings: {
       algorithm: "neat",

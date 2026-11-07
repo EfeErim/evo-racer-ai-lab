@@ -8,16 +8,16 @@
 
 Eksik olan özellik değil, **kanıt ve kalite**:
 
-| Alan                         | Durum                                                                                                                                                                     | Neden önemli                                                 |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| Öğrenme kalitesi             | Kısmen. Held-out matriste evrim kontrolü 84/96 çiftte geçti; ama Chicane 30 s'de 1/24, Quick check'te Fixed GA 8/24 tur bitiriyor. Fren çoğunlukla sabit hız sınırlayıcı. | Kullanıcının seçebileceği bir preset "öğrenmiyor" görünüyor. |
-| Önerilen ayarların doğruluğu | Balanced metni "daha uzun deneme" diyor ama süre aynı (30 s). Thorough fizik v2'de hiç ölçülmedi.                                                                         | Ekrandaki vaat kanıta dayanmıyor.                            |
-| Temiz Windows, ağ kapalı     | Hiç yapılmadı. M9 ve M10 gate'lerinin şartı.                                                                                                                              | "Tamamen çevrimdışı" iddiasının tek eksik kanıtı.            |
-| Erişilebilirlik              | Otomatik tarama, %200 yakınlaştırma, ekran okuyucu yok.                                                                                                                   | WCAG 2.2 ölçütleri doğrulanmadı.                             |
-| Kullanılabilirlik            | Gerçek kullanıcı testi yok.                                                                                                                                               | "Kolay anlaşılır" iddiası kanıtsız.                          |
-| Yayın                        | v1.1.1 ve fizik v2 yayımlanmadı; sürüm hâlâ `1.1.1`.                                                                                                                      | Kullanıcılar eski `v1.1.0` paketini indiriyor.               |
+| Alan                         | Durum                                                                                                                                                                           | Neden önemli                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Öğrenme kalitesi             | Sağlandı. Her presette önerilen plan iki algoritmada da en az 2/3 tur bitiriyor ve kontrolü geçiyor; Chicane yalnızca Thorough ile. Fren hâlâ çoğunlukla sabit hız sınırlayıcı. | Kullanıcı her pist için çalışan bir plan seçebiliyor. |
+| Önerilen ayarların doğruluğu | Sağlandı. Üç plan açıklaması 54 eşli koşuluk ölçüme dayanıyor.                                                                                                                  | Ekrandaki vaat kanıta dayanıyor.                      |
+| Temiz Windows, ağ kapalı     | Hiç yapılmadı. M9 ve M10 gate'lerinin şartı.                                                                                                                                    | "Tamamen çevrimdışı" iddiasının tek eksik kanıtı.     |
+| Erişilebilirlik              | Otomatik tarama, %200 yakınlaştırma, ekran okuyucu yok.                                                                                                                         | WCAG 2.2 ölçütleri doğrulanmadı.                      |
+| Kullanılabilirlik            | Gerçek kullanıcı testi yok.                                                                                                                                                     | "Kolay anlaşılır" iddiası kanıtsız.                   |
+| Yayın                        | v1.1.1 ve fizik v2 yayımlanmadı; sürüm hâlâ `1.1.1`.                                                                                                                            | Kullanıcılar eski `v1.1.0` paketini indiriyor.        |
 
-**Kabaca:** mühendislik %90, kanıtlanmış ürün %70. Kalan iş az ama sırası önemli: önce öğrenme ve öneriler düzelir, sonra o sürüm doğrulanır ve yayımlanır.
+**Kabaca:** mühendislik %90, kanıtlanmış ürün %80. Öğrenme ve öneriler kanıta bağlandı (1. ve 2. adım). Sırada bu sürümün erişilebilirlik, çevrimdışı ve kullanıcı doğrulaması, ardından yayın var.
 
 ## Başarı tanımı (v1.2.0)
 
@@ -44,15 +44,17 @@ Her adımın bir çıkış ölçütü var. Ölçüt sağlanmadan sonraki adıma 
 
 **Çıkış:** Sağlandı. v1.2.0 için fren davranışı daha fazla zorlanmıyor. Değişken frenin bulunması 2. adımdaki daha uzun bütçelerde ölçülecek; bulunmazsa bu bir arama sınırı olarak dürüstçe raporlanacak.
 
-### 2. Önerilen ayarları kanıta bağla
+### 2. Önerilen ayarları kanıta bağla · tamamlandı
 
 [Togelius ve Lucas](https://arxiv.org/abs/cs/0611006) ile [Cardamone ve diğerleri](https://re.public.polimi.it/handle/11311/565272), pist zorluğunun ve değerlendirme süresinin evrilen sürücüyü belirlediğini gösteriyor. Ölçümler de aynı yönde: Chicane'de en iyi sabit hız 33,1 s sürüyor, yani 30 s sınırı bu pisti yapısal olarak zorlaştırıyor.
 
-- [ ] Önceden yazılı bir planla, ayar seçiminde kullanılmamış seed'lerle Quick check, Balanced ve Thorough'u üç presette ve iki algoritmada ölç. Duvar saati süresini ve şampiyonların değişken fren kullanımını da kaydet.
-- [ ] Ölçüm gerektirirse Chicane için en az 45 s deneme süresi öner, ya da hangi planın onu çözdüğünü arayüzde açıkça yaz.
-- [ ] Balanced açıklamasını gerçeğe uydur ("daha uzun deneme" yanlış). Fixed GA'nın Quick check'te zayıf olduğunu ölçüm doğrularsa, önerilen algoritmaları buna göre seç.
+- [x] [Önceden yazılı planla](verification/training-plan-plan.md) 54 eşli koşu ölçüldü: 3 plan × 3 preset × 2 algoritma × 3 yeni seed. [Sonuç](verification/training-plan-plan.md#result-2026-11-07)
+- [x] Chicane'i yalnızca Thorough çözüyor (60 s denemeler, NEAT 3/3, Fixed GA 2/3). Bu yüzden deneme süresi değişmedi; arayüz Chicane için Thorough'u açıkça söylüyor.
+- [x] Fixed GA'nın Quick check'te zayıf olduğu doğrulandı (Technical Circuit'te 1/3). Quick check zaten NEAT ile geliyor; hiçbir planın algoritması değişmedi, B aşaması gerekmedi.
+- [x] Üç planın açıklaması ölçüme göre yeniden yazıldı. Balanced'daki yanlış "daha uzun deneme" ifadesi kaldırıldı.
+- [x] Daha uzun bütçeler değişken freni bulmadı: 17 Thorough bitiricisinin yalnızca 1'i sabit ortalama frenle bitiremiyor. Bu bir arama sınırı olarak kayıtlı.
 
-**Çıkış:** Başarı tanımının 1. ve 2. maddesi kayıtlı kanıtla sağlanıyor.
+**Çıkış:** Sağlandı. Başarı tanımının 1. maddesi, her preset için şu önerilen planla iki algoritmada da en az 2/3 tur ve kontrol üstünlüğüyle sağlanıyor: Easy Oval için Quick check, Technical Circuit için Balanced, Chicane Challenge için Thorough. 2. madde plan açıklamaları için sağlandı. README iddiaları 6. adımda yayın öncesi yeniden kontrol edilecek.
 
 ### 3. Erişilebilirliği otomatik ve elle doğrula
 
