@@ -8,7 +8,7 @@ evidence lives in
 ## Current position
 
 - Current phase: `Post-release v1.1.1 game and interface hardening`
-- Status: `Physics v2 and its saved-run compatibility are source-, Chromium-, and Windows-package-verified on the uncommitted feat/braking-physics working tree; evolved champions use the brake mainly as a constant speed limit; the rebuilt artifact remains unsigned and unpublished`
+- Status: `Physics v2 and its saved-run compatibility are on main and source-, CI-, Chromium-, and Windows-package-verified; evolved champions use the brake mainly as a constant speed limit; the rebuilt artifact remains unsigned and unpublished`
 - Active milestone: `None`
 - Last verified: `2026-11-06`
 
@@ -50,8 +50,8 @@ is recorded here, and documentation matches behavior.
 
 ## Latest verification
 
-Recorded on `2026-11-06` for physics v2, on the uncommitted `feat/braking-physics`
-working tree on top of `dd65b40`. Findings and limits are in
+Recorded on `2026-11-06` and `2026-11-07` for physics v2, first on the working tree on
+top of `dd65b40`, then on `main`. Findings and limits are in
 [`docs/verification/physics-v2.md`](docs/verification/physics-v2.md).
 
 - `npm run test:phase10` passed as one command: `142` Vitest and `180` pytest tests, the
@@ -81,7 +81,14 @@ working tree on top of `dd65b40`. Findings and limits are in
   native confirmation prompt itself was not exercised. After Exit, no process or listener
   remained. A clean Windows machine with its network adapters disabled, 200% zoom, a
   screen reader, and first-time participants were not tested.
-- CI has not run on this work, which is not committed.
+- This work landed on `main` as `fbf70eb` and `ef6b5be`. GitHub CI run `42359132144`
+  passed on `ef6b5be`, including source checks and browser flows. A fresh
+  `core.autocrlf=true` clone of that commit also passed `npm run check` (`142` Vitest,
+  `180` pytest) and all `30` Chromium flows.
+- `python/tools/brake_value_study.py`, an exploratory analysis, found that with the
+  default car, varying the brake saves `1.1` to `4.4 s` per lap over the best constant
+  speed. Under current fitness that is worth `11` to `44` points, against `1000` to `1300`
+  for finishing.
 
 Recorded on `2026-11-05` for the faster track generator and test suite, on the
 uncommitted `test/faster-suite` working tree on top of `254ba2a`.
@@ -232,8 +239,9 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Commit physics v2 on `feat/braking-physics`, then decide whether its result is enough:
-brakes now matter, but evolved drivers use them mainly as a constant speed limit. Any
+Decide whether physics v2's result is enough: brakes now matter, but evolved drivers use
+them mainly as a constant speed limit, and current fitness pays little for lap time. Work
+directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human
 usability testing, 200% zoom, a screen reader, and a clean Windows machine with its

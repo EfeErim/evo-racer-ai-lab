@@ -201,6 +201,44 @@ measures dependence on the brake output, not what evolution would find without o
 Changing physics, fitness, or settings in response must use new seeds and tracks, since
 this matrix is now development evidence.
 
+## Why a constant brake is enough
+
+Also exploratory. Command: `scripts/run-python.ps1 python/tools/brake_value_study.py`.
+Raw evidence: [brake value study](../../contracts/brake-value-v2.json). It asks how much
+lap time varying the brake can buy at all, separately from what evolution finds.
+
+Every driver uses the same Pure Pursuit steering law. **Hold** reaches one target speed
+and keeps it, swept from `4` to `39.5 m/s`. **Varied** slows for upcoming curvature
+using `SetupAwarePurePursuit`, swept over `77` caution values. **Varied, no brake** is
+the same with brake output removed. The table shows the fastest finish of each sweep
+within `60 s`. The grids are coarse, so the gaps are lower bounds.
+
+| Car             | Track             |  Hold | Varied | Varied, no brake | Varied saves |
+| --------------- | ----------------- | ----: | -----: | ---------------: | -----------: |
+| Default         | Easy Oval         | 18.90 |  16.90 |            18.90 |       2.00 s |
+| Default         | Technical Circuit | 19.55 |  18.48 |            19.30 |       1.07 s |
+| Default         | Chicane Challenge | 33.13 |  28.73 |            34.30 |       4.40 s |
+| Default         | Technical Short   | 23.02 |  20.22 |            26.07 |       2.80 s |
+| Balanced genome | Easy Oval         | 22.52 |  21.43 |            22.52 |       1.09 s |
+| Balanced genome | Technical Circuit | 27.97 |  25.93 |            24.40 |       2.04 s |
+| Balanced genome | Chicane Challenge |     — |      — |                — |            — |
+| Balanced genome | Technical Short   | 43.08 |  49.75 |            51.70 |      -6.67 s |
+
+- **Lap time is worth little in fitness.** A finish that arrives one second sooner gains
+  `10` points, so the default car's `1.1` to `4.4 s` from varied braking is worth `11` to
+  `44`. A lap finish is worth `1000` to `1300`, and each collision costs `75` plus the
+  lost progress. Selection mostly rewards finishing safely, and a constant speed already
+  does that inside `30 s` on three of the four tracks.
+- **Chicane Challenge is the exception.** The best constant speed needs `33.1 s`, over
+  the `30 s` limit, while varied braking finishes in `28.7 s`. This matches the one
+  held-out champion whose finish depended on a varying brake.
+- **A weaker car gains less.** With the balanced genome that the fixed-vehicle runs
+  use, the best varied lap on Technical Circuit was slower than the same policy without
+  brakes, and on the generated track a constant speed was fastest.
+
+These results suggest the reward, not the physics alone, keeps evolved drivers at a
+constant brake. They do not test that: no fitness or settings change was tried.
+
 ## Outstanding verification
 
 The user confirmed that neither a clean Windows environment nor first-time test

@@ -1,6 +1,6 @@
 # EvoRacer AI Lab yapılacaklar listesi
 
-6 Kasım 2026 itibarıyla yayımlanmış sürüm `v1.1.0`. `main` üzerindeki `dd65b40` CI'dan geçti. Fizik v2 `feat/braking-physics` dalında commit edilmemiş halde duruyor; yerel gate'leri geçti, ZIP'i imzasız ve yayımlanmamış. [Proje durumu](../PROJECT_STATE.md) · [Fizik v2 kanıtı](verification/physics-v2.md) · [GitHub CI](https://github.com/EfeErim/evo-racer-ai-lab/actions/runs/42052993584)
+6 Kasım 2026 itibarıyla yayımlanmış sürüm `v1.1.0`. `main` üzerindeki `dd65b40` CI'dan geçti. Fizik v2 `main` üzerinde (`ef6b5be`) ve [CI'dan geçti](https://github.com/EfeErim/evo-racer-ai-lab/actions/runs/42359132144). ZIP imzasız ve yayımlanmamış. Çalışma doğrudan `main` üzerinde ilerliyor. [Proje durumu](../PROJECT_STATE.md) · [Fizik v2 kanıtı](verification/physics-v2.md) · [GitHub CI](https://github.com/EfeErim/evo-racer-ai-lab/actions/runs/42052993584)
 
 ## 1. P0 · Fizik v2 kayıt uyumluluğu
 
@@ -19,7 +19,8 @@ Referans sürücüde fren bazı koşullarda işe yarıyor. Evrilen şampiyonlard
 - [x] Aynı referans sürücüyü fren açık ve kapalı çalıştır. Pist başına tur tamamlama, çarpışma, ilerleme, viraj giriş hızı ve bitirenlerde tur süresini raporla.
 - [x] Chicane Challenge'da referans sürücüyü önce yeterli süreyle çalıştır. Ardından 30 saniyelik sınırla aynı koşulu tekrarla ve sonuçları ayrı göster.
 - [x] Fizik v2 adayını bu kanıtla değerlendir. Sabit zaman adımı, seed tekrarlanabilirliği ve bölüm boyunca değişmeyen araç ve ağ parametrelerini doğrula.
-- [ ] Evrilen sürücülerin viraj öncesi frenlemesinin hedef olup olmadığına karar ver. Hedefse yeni seed ve pistlerle ölç; mevcut held-out matris artık geliştirme kanıtı.
+- [x] Sabit frenin nedenini incele. Aynı direksiyonla değişken fren, varsayılan araçta turu 1,1–4,4 s kısaltıyor, ama fitness'ta bir saniye yalnızca 10 puan; tur bitirmek 1000–1300 puan. Sabit hız dört pistin üçünde 30 s içinde bitiriyor; Chicane'de bitirmiyor (33,1 s). [Analiz](verification/physics-v2.md#why-a-constant-brake-is-enough)
+- [ ] Viraj öncesi frenleme hedef mi, karar ver. Hedefse seçenekler: fitness'ta tur süresinin ağırlığını artırmak, daha kısa süre sınırı ya da daha zor pistler. Her biri fixture'ları değiştirir ve yeni seed ile pistlerle ölçülmeli.
 
 ## 3. P1 · Regresyon ve öğrenme benchmark'ı
 
@@ -32,7 +33,7 @@ Fizik v2 held-out matrisinde evrim, aynı aday sayısına sahip seçilimsiz kont
 
 ## 4. P1 · Yayın adayı ve kullanıcı doğrulaması
 
-- [x] Son kaynak üzerinde `npm run test:phase10` ve `npm run test:learning` çalıştır. Kaynak, Chromium, paket ve benchmark sonuçlarını ZIP SHA-256 ile birlikte kaydet. Commit karması henüz yok, çünkü çalışma commit edilmedi.
+- [x] Son kaynak üzerinde `npm run test:phase10` ve `npm run test:learning` çalıştır. Kaynak, Chromium, paket ve benchmark sonuçlarını ZIP SHA-256 ile birlikte kaydet. Kod `ef6b5be` ile commit edildi.
 - [ ] Temiz Windows x64 ortamında Wi-Fi ve Ethernet kapalıyken paketli EXE ile Review → Start → Training → Results → yeniden açma akışını tamamla. Yalnızca loopback bağlantısı kullanıldığını ve kurulu Python ya da Node.js gerekmeksizin çalıştığını kaydet. Akış bu makinede denendi; temiz ortam hâlâ yok.
 - [ ] %200 yakınlaştırma, klavye ve ekran okuyucuyla ana görevleri dene. Start, durdurma ve kayıt kontrollerinin erişilebilir kalmasını, durum mesajlarının duyurulmasını doğrula. [Arayüz test kanıtı](verification/ui-redesign.md) · [W3C metin ölçekleme ölçütü](https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html)
 - [ ] İlk kez kullanan kişilerle önerilen deneyi başlatma, üretilmiş pisti seçme ve Results'ta tur, fitness ve Pure Pursuit sonucunu açıklama görevlerini gözlemle. Yanlış yorumları ve tamamlanamayan görevleri kaydet. Şu an katılımcı yok.
