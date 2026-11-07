@@ -1,0 +1,347 @@
+{
+  "plan": "docs/verification/training-plan-plan.md",
+  "rows": [
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 0,
+      "lapSeconds": [],
+      "medianWallSeconds": 88.52097640000284,
+      "needVariedBrake": 0,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 3,
+      "trackId": "chicane-challenge",
+      "works": false
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 1,
+      "lapSeconds": [
+        28.583333333333332
+      ],
+      "medianWallSeconds": 79.86636510002427,
+      "needVariedBrake": 1,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 2,
+      "trackId": "chicane-challenge",
+      "works": false
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        20.783333333333335,
+        24.316666666666666,
+        27.483333333333334
+      ],
+      "medianWallSeconds": 86.69947029999457,
+      "needVariedBrake": 0,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 1,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        18.35,
+        19.516666666666666,
+        20.533333333333335
+      ],
+      "medianWallSeconds": 67.76210280001396,
+      "needVariedBrake": 2,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        19.95,
+        20.866666666666667,
+        22.016666666666666
+      ],
+      "medianWallSeconds": 72.78032249998068,
+      "needVariedBrake": 0,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "technical-circuit",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 2,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        19.2,
+        19.2,
+        20.466666666666665
+      ],
+      "medianWallSeconds": 61.90901040000608,
+      "needVariedBrake": 0,
+      "plan": "balanced",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "technical-circuit",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 1,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 0,
+      "lapSeconds": [],
+      "medianWallSeconds": 33.26901439996436,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 2,
+      "trackId": "chicane-challenge",
+      "works": false
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 0,
+      "lapSeconds": [],
+      "medianWallSeconds": 29.496356199961156,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 3,
+      "trackId": "chicane-challenge",
+      "works": false
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 2,
+      "lapSeconds": [
+        28.9,
+        28.983333333333334
+      ],
+      "medianWallSeconds": 29.534806999959983,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 1,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 2,
+      "collided": 0,
+      "controlFinished": 1,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        21.75,
+        22.1,
+        26.733333333333334
+      ],
+      "medianWallSeconds": 22.80783010000596,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 1,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 1,
+      "lapSeconds": [
+        25.95
+      ],
+      "medianWallSeconds": 29.887154099997133,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 2,
+      "trackId": "technical-circuit",
+      "works": false
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 30.0,
+      "finished": 3,
+      "lapSeconds": [
+        21.733333333333334,
+        22.266666666666666,
+        25.883333333333333
+      ],
+      "medianWallSeconds": 24.605564500030596,
+      "needVariedBrake": 0,
+      "plan": "quick",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "technical-circuit",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 0,
+      "episodeSeconds": 60.0,
+      "finished": 2,
+      "lapSeconds": [
+        28.666666666666668,
+        29.066666666666666
+      ],
+      "medianWallSeconds": 666.7285710999859,
+      "needVariedBrake": 0,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 1,
+      "trackId": "chicane-challenge",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 1,
+      "episodeSeconds": 60.0,
+      "finished": 3,
+      "lapSeconds": [
+        26.133333333333333,
+        28.15,
+        31.6
+      ],
+      "medianWallSeconds": 494.56970359996194,
+      "needVariedBrake": 0,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "chicane-challenge",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 3,
+      "episodeSeconds": 60.0,
+      "finished": 3,
+      "lapSeconds": [
+        17.766666666666666,
+        18.533333333333335,
+        18.95
+      ],
+      "medianWallSeconds": 378.3511228999705,
+      "needVariedBrake": 1,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 3,
+      "episodeSeconds": 60.0,
+      "finished": 3,
+      "lapSeconds": [
+        17.816666666666666,
+        17.816666666666666,
+        19.516666666666666
+      ],
+      "medianWallSeconds": 341.18716689996654,
+      "needVariedBrake": 0,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "easy-oval",
+      "works": true
+    },
+    {
+      "algorithm": "fixed-ga",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 3,
+      "episodeSeconds": 60.0,
+      "finished": 3,
+      "lapSeconds": [
+        18.233333333333334,
+        19.016666666666666,
+        19.75
+      ],
+      "medianWallSeconds": 378.6084146000212,
+      "needVariedBrake": 0,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "technical-circuit",
+      "works": true
+    },
+    {
+      "algorithm": "neat",
+      "beatControl": 3,
+      "collided": 0,
+      "controlFinished": 3,
+      "episodeSeconds": 60.0,
+      "finished": 3,
+      "lapSeconds": [
+        18.35,
+        18.383333333333333,
+        19.216666666666665
+      ],
+      "medianWallSeconds": 276.5580346999923,
+      "needVariedBrake": 0,
+      "plan": "thorough",
+      "runs": 3,
+      "timedOut": 0,
+      "trackId": "technical-circuit",
+      "works": true
+    }
+  ]
+}
