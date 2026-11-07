@@ -10,7 +10,8 @@ Verified on `2026-07-29` on Windows 11 x64 build `26200` with Node.js
 Each of the `18` cases used population `10`, one generation, a `15 s` episode,
 and the canonical fixed `1/60 s` simulation step.
 
-The reviewed fixture is `contracts/phase10-regression.json`. It records the
+The reviewed fixture at this phase was `contracts/phase10-regression.json`, kept as
+the physics v1 record; current physics uses `contracts/phase10-regression-v2.json`. It records the
 track hash, champion and baseline values, replay frame count, and SHA-256 of
 each complete terminal result. Python regenerated the matrix and required exact
 fixture equality. TypeScript independently verified its version, coverage,

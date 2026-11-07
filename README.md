@@ -166,8 +166,8 @@ runtimes.
 Phase 4 adds the deterministic Python evaluator shared by future algorithms:
 
 - Arcade physics advances only at `1/60 s` and models continuous control,
-  speed-dependent steering, lateral slip and grip recovery, drag, and documented
-  front/rear drive and brake bias effects.
+  speed-dependent steering and turn-rate limit, lateral slip and grip recovery,
+  drag, and documented front/rear drive and brake bias effects.
 - Swept collision checks and seven road-edge rays consume geometry derived by
   the existing Python track compiler. Progress is measured along the same closed
   centerline.

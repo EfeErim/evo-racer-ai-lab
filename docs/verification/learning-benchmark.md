@@ -2,7 +2,9 @@
 
 Recorded on `2026-11-05`. Physics, sensors, fitness, and evolution were not changed.
 The saved results are in
-[`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json).
+[`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json). They
+describe physics v1; see [the physics v2 rerun](#rerun-under-physics-v2) for the current
+fixture.
 
 ## Pure Pursuit crashed on the cars it was compared with
 
@@ -91,6 +93,28 @@ What this supports, within this budget:
 - NEAT finished `9 / 15` laps and Fixed GA `0 / 15`. The control finished `1 / 30`.
 - Nothing finished Chicane Challenge in this budget, including Pure Pursuit.
 - Pure Pursuit no longer crashed in any of the `30` cases.
+
+## Rerun under physics v2
+
+The results above are the historical physics v1 record and stay in
+[`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json).
+`npm run test:learning` now verifies
+[`contracts/learning-benchmark-v2.json`](../../contracts/learning-benchmark-v2.json), the
+same `30` cases under [physics v2](physics-v2.md). These seeds informed that physics
+work, so this is development evidence; the held-out results are in that document.
+
+| Track             | Algorithm | Improved on generation 1 | Beat control | Beat Pure Pursuit | Laps: evolved | Laps: control | Laps: Pure Pursuit | Median fitness: evolved | Control | Pure Pursuit |
+| ----------------- | --------- | -----------------------: | -----------: | ----------------: | ------------: | ------------: | -----------------: | ----------------------: | ------: | -----------: |
+| Easy Oval         | Fixed GA  |                        5 |            4 |                 0 |             2 |             0 |                  3 |                     923 |     617 |         2277 |
+| Easy Oval         | NEAT      |                        5 |            5 |                 4 |             4 |             1 |                  5 |                    2278 |     424 |         2266 |
+| Technical Circuit | Fixed GA  |                        5 |            4 |                 1 |             3 |             0 |                  2 |                    2231 |     570 |          746 |
+| Technical Circuit | NEAT      |                        5 |            4 |                 5 |             5 |             1 |                  3 |                    2271 |     634 |         2220 |
+| Chicane Challenge | Fixed GA  |                        5 |            4 |                 0 |             0 |             0 |                  0 |                     319 |     210 |          490 |
+| Chicane Challenge | NEAT      |                        5 |            4 |                 2 |             0 |             0 |                  0 |                     397 |     220 |          472 |
+
+Evolution beat the control in `25 / 30` cases (Fixed GA `12 / 15`, NEAT `13 / 15`), and
+laps rose from `9 / 30` to `14 / 30`, all of that rise from Fixed GA. Pure Pursuit never
+crashed. Nothing finished Chicane Challenge in this budget.
 
 ## Limits
 

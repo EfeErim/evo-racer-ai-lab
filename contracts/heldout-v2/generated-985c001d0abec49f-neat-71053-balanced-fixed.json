@@ -1,0 +1,681 @@
+{
+  "algorithm": "neat",
+  "budget": "balanced",
+  "control": {
+    "baselineComparisons": [
+      {
+        "collisionCount": 0,
+        "controller": "neat:neat-g0000-k000025",
+        "finished": false,
+        "fitness": 245.8015537,
+        "label": "Champion",
+        "progress": 0.20483463,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 0,
+        "controller": "random-network",
+        "finished": false,
+        "fitness": 0.0,
+        "label": "Seeded random network",
+        "progress": 0.0,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 1,
+        "controller": "pure-pursuit",
+        "finished": false,
+        "fitness": 661.29135538,
+        "label": "Pure Pursuit",
+        "progress": 0.61357613,
+        "steps": 1729
+      }
+    ],
+    "champion": {
+      "candidateId": "neat-g0000-k000025",
+      "fitness": 245.8015537,
+      "genome": {
+        "algorithm": "neat",
+        "contractVersion": 1,
+        "network": {
+          "contractVersion": 1,
+          "inputKeys": [
+            -1,
+            -2,
+            -3,
+            -4,
+            -5,
+            -6,
+            -7,
+            -8,
+            -9,
+            -10
+          ],
+          "kind": "feed-forward-dag",
+          "nodes": [
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": 0.056737372461393265,
+              "key": 0,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": 0.16234124982940548
+                },
+                {
+                  "source": -9,
+                  "weight": 0.3940758436328225
+                },
+                {
+                  "source": -8,
+                  "weight": 2.557186381337343
+                },
+                {
+                  "source": -7,
+                  "weight": -1.9154116287000125
+                },
+                {
+                  "source": -6,
+                  "weight": 0.2085284401924878
+                },
+                {
+                  "source": -5,
+                  "weight": 2.06558989378284
+                },
+                {
+                  "source": -4,
+                  "weight": -0.9431841339188979
+                },
+                {
+                  "source": -3,
+                  "weight": 1.8655856890322289
+                },
+                {
+                  "source": -2,
+                  "weight": 0.7361258689851635
+                },
+                {
+                  "source": -1,
+                  "weight": 0.35052384663007397
+                }
+              ],
+              "response": 1.0
+            },
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": 0.950411071575347,
+              "key": 1,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": 0.22640577071918438
+                },
+                {
+                  "source": -9,
+                  "weight": -0.5770887033544881
+                },
+                {
+                  "source": -8,
+                  "weight": -0.5812518533842292
+                },
+                {
+                  "source": -7,
+                  "weight": -0.2901667212389108
+                },
+                {
+                  "source": -6,
+                  "weight": 0.011573665560629257
+                },
+                {
+                  "source": -5,
+                  "weight": 1.5016204639581607
+                },
+                {
+                  "source": -4,
+                  "weight": 1.6624557944193263
+                },
+                {
+                  "source": -3,
+                  "weight": 1.2239026727007973
+                },
+                {
+                  "source": -2,
+                  "weight": 0.710483102132379
+                },
+                {
+                  "source": -1,
+                  "weight": 0.030959763675218768
+                }
+              ],
+              "response": 1.0
+            },
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": -0.06131427287711919,
+              "key": 2,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": -0.02826510195419469
+                },
+                {
+                  "source": -9,
+                  "weight": 0.5344950471482374
+                },
+                {
+                  "source": -8,
+                  "weight": -0.16805438577525136
+                },
+                {
+                  "source": -7,
+                  "weight": -1.1692788967967631
+                },
+                {
+                  "source": -6,
+                  "weight": 1.1517101491804715
+                },
+                {
+                  "source": -5,
+                  "weight": -0.18824685115579634
+                },
+                {
+                  "source": -4,
+                  "weight": -0.15296594586330026
+                },
+                {
+                  "source": -3,
+                  "weight": -0.8095325850902484
+                },
+                {
+                  "source": -2,
+                  "weight": -0.21878070580805997
+                },
+                {
+                  "source": -1,
+                  "weight": 0.7940261747659827
+                }
+              ],
+              "response": 1.0
+            }
+          ],
+          "outputKeys": [
+            0,
+            1,
+            2
+          ],
+          "outputTransforms": [
+            "tanh",
+            "sigmoid",
+            "sigmoid"
+          ]
+        },
+        "vehicleGenes": {
+          "frontBrakeBias": 0.5,
+          "frontDriveBias": 0.5,
+          "performanceLogits": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "progress": 0.20483463,
+      "vehicleSetup": {
+        "acceleration": 5.6,
+        "brakeStrength": 9.2,
+        "frontBrakeBias": 0.5,
+        "frontDriveBias": 0.5,
+        "gripRecovery": 3.2,
+        "maxSpeed": 25.6,
+        "steeringAgility": 0.9199999999999999
+      }
+    },
+    "counts": {
+      "episodes": 480,
+      "otherSteps": 10404,
+      "trainingSteps": 665722
+    },
+    "fitnessHistory": [
+      {
+        "bestFitness": 245.8015537,
+        "generation": 0,
+        "medianFitness": 0.0
+      }
+    ],
+    "lapSeconds": null,
+    "metadata": {
+      "algorithm": "neat",
+      "contractVersion": 1,
+      "episodeSeconds": 30.0,
+      "evolutionContractVersion": 1,
+      "fixedTimeStep": 0.016666666666666666,
+      "generationsCompleted": 1,
+      "generationsRequested": 1,
+      "observationContractVersion": 1,
+      "populationSize": 480,
+      "runId": "heldout-generated-985c001d0abec49f-neat-71053-480-1-True",
+      "seed": 71053,
+      "simulationContractVersion": 2,
+      "status": "completed",
+      "trackId": "generated-985c001d0abec49f",
+      "trackName": "Technical Short 91009",
+      "trackSha256": "38fdcccb0d565d0908f4c2cfd63db13f65415669eba1f0b1e9af15c6f4cdb575"
+    },
+    "termination": "timeout"
+  },
+  "evolved": {
+    "baselineComparisons": [
+      {
+        "collisionCount": 0,
+        "controller": "neat:neat-g0018-k000420",
+        "finished": true,
+        "fitness": 2249.83333333,
+        "label": "Champion",
+        "progress": 1.0,
+        "steps": 1501
+      },
+      {
+        "collisionCount": 0,
+        "controller": "random-network",
+        "finished": false,
+        "fitness": 0.0,
+        "label": "Seeded random network",
+        "progress": 0.0,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 1,
+        "controller": "pure-pursuit",
+        "finished": false,
+        "fitness": 661.29135538,
+        "label": "Pure Pursuit",
+        "progress": 0.61357613,
+        "steps": 1729
+      }
+    ],
+    "champion": {
+      "candidateId": "neat-g0018-k000420",
+      "fitness": 2249.83333333,
+      "genome": {
+        "algorithm": "neat",
+        "contractVersion": 1,
+        "network": {
+          "contractVersion": 1,
+          "inputKeys": [
+            -1,
+            -2,
+            -3,
+            -4,
+            -5,
+            -6,
+            -7,
+            -8,
+            -9,
+            -10
+          ],
+          "kind": "feed-forward-dag",
+          "nodes": [
+            {
+              "activation": "tanh",
+              "aggregation": "sum",
+              "bias": -0.10744547465620313,
+              "key": 8,
+              "links": [],
+              "response": 1.0
+            },
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": 0.5431769699470487,
+              "key": 1,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": 0.5249472195317322
+                },
+                {
+                  "source": -9,
+                  "weight": 0.4830219031911331
+                },
+                {
+                  "source": -8,
+                  "weight": 0.6118153484914503
+                },
+                {
+                  "source": -7,
+                  "weight": 0.646846470416899
+                },
+                {
+                  "source": -6,
+                  "weight": -0.2179977095697002
+                },
+                {
+                  "source": -5,
+                  "weight": -0.9107052308279584
+                },
+                {
+                  "source": -4,
+                  "weight": -2.2383753489529528
+                },
+                {
+                  "source": -3,
+                  "weight": -1.1466069216561747
+                },
+                {
+                  "source": -2,
+                  "weight": 0.6864787595091597
+                },
+                {
+                  "source": -1,
+                  "weight": -1.2810951085815503
+                }
+              ],
+              "response": 1.0
+            },
+            {
+              "activation": "tanh",
+              "aggregation": "sum",
+              "bias": -1.049293906862968,
+              "key": 31,
+              "links": [
+                {
+                  "source": -7,
+                  "weight": -0.20138135658837128
+                },
+                {
+                  "source": 8,
+                  "weight": -1.051417374309713
+                }
+              ],
+              "response": 1.0
+            },
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": -1.2959034370420577,
+              "key": 0,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": 0.935655516286259
+                },
+                {
+                  "source": -8,
+                  "weight": 4.424056252687662
+                },
+                {
+                  "source": -7,
+                  "weight": -0.42613755341952453
+                },
+                {
+                  "source": -4,
+                  "weight": -1.1704084240209234
+                },
+                {
+                  "source": 8,
+                  "weight": 0.34836428196860175
+                },
+                {
+                  "source": 31,
+                  "weight": 0.6780646300476774
+                }
+              ],
+              "response": 1.0
+            },
+            {
+              "activation": "identity",
+              "aggregation": "sum",
+              "bias": -0.6125728014740504,
+              "key": 2,
+              "links": [
+                {
+                  "source": -10,
+                  "weight": -0.4413244245051172
+                },
+                {
+                  "source": -9,
+                  "weight": -0.7612109810102999
+                },
+                {
+                  "source": -8,
+                  "weight": 1.5121739783775159
+                },
+                {
+                  "source": -7,
+                  "weight": -0.7916780125123073
+                },
+                {
+                  "source": -5,
+                  "weight": -0.5511167643449844
+                },
+                {
+                  "source": -4,
+                  "weight": -1.993380995617894
+                },
+                {
+                  "source": -1,
+                  "weight": -2.6782177704992773
+                },
+                {
+                  "source": 31,
+                  "weight": 1.0118330668052455
+                }
+              ],
+              "response": 1.0
+            }
+          ],
+          "outputKeys": [
+            0,
+            1,
+            2
+          ],
+          "outputTransforms": [
+            "tanh",
+            "sigmoid",
+            "sigmoid"
+          ]
+        },
+        "vehicleGenes": {
+          "frontBrakeBias": 0.5,
+          "frontDriveBias": 0.5,
+          "performanceLogits": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "progress": 1.0,
+      "vehicleSetup": {
+        "acceleration": 5.6,
+        "brakeStrength": 9.2,
+        "frontBrakeBias": 0.5,
+        "frontDriveBias": 0.5,
+        "gripRecovery": 3.2,
+        "maxSpeed": 25.6,
+        "steeringAgility": 0.9199999999999999
+      }
+    },
+    "counts": {
+      "episodes": 480,
+      "otherSteps": 10105,
+      "trainingSteps": 538747
+    },
+    "fitnessHistory": [
+      {
+        "bestFitness": 94.73344778,
+        "generation": 0,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 94.73344778,
+        "generation": 1,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 463.03930057,
+        "generation": 2,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 463.03930057,
+        "generation": 3,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 463.03930057,
+        "generation": 4,
+        "medianFitness": 2.22458894
+      },
+      {
+        "bestFitness": 463.03930057,
+        "generation": 5,
+        "medianFitness": 1.41685204
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 6,
+        "medianFitness": 9.69652796
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 7,
+        "medianFitness": 35.33288832
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 8,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 9,
+        "medianFitness": 11.77829086
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 10,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 11,
+        "medianFitness": 42.8942172
+      },
+      {
+        "bestFitness": 926.03393501,
+        "generation": 12,
+        "medianFitness": 47.28177297
+      },
+      {
+        "bestFitness": 1060.06859742,
+        "generation": 13,
+        "medianFitness": 317.79995686
+      },
+      {
+        "bestFitness": 1060.06859742,
+        "generation": 14,
+        "medianFitness": 204.13496138
+      },
+      {
+        "bestFitness": 2235.83333333,
+        "generation": 15,
+        "medianFitness": 175.25911394
+      },
+      {
+        "bestFitness": 2235.83333333,
+        "generation": 16,
+        "medianFitness": 8.95716638
+      },
+      {
+        "bestFitness": 2235.83333333,
+        "generation": 17,
+        "medianFitness": 352.17088105
+      },
+      {
+        "bestFitness": 2249.83333333,
+        "generation": 18,
+        "medianFitness": 462.38114123
+      },
+      {
+        "bestFitness": 2249.83333333,
+        "generation": 19,
+        "medianFitness": 350.95976546
+      }
+    ],
+    "lapSeconds": 25.016666666666666,
+    "metadata": {
+      "algorithm": "neat",
+      "contractVersion": 1,
+      "episodeSeconds": 30.0,
+      "evolutionContractVersion": 1,
+      "fixedTimeStep": 0.016666666666666666,
+      "generationsCompleted": 20,
+      "generationsRequested": 20,
+      "observationContractVersion": 1,
+      "populationSize": 24,
+      "runId": "heldout-generated-985c001d0abec49f-neat-71053-24-20-True",
+      "seed": 71053,
+      "simulationContractVersion": 2,
+      "status": "completed",
+      "trackId": "generated-985c001d0abec49f",
+      "trackName": "Technical Short 91009",
+      "trackSha256": "38fdcccb0d565d0908f4c2cfd63db13f65415669eba1f0b1e9af15c6f4cdb575"
+    },
+    "termination": "lap_complete"
+  },
+  "fixedVehicle": true,
+  "seed": 71053,
+  "simulationContractVersion": 2,
+  "track": {
+    "id": "generated-985c001d0abec49f",
+    "name": "Technical Short 91009",
+    "pieces": [
+      {
+        "kind": "start-finish"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "chicane-right"
+      },
+      {
+        "kind": "turn-right-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "turn-left-90"
+      },
+      {
+        "kind": "chicane-right"
+      },
+      {
+        "kind": "turn-right-45"
+      }
+    ],
+    "roadWidth": 10.0,
+    "schemaVersion": 1
+  }
+}
