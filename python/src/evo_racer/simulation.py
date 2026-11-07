@@ -10,8 +10,13 @@ from typing import Final, Protocol
 
 from evo_racer.tracks import PRESET_TRACKS, TrackValidationError, compile_track_payload
 
-SIMULATION_CONTRACT_VERSION: Final = 1
+# Physics revision recorded on saved results. Version 2 lowered drag and added the corner limit.
+SIMULATION_CONTRACT_VERSION: Final = 2
+PREVIEW_CONTRACT_VERSION: Final = 1
 FIXED_TIME_STEP: Final = 1.0 / 60.0
+DRAG_COEFFICIENT: Final = 0.004
+CORNER_GRIP_BASE: Final = 6.0
+CORNER_GRIP_PER_RECOVERY: Final = 1.0
 VEHICLE_RADIUS: Final = 0.8
 SENSOR_RANGE: Final = 36.0
 SENSOR_ANGLES: Final[tuple[float, ...]] = tuple(
@@ -534,11 +539,13 @@ class SetupAwarePurePursuit(PurePursuitBaseline):
 
     def _corner_speed(self, curvature: float) -> float:
         """Speed at which this setup's full-lock turn matches the planned radius."""
-        reach = (self._caution / curvature) * self._setup.steering_agility
+        radius = self._caution / curvature
+        grip_speed = math.sqrt(corner_grip(self._setup) * radius)
+        reach = radius * self._setup.steering_agility
         remainder = 1.0 - 1.3 * reach / self._setup.max_speed
         if remainder <= 0.0:
-            return self._setup.max_speed
-        return min(self._setup.max_speed, 0.2 * reach / remainder)
+            return min(self._setup.max_speed, grip_speed)
+        return min(self._setup.max_speed, grip_speed, 0.2 * reach / remainder)
 
     def control(self, observation: Observation, geometry: TrackGeometry) -> Controls:
         speed = observation.state.forward_speed
@@ -616,6 +623,11 @@ class RandomNetworkBaseline:
         )
 
 
+def corner_grip(setup: VehicleSetup) -> float:
+    """Sideways acceleration this setup can hold in a corner, in m/s²."""
+    return CORNER_GRIP_BASE + CORNER_GRIP_PER_RECOVERY * setup.grip_recovery
+
+
 def step_physics(
     state: VehicleState,
     controls: Controls,
@@ -643,7 +655,7 @@ def step_physics(
     speed_ratio = _clamp(state.forward_speed / setup.max_speed, 0.0, 1.0)
     drive_force = setup.acceleration * controls.throttle * (1.0 - speed_ratio)
     braking_force = setup.brake_strength * controls.brake
-    drag_force = 0.018 * state.forward_speed * state.forward_speed
+    drag_force = DRAG_COEFFICIENT * state.forward_speed * state.forward_speed
     forward_speed = _clamp(
         state.forward_speed + (drive_force - braking_force - drag_force) * dt,
         0.0,
@@ -659,6 +671,9 @@ def step_physics(
         * drive_understeer
         * brake_understeer
     )
+    if forward_speed > 1e-6:
+        turn_limit = corner_grip(setup) / forward_speed
+        heading_rate = _clamp(heading_rate, -turn_limit, turn_limit)
     heading = (state.heading + heading_rate * dt) % (2.0 * math.pi)
 
     velocity_x = math.cos(heading) * forward_speed - math.sin(heading) * lateral_speed
@@ -862,7 +877,7 @@ def simulate_preview_payload(payload: object) -> dict[str, object]:
         selected_car_id="selected-baseline",
     )
     return {
-        "contractVersion": SIMULATION_CONTRACT_VERSION,
+        "contractVersion": PREVIEW_CONTRACT_VERSION,
         "valid": True,
         "errors": [],
         "episode": result.to_payload(),
@@ -926,7 +941,7 @@ def _resolve_compiled_track(payload: dict[object, object]) -> dict[str, object]:
 
 def _simulation_error(code: str, field: str, message: str) -> dict[str, object]:
     return {
-        "contractVersion": SIMULATION_CONTRACT_VERSION,
+        "contractVersion": PREVIEW_CONTRACT_VERSION,
         "valid": False,
         "errors": [{"code": code, "field": field, "message": message}],
     }

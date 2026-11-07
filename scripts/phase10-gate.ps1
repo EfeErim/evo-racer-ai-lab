@@ -28,7 +28,7 @@ try {
     Invoke-GateStep "Chromium recommended offline user flow" { npm run test:e2e --silent }
     Invoke-GateStep "Three-seed, three-preset algorithm matrix" {
         & $python python/tools/hardening.py `
-            --fixture contracts/phase10-regression.json `
+            --fixture contracts/phase10-regression-v2.json `
             --report $reportPath
     }
     Invoke-GateStep "Windows release build" { npm run build:release --silent }

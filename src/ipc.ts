@@ -177,7 +177,17 @@ async function loadRunDocument(
   if (response.run === undefined) {
     throw new Error(`${operation} returned an invalid response.`);
   }
-  return parseRunDocument(response.run);
+  const document = parseRunDocument(response.run);
+  if (typeof response.serializedRun === "string") {
+    const serializedDocument = parseRunDocument(
+      JSON.parse(response.serializedRun),
+    );
+    if (JSON.stringify(serializedDocument) !== JSON.stringify(document)) {
+      throw new Error(`${operation} returned conflicting serialized data.`);
+    }
+    document.sourceJson = response.serializedRun;
+  }
+  return document;
 }
 
 export async function deleteRun(runId: string): Promise<void> {

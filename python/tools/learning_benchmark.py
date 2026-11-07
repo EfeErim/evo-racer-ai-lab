@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Final, Literal, TypedDict, cast
 
 from evo_racer.observer import RunSession, RunSettings
+from evo_racer.simulation import SIMULATION_CONTRACT_VERSION
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 BENCHMARK_CONTRACT_VERSION: Final = 1
@@ -147,6 +148,7 @@ def build_benchmark(workers: int | None = None) -> dict[str, object]:
         "contractVersion": BENCHMARK_CONTRACT_VERSION,
         "kind": "learning-benchmark",
         "configuration": {
+            "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
             "seeds": list(BENCHMARK_SEEDS),
             "presets": [preset.track_id for preset in PRESET_TRACKS],
             "algorithms": list(BENCHMARK_ALGORITHMS),

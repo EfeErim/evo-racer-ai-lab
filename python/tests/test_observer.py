@@ -89,7 +89,7 @@ def test_batched_observation_completes_both_algorithms(algorithm: str) -> None:
         "generationsCompleted": 2,
         "episodeSeconds": 0.2,
         "fixedTimeStep": 1.0 / 60.0,
-        "simulationContractVersion": 1,
+        "simulationContractVersion": 2,
         "evolutionContractVersion": 1,
         "observationContractVersion": 1,
     }

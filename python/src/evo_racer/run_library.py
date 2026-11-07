@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from typing import Final, cast
 
+from evo_racer.simulation import SIMULATION_CONTRACT_VERSION
 from evo_racer.track_library import default_data_root
 from evo_racer.tracks import TRACK_SCHEMA_VERSION, TrackValidationError, compile_track_payload
 
@@ -24,6 +25,21 @@ ATOMIC_REPLACE_RETRY_SECONDS: Final = 0.01
 
 class RunRecordError(ValueError):
     """Raised when one local run document cannot satisfy the versioned schema."""
+
+
+def simulation_version(snapshot: dict[str, object]) -> int:
+    """Old checkpoints without a revision belong to physics v1."""
+    result = snapshot.get("result")
+    metadata = result.get("metadata") if isinstance(result, dict) else None
+    result_version = (
+        metadata.get("simulationContractVersion", 1) if isinstance(metadata, dict) else 1
+    )
+    version = snapshot.get("simulationContractVersion", result_version)
+    if type(version) is not int or version not in {1, 2}:
+        raise RunRecordError("Unsupported simulation revision.")
+    if isinstance(metadata, dict) and version != result_version:
+        raise RunRecordError("Result and checkpoint simulation revisions differ.")
+    return version
 
 
 def checkpoint_sha256(snapshot: object) -> str:
@@ -167,6 +183,7 @@ def export_run_payload(run_id: str, data_root: Path | None = None) -> dict[str, 
         "valid": True,
         "errors": [],
         "run": document,
+        "serializedRun": json.dumps(document, allow_nan=False, indent=2, sort_keys=True) + "\n",
     }
 
 
@@ -213,6 +230,7 @@ def validate_run_document(payload: object) -> dict[str, object]:
     if status not in {"running", "paused", "stopped", "completed"}:
         raise RunRecordError("checkpoint.status is unsupported.")
     snapshot = _object(checkpoint.get("snapshot"), "checkpoint.snapshot")
+    simulation_version(snapshot)
     if checkpoint.get("sha256") != checkpoint_sha256(snapshot):
         raise RunRecordError("checkpoint.sha256 does not match the saved snapshot.")
     if snapshot.get("contractVersion") != 1 or snapshot.get("runId") != run_id:
@@ -302,7 +320,16 @@ def run_summary(document: dict[str, object]) -> dict[str, object]:
         "episodeSeconds": settings["episodeSeconds"],
         "generation": checkpoint["generation"],
         "totalGenerations": settings["generations"],
-        "resumable": checkpoint["status"] in {"running", "paused"},
+        "simulationContractVersion": simulation_version(snapshot),
+        "resumable": checkpoint["status"] in {"running", "paused"}
+        and simulation_version(snapshot) == SIMULATION_CONTRACT_VERSION,
+        "resumeUnavailableReason": (
+            "This run uses earlier physics and cannot continue in this version. "
+            "Your saved run is preserved. Start a new experiment from Welcome."
+            if checkpoint["status"] in {"running", "paused"}
+            and simulation_version(snapshot) != SIMULATION_CONTRACT_VERSION
+            else None
+        ),
         "championFitness": champion_fitness,
         "championProgress": champion_progress,
     }
@@ -365,7 +392,7 @@ def _validate_terminal_result(
         "generationsRequested": settings["generations"],
         "generationsCompleted": generation,
         "episodeSeconds": settings["episodeSeconds"],
-        "simulationContractVersion": 1,
+        "simulationContractVersion": simulation_version(snapshot),
         "evolutionContractVersion": 1,
         "observationContractVersion": 1,
     }
