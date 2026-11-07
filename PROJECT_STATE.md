@@ -239,9 +239,10 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Decide whether physics v2's result is enough: brakes now matter, but evolved drivers use
-them mainly as a constant speed limit, and current fitness pays little for lap time. Work
-directly on `main`. Any
+Follow the ordered roadmap and its v1.2.0 success definition in
+[`docs/YAPILACAKLAR.md`](docs/YAPILACAKLAR.md). Step 1 is the predeclared lap-time weight
+experiment in [`docs/verification/lap-weight-plan.md`](docs/verification/lap-weight-plan.md).
+Work directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human
 usability testing, 200% zoom, a screen reader, and a clean Windows machine with its
