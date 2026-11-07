@@ -2572,3 +2572,18 @@ thead th {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* At 400% zoom six labelled steps no longer fit. The page title names the
+   current step, and aria-current still marks it. */
+@media (max-width: 360px) {
+  .progress-item.is-active .progress-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+  }
+}

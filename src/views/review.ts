@@ -32,12 +32,12 @@ export function renderReview(
         <div>
           <dt>Track</dt>
           <dd><strong>${escapeHtml(identity.name)}</strong> <span>${escapeHtml(identity.summary)}</span></dd>
-          <button class="button secondary compact" type="button" data-route="track" aria-label="Edit track">Edit</button>
+          <dd><button class="button secondary compact" type="button" data-route="track" aria-label="Edit track">Edit</button></dd>
         </div>
         <div>
           <dt>Training plan</dt>
           <dd><strong>${preset?.name ?? "Custom settings"}</strong></dd>
-          <button class="button secondary compact" type="button" data-route="settings" aria-label="Edit training plan">Edit</button>
+          <dd><button class="button secondary compact" type="button" data-route="settings" aria-label="Edit training plan">Edit</button></dd>
         </div>
         <div>
           <dt>Population</dt>
