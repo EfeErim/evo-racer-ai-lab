@@ -1,0 +1,498 @@
+{
+  "algorithm": "fixed-ga",
+  "budget": "quick",
+  "control": {
+    "baselineComparisons": [
+      {
+        "collisionCount": 0,
+        "controller": "fixed-ga:g0000-c0156",
+        "finished": false,
+        "fitness": 570.5705205,
+        "label": "Champion",
+        "progress": 0.47547543,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 0,
+        "controller": "random-network",
+        "finished": false,
+        "fitness": 0.0,
+        "label": "Seeded random network",
+        "progress": 0.0,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 0,
+        "controller": "pure-pursuit",
+        "finished": true,
+        "fitness": 2232.33333333,
+        "label": "Pure Pursuit",
+        "progress": 1.0,
+        "steps": 1606
+      }
+    ],
+    "champion": {
+      "candidateId": "g0000-c0156",
+      "fitness": 570.5705205,
+      "genome": {
+        "algorithm": "fixed-ga",
+        "contractVersion": 1,
+        "network": {
+          "activations": {
+            "brake": "sigmoid",
+            "hidden": "tanh",
+            "steering": "tanh",
+            "throttle": "sigmoid"
+          },
+          "contractVersion": 1,
+          "parameters": [
+            -0.6578580140567534,
+            0.922084353858799,
+            -0.1003286318161769,
+            -0.2542446398570428,
+            0.6471227992536863,
+            -0.30508220755415394,
+            -0.312518109067516,
+            -0.7440983934675649,
+            -0.030066502885292445,
+            0.5688667783302777,
+            0.7530470823812283,
+            0.7234806199509505,
+            -0.3847485941859343,
+            0.6161768031640353,
+            -0.5853190070018903,
+            -0.4470968927487027,
+            -0.35137859417699224,
+            0.7255071542212916,
+            0.3254580904817814,
+            -0.5381908313209969,
+            -0.6664484193377673,
+            -0.9789538775374937,
+            -0.7066029782476229,
+            0.1483314009795329,
+            -0.8972664481342809,
+            -0.42249285260237324,
+            0.333696102681422,
+            -0.8511716662965039,
+            0.17999102235539022,
+            0.5860773122495853,
+            -0.9438611319152237,
+            0.12348966877138379,
+            0.018931976320843313,
+            0.9558075410467506,
+            -0.8729423526261242,
+            -0.05881214081925079,
+            0.9919088054663872,
+            -0.6050017083227912,
+            -0.6336349823809921,
+            -0.9732643702769903,
+            -0.5103855317133823,
+            0.6811467104350291,
+            -0.1966876826377948,
+            -0.41142880608886845,
+            -0.5607440462437696,
+            0.8090248460917291,
+            -0.46662479700654935,
+            -0.8935236367798445,
+            0.5634215429988301,
+            -0.11544651085232971,
+            -0.6222427042663892,
+            -0.15850416351165375,
+            0.10464533518032093,
+            0.09322435319380018,
+            -0.4961572267185985,
+            0.9903123186450975,
+            -0.4302464452515331,
+            -0.5322406650568361,
+            -0.5181489715571921,
+            0.08954048298458073,
+            0.2538425620850069,
+            -0.9082169814081924,
+            -0.30076112260175525,
+            0.13785519565090065,
+            -0.8407329903969287,
+            -0.7214499078880547,
+            0.022179672494152536,
+            -0.038683656768300434,
+            -0.43710932686449167,
+            -0.7302229607558177,
+            -0.5314405103939925,
+            -0.8228767450457828,
+            -0.2131522539962547,
+            0.2689667927688195,
+            0.5875846041830166,
+            0.4161973642031358,
+            -0.41047453764650643,
+            0.09528669362085163,
+            0.9731363378864186,
+            -0.23902187890544013,
+            -0.5422636539729206,
+            -0.3515052858250325,
+            0.9539800563037486,
+            0.9300601848008283,
+            -0.9565947287943868,
+            -0.3122550158048294,
+            -0.14414073044525755
+          ],
+          "topology": {
+            "hiddenCount": 6,
+            "inputCount": 10,
+            "outputCount": 3
+          }
+        },
+        "vehicleGenes": {
+          "frontBrakeBias": 0.5,
+          "frontDriveBias": 0.5,
+          "performanceLogits": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "progress": 0.47547543,
+      "vehicleSetup": {
+        "acceleration": 5.6,
+        "brakeStrength": 9.2,
+        "frontBrakeBias": 0.5,
+        "frontDriveBias": 0.5,
+        "gripRecovery": 3.2,
+        "maxSpeed": 25.6,
+        "steeringAgility": 0.9199999999999999
+      }
+    },
+    "counts": {
+      "episodes": 160,
+      "otherSteps": 11969,
+      "trainingSteps": 234113
+    },
+    "fitnessHistory": [
+      {
+        "bestFitness": 570.5705205,
+        "generation": 0,
+        "medianFitness": 0.0
+      }
+    ],
+    "lapSeconds": null,
+    "metadata": {
+      "algorithm": "fixed-ga",
+      "contractVersion": 1,
+      "episodeSeconds": 30.0,
+      "evolutionContractVersion": 1,
+      "fixedTimeStep": 0.016666666666666666,
+      "generationsCompleted": 1,
+      "generationsRequested": 1,
+      "observationContractVersion": 1,
+      "populationSize": 160,
+      "runId": "heldout-technical-circuit-fixed-ga-31013-160-1-True",
+      "seed": 31013,
+      "simulationContractVersion": 2,
+      "status": "completed",
+      "trackId": "technical-circuit",
+      "trackName": "Technical Circuit",
+      "trackSha256": "8ec00e1c7326401b535169987fc44e6624d0e0f2dd9f51f522a21f8630041fab"
+    },
+    "termination": "timeout"
+  },
+  "evolved": {
+    "baselineComparisons": [
+      {
+        "collisionCount": 1,
+        "controller": "fixed-ga:g0001-c0004",
+        "finished": false,
+        "fitness": 111.88844182,
+        "label": "Champion",
+        "progress": 0.15574037,
+        "steps": 610
+      },
+      {
+        "collisionCount": 0,
+        "controller": "random-network",
+        "finished": false,
+        "fitness": 0.0,
+        "label": "Seeded random network",
+        "progress": 0.0,
+        "steps": 1800
+      },
+      {
+        "collisionCount": 0,
+        "controller": "pure-pursuit",
+        "finished": true,
+        "fitness": 2232.33333333,
+        "label": "Pure Pursuit",
+        "progress": 1.0,
+        "steps": 1606
+      }
+    ],
+    "champion": {
+      "candidateId": "g0001-c0004",
+      "fitness": 111.88844182,
+      "genome": {
+        "algorithm": "fixed-ga",
+        "contractVersion": 1,
+        "network": {
+          "activations": {
+            "brake": "sigmoid",
+            "hidden": "tanh",
+            "steering": "tanh",
+            "throttle": "sigmoid"
+          },
+          "contractVersion": 1,
+          "parameters": [
+            -1.0636711547817008,
+            -0.29295844181085506,
+            0.5335321253220637,
+            -0.673393791254072,
+            0.7713842342040307,
+            0.5107594876781656,
+            0.4084303257126791,
+            -0.8974553303694637,
+            -0.2691464709048821,
+            0.5633196536917133,
+            0.032629281144092026,
+            -0.6192499630433788,
+            0.922650929461974,
+            -0.5133395199311035,
+            0.8516128612289874,
+            0.06839581863149724,
+            0.4858492030595518,
+            0.106440894433808,
+            0.2900439196070881,
+            -0.27972491039090475,
+            0.24861991163119734,
+            -0.06560726536844763,
+            0.3878264151342188,
+            -0.7687850663369529,
+            -0.06841888367589877,
+            0.41308385401153025,
+            0.524590829981451,
+            0.19787217890789432,
+            0.840140939260362,
+            0.15369730782130397,
+            -0.6215436189329253,
+            -0.6399170630518831,
+            -0.787450025307612,
+            -0.6711965808924547,
+            0.2517021746169792,
+            0.626692881323788,
+            0.7338945923792519,
+            -0.8215911394647906,
+            0.788296068633253,
+            -0.07176383304459,
+            0.8346366060872941,
+            -0.9960151896917997,
+            0.7222581573467011,
+            0.10649590020498523,
+            -0.29545967858774747,
+            -0.432549290962424,
+            -0.24853542540500884,
+            0.2443410665796335,
+            -0.2519247271182372,
+            -0.042863338032278264,
+            0.5313359222943348,
+            -0.36170266549969754,
+            0.4713867441894528,
+            0.7859729582901553,
+            0.28754679296453967,
+            -0.01517175142219096,
+            -0.36893667622180515,
+            -0.575287167263661,
+            -0.4244773066920051,
+            -0.8809891783759671,
+            0.2948872203670243,
+            0.11652176722343555,
+            -0.9331273266440747,
+            -0.2969480944066991,
+            -1.393955489620173,
+            -0.6398574018291581,
+            -0.10742634405517038,
+            -0.9354266304709871,
+            -0.5479574214503111,
+            1.0626285413933703,
+            0.0740293682832045,
+            -0.8771858150102696,
+            0.4592512796990893,
+            -0.1453985461428957,
+            -0.6455571430194995,
+            -0.2127825617787255,
+            -0.5333951531913432,
+            0.8957829995152824,
+            0.6405713502688486,
+            -0.7398392580682644,
+            0.38428928829295206,
+            0.11358147974218946,
+            0.9485025952836823,
+            0.9972454796278079,
+            -0.3311057921566112,
+            0.10513111948033727,
+            0.2152235327334331
+          ],
+          "topology": {
+            "hiddenCount": 6,
+            "inputCount": 10,
+            "outputCount": 3
+          }
+        },
+        "vehicleGenes": {
+          "frontBrakeBias": 0.5,
+          "frontDriveBias": 0.5,
+          "performanceLogits": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "progress": 0.15574037,
+      "vehicleSetup": {
+        "acceleration": 5.6,
+        "brakeStrength": 9.2,
+        "frontBrakeBias": 0.5,
+        "frontDriveBias": 0.5,
+        "gripRecovery": 3.2,
+        "maxSpeed": 25.6,
+        "steeringAgility": 0.9199999999999999
+      }
+    },
+    "counts": {
+      "episodes": 160,
+      "otherSteps": 10779,
+      "trainingSteps": 193032
+    },
+    "fitnessHistory": [
+      {
+        "bestFitness": 44.3184568,
+        "generation": 0,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 1,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 2,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 3,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 4,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 5,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 6,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 7,
+        "medianFitness": 0.0
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 8,
+        "medianFitness": -9.37565746
+      },
+      {
+        "bestFitness": 111.88844182,
+        "generation": 9,
+        "medianFitness": -2.1922196
+      }
+    ],
+    "lapSeconds": null,
+    "metadata": {
+      "algorithm": "fixed-ga",
+      "contractVersion": 1,
+      "episodeSeconds": 30.0,
+      "evolutionContractVersion": 1,
+      "fixedTimeStep": 0.016666666666666666,
+      "generationsCompleted": 10,
+      "generationsRequested": 10,
+      "observationContractVersion": 1,
+      "populationSize": 16,
+      "runId": "heldout-technical-circuit-fixed-ga-31013-16-10-True",
+      "seed": 31013,
+      "simulationContractVersion": 2,
+      "status": "completed",
+      "trackId": "technical-circuit",
+      "trackName": "Technical Circuit",
+      "trackSha256": "8ec00e1c7326401b535169987fc44e6624d0e0f2dd9f51f522a21f8630041fab"
+    },
+    "termination": "collision"
+  },
+  "fixedVehicle": true,
+  "seed": 31013,
+  "simulationContractVersion": 2,
+  "track": {
+    "id": "technical-circuit",
+    "name": "Technical Circuit",
+    "pieces": [
+      {
+        "kind": "start-finish"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-long"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-long"
+      },
+      {
+        "kind": "turn-left-45"
+      },
+      {
+        "kind": "straight-short"
+      },
+      {
+        "kind": "turn-left-45"
+      }
+    ],
+    "roadWidth": 9.5,
+    "schemaVersion": 1
+  }
+}

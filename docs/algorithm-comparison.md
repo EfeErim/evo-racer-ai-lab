@@ -26,11 +26,11 @@ a learning benchmark. Within it:
 
 | Algorithm | Cases | Mean champion fitness | Median champion fitness | Zero-fitness champions |
 | --------- | ----: | --------------------: | ----------------------: | ---------------------: |
-| Fixed GA  |     9 |          103.83024287 |            109.49896879 |                      0 |
-| NEAT      |     9 |           52.92941111 |             31.09698435 |                      0 |
+| Fixed GA  |     9 |           95.29697295 |             81.88723885 |                      0 |
+| NEAT      |     9 |           54.88429826 |             31.62040340 |                      0 |
 
-Fixed GA has the higher champion fitness in `6 / 9` paired smoke cases; NEAT has
-the higher value in `3 / 9`. The episodes contain 900 fixed simulation steps
+Fixed GA has the higher champion fitness in `5 / 9` paired smoke cases; NEAT has
+the higher value in `4 / 9`. The episodes contain 900 fixed simulation steps
 and only one generation, so these numbers say only that the reviewed code paths
 completed with the saved deterministic outputs. They are too small to support a
 general claim of algorithm superiority or learning quality.
@@ -38,10 +38,16 @@ general claim of algorithm superiority or learning quality.
 The stronger learning evidence is the
 [learning benchmark](verification/learning-benchmark.md). It compares each evolved run
 with the same evaluation budget spent without selection, on all three presets across
-five seeds. Evolution beat that control in `11 / 15` Fixed GA cases and `13 / 15` NEAT
-cases. NEAT finished `9 / 15` laps and Fixed GA `0 / 15`, at `16` cars, `10`
-generations, and `30 s`. That is one budget and a small sample, so it does not establish
-a general ranking of the algorithms.
+five seeds. Under physics v2, evolution beat that control in `12 / 15` Fixed GA cases and
+`13 / 15` NEAT cases. NEAT finished `9 / 15` laps and Fixed GA `5 / 15`, at `16` cars,
+`10` generations, and `30 s`.
+
+The [held-out matrix](verification/physics-v2.md#held-out-matrix) uses seeds and a
+generated track kept out of physics tuning, at Quick check and Balanced, with and without
+evolved vehicle genes. Across its `48` runs per algorithm, Fixed GA beat its control in
+`41` and finished `23` laps; NEAT beat its control in `43` and finished `32`. Three seeds
+per cell is a small sample, so this does not establish a general ranking of the
+algorithms.
 
 ## How to choose
 
@@ -52,6 +58,9 @@ a general ranking of the algorithms.
   learning-performance claims.
 
 The reviewed raw regression values are in
-[`contracts/phase10-regression.json`](../contracts/phase10-regression.json).
+[`contracts/phase10-regression-v2.json`](../contracts/phase10-regression-v2.json).
+The physics v1 values remain in
+[`contracts/phase10-regression.json`](../contracts/phase10-regression.json) as a
+historical record.
 Phase-level methods and limitations are recorded in
 [`docs/verification/phase10-hardening.md`](verification/phase10-hardening.md).

@@ -8,9 +8,9 @@ evidence lives in
 ## Current position
 
 - Current phase: `Post-release v1.1.1 game and interface hardening`
-- Status: `Generator v5 asymmetric circuits, active-track clarity, Smooth Results replay, and the Python-owned minimum-curvature reference are source-, Chromium-, and Windows-package-verified; the rebuilt v1.1.1 artifact remains unsigned and unpublished`
+- Status: `Physics v2 and its saved-run compatibility are source-, Chromium-, and Windows-package-verified on the uncommitted feat/braking-physics working tree; evolved champions use the brake mainly as a constant speed limit; the rebuilt artifact remains unsigned and unpublished`
 - Active milestone: `None`
-- Last verified: `2026-11-05`
+- Last verified: `2026-11-06`
 
 ## Milestones
 
@@ -43,10 +43,45 @@ is recorded here, and documentation matches behavior.
   `docs/releases/v1.1.1.md`
 - v1.1.0 hardening, verified repository facts, and milestone gate results:
   `docs/verification/milestone-history.md`
-- Learning benchmark results: `contracts/learning-benchmark.json`
+- Learning benchmark results: `contracts/learning-benchmark-v2.json`, with physics v1
+  kept in `contracts/learning-benchmark.json`
+- Physics v2 experiments and held-out matrix: `docs/verification/physics-v2.md`
 - Phase and theme verification notes: `docs/verification/`
 
 ## Latest verification
+
+Recorded on `2026-11-06` for physics v2, on the uncommitted `feat/braking-physics`
+working tree on top of `dd65b40`. Findings and limits are in
+[`docs/verification/physics-v2.md`](docs/verification/physics-v2.md).
+
+- `npm run test:phase10` passed as one command: `142` Vitest and `180` pytest tests, the
+  loopback smoke, all `30` Chromium flows, all `18` matrix cases in `22.51 s` with
+  regression SHA-256
+  `0de8fb4b6915b1b26800ee680ec2619971a78b6a2eb4c17d3dd2e4635afab963`, the Windows build,
+  and release acceptance including run `run-d84a8d3e02124529afbe5cee62e721e0`. The ZIP is
+  `9,473,692` bytes with SHA-256
+  `5a07dbce8be60f3280e701b7eccbe5ecf3511b44285b50ff99dd3cc2a341d7a4`.
+- `npm run test:learning` verified all `30` cases against
+  `contracts/learning-benchmark-v2.json`. Evolution beat the control in `25 / 30`.
+- The predeclared held-out matrix saved `96` paired runs. Selection beat the control in
+  `84 / 96`, and `55 / 96` evolved champions finished a lap.
+- `python/tools/champion_brake_study.py` replayed all `96` champions from their saved
+  genomes and reproduced each saved step count, finish flag, and termination. Of `55`
+  finishers, `36` fail without brakes, but `54` still finish with the brake held constant
+  at its mean. This analysis is exploratory and was added after the matrix ran.
+- The packaged EXE, run with a temporary data folder seeded with physics v1 records, was
+  driven through Review, Start, Training, and Results on Quick check. The champion
+  finished at fitness `2297.8` against Pure Pursuit `2267.5`. The completed v1 run opened
+  with its replay. The interrupted v1 run showed its explanation and no Resume, and the
+  service refused it with `RUN_PHYSICS_INCOMPATIBLE`. All three runs exported and were
+  listed again after the application exited and relaunched, and the v2 run reopened. The
+  console had no errors, every request went to `127.0.0.1:8765`, and the only listener
+  was on `127.0.0.1`.
+- The Exit button was used with the browser's confirmation replaced by script, so the
+  native confirmation prompt itself was not exercised. After Exit, no process or listener
+  remained. A clean Windows machine with its network adapters disabled, 200% zoom, a
+  screen reader, and first-time participants were not tested.
+- CI has not run on this work, which is not committed.
 
 Recorded on `2026-11-05` for the faster track generator and test suite, on the
 uncommitted `test/faster-suite` working tree on top of `254ba2a`.
@@ -197,9 +232,12 @@ Recorded on `2026-11-04` for the repository cleanup on branch
 
 ## Next action
 
-Make braking worthwhile in racing, using the saved learning benchmark as the
-before-and-after measure for any physics or evolution change. Remaining open checks are human usability testing, 200% zoom, a screen
-reader, and a clean Windows machine with its network adapters disabled.
+Commit physics v2 on `feat/braking-physics`, then decide whether its result is enough:
+brakes now matter, but evolved drivers use them mainly as a constant speed limit. Any
+further physics, fitness, or settings change must be measured on new seeds and tracks,
+because the held-out matrix is now development evidence. Remaining open checks are human
+usability testing, 200% zoom, a screen reader, and a clean Windows machine with its
+network adapters disabled.
 Push, tag, publish, or apply the optional trusted-signing path only on explicit
 request. Preserve the immutable
 `v1.0.0` and `v1.1.0` tags, published

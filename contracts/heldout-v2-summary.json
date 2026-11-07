@@ -1,0 +1,1477 @@
+[
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        235957,
+        244012,
+        226643
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        28.916666666666668,
+        25.383333333333333
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        230089,
+        172046,
+        233549
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 1546.1412016133334,
+    "pairedBootstrap95": [
+      774.3142961399999,
+      2016.78068161
+    ],
+    "pairedFitnessDifferences": [
+      2016.78068161,
+      774.3142961399999,
+      1847.3286270899998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        236262,
+        240308,
+        221820
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 1,
+      "finishedLapSeconds": [
+        27.683333333333334
+      ],
+      "timeout": 2,
+      "trainingSteps": [
+        239107,
+        209100,
+        187078
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 885.9649322466665,
+    "pairedBootstrap95": [
+      -32.552516600000104,
+      1849.9503740899997
+    ],
+    "pairedFitnessDifferences": [
+      -32.552516600000104,
+      1849.9503740899997,
+      840.49693925
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        697032,
+        721168,
+        689577
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        20.383333333333333,
+        20.35,
+        21.983333333333334
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        470585,
+        488682,
+        614666
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 1576.7927647099998,
+    "pairedBootstrap95": [
+      1191.7037966399998,
+      1881.3286270899998
+    ],
+    "pairedFitnessDifferences": [
+      1191.7037966399998,
+      1657.3458704,
+      1881.3286270899998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        693164,
+        724250,
+        696046
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        22.016666666666666,
+        20.383333333333333,
+        20.566666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        539162,
+        605637,
+        593548
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1583.2157875433334,
+    "pairedBootstrap95": [
+      1173.8764646600002,
+      1922.9503740899997
+    ],
+    "pairedFitnessDifferences": [
+      1173.8764646600002,
+      1922.9503740899997,
+      1652.82052388
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 1,
+      "finishedLapSeconds": [
+        27.65
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        213566,
+        217302,
+        213181
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        21.483333333333334,
+        21.733333333333334
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        215914,
+        111904,
+        142292
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 386.2836523166665,
+    "pairedBootstrap95": [
+      -261.77252053999996,
+      1358.9568108199996
+    ],
+    "pairedFitnessDifferences": [
+      61.66666666999981,
+      -261.77252053999996,
+      1358.9568108199996
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 1,
+      "finishedLapSeconds": [
+        29.45
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        223874,
+        228429,
+        213860
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        20.0,
+        21.75,
+        23.05
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        214083,
+        124822,
+        167494
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1035.37279639,
+    "pairedBootstrap95": [
+      94.5,
+      1675.96309688
+    ],
+    "pairedFitnessDifferences": [
+      94.5,
+      1335.65529229,
+      1675.96309688
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 1,
+      "finished": 1,
+      "finishedLapSeconds": [
+        20.516666666666666
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        646438,
+        654454,
+        659179
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        19.083333333333332,
+        20.25,
+        19.083333333333332
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        518720,
+        536869,
+        480363
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 977.8449427799998,
+    "pairedBootstrap95": [
+      14.333333339999626,
+      1533.7446841800001
+    ],
+    "pairedFitnessDifferences": [
+      14.333333339999626,
+      1533.7446841800001,
+      1385.4568108199996
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        29.45,
+        27.116666666666667
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        664641,
+        669964,
+        663551
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        20.433333333333334,
+        21.4,
+        20.183333333333334
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        577008,
+        512225,
+        586248
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 499.55176409999984,
+    "pairedBootstrap95": [
+      69.33333333999963,
+      1339.15529229
+    ],
+    "pairedFitnessDifferences": [
+      90.16666666999981,
+      1339.15529229,
+      69.33333333999963
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "easy-oval"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        234566,
+        245707,
+        230799
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        29.383333333333333,
+        27.533333333333335,
+        24.383333333333333
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        246240,
+        202055,
+        202230
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 1467.281319303333,
+    "pairedBootstrap95": [
+      1205.2576530799997,
+      1962.3885042599998
+    ],
+    "pairedFitnessDifferences": [
+      1205.2576530799997,
+      1234.1978005699998,
+      1962.3885042599998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        234113,
+        245543,
+        220768
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 2,
+      "finishedLapSeconds": [
+        28.95,
+        25.183333333333334
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        193032,
+        227869,
+        157184
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 961.4313833833332,
+    "pairedBootstrap95": [
+      -458.68207868,
+      2068.7853483699996
+    ],
+    "pairedFitnessDifferences": [
+      -458.68207868,
+      1274.19088046,
+      2068.7853483699996
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        694417,
+        718587,
+        696518
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        20.733333333333334,
+        20.083333333333332,
+        21.966666666666665
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        586701,
+        580126,
+        547197
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 1392.1310447499998,
+    "pairedBootstrap95": [
+      1291.7576530799997,
+      1575.9376806
+    ],
+    "pairedFitnessDifferences": [
+      1291.7576530799997,
+      1308.6978005699998,
+      1575.9376806
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        694705,
+        729281,
+        693695
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        22.416666666666668,
+        23.05,
+        21.316666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        614467,
+        575986,
+        594826
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1368.8927188100001,
+    "pairedBootstrap95": [
+      1176.68333892,
+      1596.80393705
+    ],
+    "pairedFitnessDifferences": [
+      1176.68333892,
+      1333.19088046,
+      1596.80393705
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        27.333333333333332,
+        28.766666666666666
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        216766,
+        215457,
+        215016
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        21.933333333333334,
+        21.766666666666666,
+        20.566666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        206787,
+        127288,
+        155806
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 497.5809613600001,
+    "pairedBootstrap95": [
+      55.666666660000374,
+      1355.07621742
+    ],
+    "pairedFitnessDifferences": [
+      1355.07621742,
+      55.666666660000374,
+      82.0
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        226055,
+        226162,
+        217047
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        21.566666666666666,
+        21.233333333333334,
+        21.466666666666665
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        188440,
+        153697,
+        168838
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1237.8597160200002,
+    "pairedBootstrap95": [
+      1165.3151703900003,
+      1337.1950455499998
+    ],
+    "pairedFitnessDifferences": [
+      1165.3151703900003,
+      1337.1950455499998,
+      1211.0689321200002
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        26.75,
+        25.016666666666666,
+        28.766666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        649710,
+        650816,
+        662392
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        20.933333333333334,
+        18.833333333333332,
+        18.566666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        467763,
+        430361,
+        463804
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 74.00000000333314,
+    "pairedBootstrap95": [
+      58.16666666999981,
+      102.0
+    ],
+    "pairedFitnessDifferences": [
+      58.16666666999981,
+      61.833333339999626,
+      102.0
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        27.1,
+        23.766666666666666
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        667091,
+        667742,
+        671445
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        19.7,
+        19.866666666666667,
+        20.033333333333335
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        493646,
+        449336,
+        486258
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 409.33482559666663,
+    "pairedBootstrap95": [
+      39.0,
+      1115.00447679
+    ],
+    "pairedFitnessDifferences": [
+      74.0,
+      39.0,
+      1115.00447679
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "technical-circuit"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 3,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 0,
+      "trainingSteps": [
+        231589,
+        241617,
+        226037
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        233371,
+        238502,
+        179824
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 39.000375296666675,
+    "pairedBootstrap95": [
+      1.4080881000000147,
+      66.45444454
+    ],
+    "pairedFitnessDifferences": [
+      66.45444454,
+      1.4080881000000147,
+      49.138593250000014
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        232364,
+        239188,
+        217958
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        231322,
+        237030,
+        162554
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 26.105022803333327,
+    "pairedBootstrap95": [
+      -42.3427088,
+      69.14370682999999
+    ],
+    "pairedFitnessDifferences": [
+      -42.3427088,
+      69.14370682999999,
+      51.51407037999999
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 3,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 0,
+      "trainingSteps": [
+        682313,
+        710569,
+        684629
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        528506,
+        612612,
+        571083
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 262.01197506666665,
+    "pairedBootstrap95": [
+      72.67638563,
+      637.22463839
+    ],
+    "pairedFitnessDifferences": [
+      76.13490117999999,
+      637.22463839,
+      72.67638563
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 3,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 0,
+      "trainingSteps": [
+        678228,
+        718545,
+        680002
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        635014,
+        635391,
+        481934
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 233.74047657999998,
+    "pairedBootstrap95": [
+      28.419888490000005,
+      511.70807319999994
+    ],
+    "pairedFitnessDifferences": [
+      28.419888490000005,
+      161.09346804999998,
+      511.70807319999994
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        213399,
+        213537,
+        211563
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        197784,
+        116136,
+        165179
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 375.4942248966667,
+    "pairedBootstrap95": [
+      -461.81219763,
+      796.12613299
+    ],
+    "pairedFitnessDifferences": [
+      -461.81219763,
+      792.1687393300001,
+      796.12613299
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        218937,
+        225553,
+        212216
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        185275,
+        123792,
+        147274
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 98.09614004666668,
+    "pairedBootstrap95": [
+      11.11495518000001,
+      222.67204559
+    ],
+    "pairedFitnessDifferences": [
+      60.50141937000001,
+      11.11495518000001,
+      222.67204559
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        640381,
+        641128,
+        655854
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 1,
+      "finishedLapSeconds": [
+        27.816666666666666
+      ],
+      "timeout": 2,
+      "trainingSteps": [
+        555288,
+        469749,
+        481577
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 859.3380695566668,
+    "pairedBootstrap95": [
+      323.02074488,
+      1388.3143492400002
+    ],
+    "pairedFitnessDifferences": [
+      1388.3143492400002,
+      866.6791145500001,
+      323.02074488
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        654961,
+        656093,
+        650298
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        534877,
+        415557,
+        576713
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 423.5115230533333,
+    "pairedBootstrap95": [
+      313.62808514999995,
+      567.35800818
+    ],
+    "pairedFitnessDifferences": [
+      313.62808514999995,
+      389.5484758299999,
+      567.35800818
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "chicane-challenge"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        234734,
+        244350,
+        230389
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        225793,
+        258798,
+        174839
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": -84.39865593666669,
+    "pairedBootstrap95": [
+      -230.26060888,
+      46.97778667999998
+    ],
+    "pairedFitnessDifferences": [
+      -69.91314561000002,
+      -230.26060888,
+      46.97778667999998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        235353,
+        240994,
+        221567
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        210242,
+        246859,
+        143897
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": -11.084095453333338,
+    "pairedBootstrap95": [
+      -79.89232957000002,
+      123.2053216
+    ],
+    "pairedFitnessDifferences": [
+      -79.89232957000002,
+      123.2053216,
+      -76.56527839
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 0,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 3,
+      "trainingSteps": [
+        693238,
+        713828,
+        696846
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 1,
+      "finishedLapSeconds": [
+        26.866666666666667
+      ],
+      "timeout": 2,
+      "trainingSteps": [
+        634312,
+        643475,
+        518149
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 896.0173465500001,
+    "pairedBootstrap95": [
+      256.86403916999996,
+      1995.26834877
+    ],
+    "pairedFitnessDifferences": [
+      435.91965171000004,
+      256.86403916999996,
+      1995.26834877
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "fixed-ga",
+    "budget": "balanced",
+    "control": {
+      "collided": 2,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 1,
+      "trainingSteps": [
+        692531,
+        721057,
+        695975
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 2,
+      "finishedLapSeconds": [
+        25.166666666666668,
+        25.983333333333334
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        603532,
+        540097,
+        589151
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1309.1490182966668,
+    "pairedBootstrap95": [
+      299.66144568000004,
+      1867.6544874699998
+    ],
+    "pairedFitnessDifferences": [
+      1760.1311217400003,
+      299.66144568000004,
+      1867.6544874699998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        216179,
+        215734,
+        210956
+      ]
+    },
+    "evolved": {
+      "collided": 2,
+      "finished": 1,
+      "finishedLapSeconds": [
+        27.7
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        182981,
+        176736,
+        139363
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 405.0435880466667,
+    "pairedBootstrap95": [
+      -268.95922803999997,
+      1683.62258556
+    ],
+    "pairedFitnessDifferences": [
+      -268.95922803999997,
+      1683.62258556,
+      -199.53259337999998
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "quick",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        222823,
+        226581,
+        214470
+      ]
+    },
+    "evolved": {
+      "collided": 1,
+      "finished": 1,
+      "finishedLapSeconds": [
+        25.316666666666666
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        204162,
+        114102,
+        173952
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 840.9498113000001,
+    "pairedBootstrap95": [
+      183.50265178,
+      1653.2393432500003
+    ],
+    "pairedFitnessDifferences": [
+      1653.2393432500003,
+      183.50265178,
+      686.10743887
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 1,
+      "finished": 1,
+      "finishedLapSeconds": [
+        24.233333333333334
+      ],
+      "timeout": 1,
+      "trainingSteps": [
+        649030,
+        651675,
+        656978
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        25.533333333333335,
+        24.616666666666667,
+        22.3
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        607528,
+        519140,
+        516831
+      ]
+    },
+    "fixedVehicle": false,
+    "meanDifference": 1099.8343236366668,
+    "pairedBootstrap95": [
+      -13.0,
+      1714.4559188900002
+    ],
+    "pairedFitnessDifferences": [
+      -13.0,
+      1714.4559188900002,
+      1598.0470520200001
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  },
+  {
+    "algorithm": "neat",
+    "budget": "balanced",
+    "control": {
+      "collided": 1,
+      "finished": 0,
+      "finishedLapSeconds": [],
+      "timeout": 2,
+      "trainingSteps": [
+        656996,
+        670566,
+        665722
+      ]
+    },
+    "evolved": {
+      "collided": 0,
+      "finished": 3,
+      "finishedLapSeconds": [
+        24.25,
+        27.583333333333332,
+        25.016666666666666
+      ],
+      "timeout": 0,
+      "trainingSteps": [
+        554326,
+        491027,
+        538747
+      ]
+    },
+    "fixedVehicle": true,
+    "meanDifference": 1825.33619118,
+    "pairedBootstrap95": [
+      1517.7787756100001,
+      2004.03177963
+    ],
+    "pairedFitnessDifferences": [
+      1517.7787756100001,
+      1954.1980182999998,
+      2004.03177963
+    ],
+    "seeds": [
+      31013,
+      51031,
+      71053
+    ],
+    "trackId": "generated-985c001d0abec49f"
+  }
+]

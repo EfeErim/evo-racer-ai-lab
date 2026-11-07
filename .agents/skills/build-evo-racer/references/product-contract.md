@@ -81,7 +81,7 @@ lateralSpeed
 steering
 ```
 
-Run physics at a fixed `1/60 s` step. Model throttle, braking, speed-dependent steering, lateral velocity, grip recovery, drag, and swept boundary collision. Do not add Pacejka tires, per-wheel simulation, suspension, gearing, temperature, damage, weight transfer, or vehicle-to-vehicle collision.
+Run physics at a fixed `1/60 s` step. Model throttle, braking, speed-dependent steering, a speed-dependent turn-rate limit, lateral velocity, grip recovery, drag, and swept boundary collision. Do not add Pacejka tires, per-wheel simulation, suspension, gearing, temperature, damage, weight transfer, or vehicle-to-vehicle collision.
 
 Controller outputs remain continuous:
 

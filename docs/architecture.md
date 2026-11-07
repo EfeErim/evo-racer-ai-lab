@@ -140,8 +140,8 @@ steering, throttle, and brake ranges. The evaluator rejects any time step other
 than `1/60 s`.
 
 The handling model is intentionally arcade-style. It applies throttle, braking,
-quadratic drag, speed-dependent steering, lateral-force accumulation, and
-grip-based recovery. Front-heavy drive/braking applies small understeer
+quadratic drag, speed-dependent steering, a speed-dependent limit on turn rate,
+lateral-force accumulation, and grip-based recovery. Front-heavy drive/braking applies small understeer
 multipliers; rear-heavy drive/braking increases lateral slip. The two bias
 values retain their full `[0,1]` domain. Vehicle setup is a frozen value object,
 and the evaluator snapshots and checks controller parameters at every step.
@@ -437,8 +437,8 @@ Phase 10 adds a verification plane without adding a second simulation path.
 `python/tools/hardening.py` creates a bounded matrix through the public
 `RunSession`, bundled preset compiler, Fixed GA, NEAT, canonical evaluator, and
 terminal result builder. It records stable case metadata and SHA-256 signatures
-in `contracts/phase10-regression.json`; timing stays outside that deterministic
-fixture.
+in `contracts/phase10-regression-v2.json`; timing stays outside that deterministic
+fixture. `contracts/phase10-regression.json` keeps the physics v1 values.
 
 Both Python and TypeScript test the version 1 fixture. Python reruns all 18
 cases and requires exact equality. TypeScript checks that the same file covers
