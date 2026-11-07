@@ -15,6 +15,7 @@ from typing import Final, Literal, TypedDict, cast
 
 from evo_racer.observer import RunSession, RunSettings
 from evo_racer.onboarding import validate_setup
+from evo_racer.simulation import SIMULATION_CONTRACT_VERSION
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 PHASE10_CONTRACT_VERSION: Final = 1
@@ -198,6 +199,7 @@ def _run_matrix(
             "contractVersion": PHASE10_CONTRACT_VERSION,
             "kind": "phase10-deterministic-regression",
             "configuration": {
+                "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
                 "seeds": list(SMOKE_SEEDS),
                 "presets": [preset.track_id for preset in PRESET_TRACKS],
                 "algorithms": list(SMOKE_ALGORITHMS),

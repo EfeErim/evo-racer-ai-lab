@@ -10,10 +10,12 @@ export function downloadTrack(compiled: CompiledTrackV1): void {
 }
 
 export function downloadRunDocument(run: RunDocumentV1): void {
-  downloadJson(
-    `${JSON.stringify(run, null, 2)}\n`,
-    `${safeFileName(run.runId)}.run.json`,
-  );
+  if (run.sourceJson === undefined) {
+    throw new Error(
+      "The local core did not provide a checksum-preserving export. Reopen the application and try again.",
+    );
+  }
+  downloadJson(run.sourceJson, `${safeFileName(run.runId)}.run.json`);
 }
 
 function downloadJson(contents: string, fileName: string): void {

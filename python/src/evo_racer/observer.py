@@ -45,6 +45,7 @@ from evo_racer.run_library import (
     read_run_document,
     run_library_payload,
     save_run_document,
+    simulation_version,
     validate_run_document,
 )
 from evo_racer.simulation import (
@@ -290,6 +291,7 @@ class RunSession:
     def to_run_document(self) -> dict[str, object]:
         """Serialize the current generation boundary into the version 1 run schema."""
         snapshot = self.snapshot(include_live=False)
+        snapshot["simulationContractVersion"] = SIMULATION_CONTRACT_VERSION
         track = cast(dict[str, object], self.compiled_track["track"])
         return {
             "schemaVersion": RUN_SCHEMA_VERSION,
@@ -313,6 +315,8 @@ class RunSession:
         settings_value = cast(dict[str, object], document["settings"])
         checkpoint = cast(dict[str, object], document["checkpoint"])
         expected_snapshot = cast(dict[str, object], checkpoint["snapshot"])
+        if simulation_version(expected_snapshot) != SIMULATION_CONTRACT_VERSION:
+            raise RunRecordError("Earlier physics checkpoints cannot resume under current physics.")
         status = cast(RunStatus, checkpoint["status"])
         session = cls(
             run_id=cast(str, document["runId"]),
@@ -334,6 +338,7 @@ class RunSession:
             session.command("pause")
         actual_projection = _resume_projection(session.snapshot())
         expected_projection = _resume_projection(expected_snapshot)
+        expected_projection.pop("simulationContractVersion", None)
         if "generationTrails" not in expected_projection:
             actual_projection.pop("generationTrails", None)
         if actual_projection != expected_projection:
@@ -717,7 +722,17 @@ class RunManager:
             session = self._sessions.get(run_id)
         if session is None:
             try:
-                session = RunSession.from_run_document(read_run_document(run_id, self._data_root))
+                document = read_run_document(run_id, self._data_root)
+                checkpoint = cast(dict[str, object], document["checkpoint"])
+                saved_snapshot = cast(dict[str, object], checkpoint["snapshot"])
+                if simulation_version(saved_snapshot) != SIMULATION_CONTRACT_VERSION:
+                    return _run_error(
+                        "RUN_PHYSICS_INCOMPATIBLE",
+                        "runId",
+                        "This saved run uses earlier physics. "
+                        "It is preserved; start a new experiment.",
+                    )
+                session = RunSession.from_run_document(document)
             except FileNotFoundError:
                 return _run_error("RUN_NOT_FOUND", "runId", "The local run does not exist.")
             except (RunRecordError, ValueError):
@@ -828,6 +843,7 @@ class RunManager:
                 for run in stored_runs
                 if run["runId"] != session.run_id
                 and run["trackSha256"] == metadata["trackSha256"]
+                and run["simulationContractVersion"] == metadata["simulationContractVersion"]
                 and run["populationSize"] == metadata["populationSize"]
                 and run["totalGenerations"] == metadata["generationsRequested"]
                 and run["generation"] == metadata["generationsCompleted"]

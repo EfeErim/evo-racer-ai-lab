@@ -186,6 +186,7 @@ export interface RunLibraryEntryV1 {
   generation: number;
   totalGenerations: number;
   resumable: boolean;
+  resumeUnavailableReason?: string;
   championFitness: number | null;
   championProgress: number | null;
 }
@@ -199,6 +200,8 @@ export interface RunLibraryResponseV1 {
 }
 
 export interface RunDocumentV1 {
+  /** Original Python serialization for checksum-preserving downloads only. */
+  sourceJson?: string;
   schemaVersion: 1;
   kind: "evo-racer-run";
   runId: string;
@@ -215,6 +218,7 @@ export interface RunDocumentV1 {
 
 export interface ObservationSnapshotV1 {
   contractVersion: 1;
+  simulationContractVersion?: number;
   runId: string;
   status: RunStatusV1;
   generation: number;
@@ -434,7 +438,10 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         generation > totalGenerations ||
         (status === "completed" && generation !== totalGenerations) ||
         (expectedResumable && generation >= totalGenerations) ||
-        resumable !== expectedResumable ||
+        (resumable && !expectedResumable) ||
+        (expectedResumable &&
+          !resumable &&
+          typeof run.resumeUnavailableReason !== "string") ||
         (championFitness === null) !== (championProgress === null) ||
         (expectedResumable && hasResult) ||
         (!expectedResumable && generation > 0 && !hasResult)
@@ -451,6 +458,9 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         generation,
         totalGenerations,
         resumable,
+        ...(typeof run.resumeUnavailableReason === "string"
+          ? { resumeUnavailableReason: run.resumeUnavailableReason }
+          : {}),
         championFitness,
         championProgress,
       };
@@ -628,6 +638,14 @@ export function parseObservationSnapshot(
   validatePreviousRunConsistency(runId, result, previousRuns);
   return {
     contractVersion: 1,
+    ...(snapshot.simulationContractVersion === undefined
+      ? {}
+      : {
+          simulationContractVersion: requiredSimulationVersion(
+            snapshot.simulationContractVersion,
+            "simulation contract",
+          ),
+        }),
     runId,
     status,
     generation,
@@ -948,7 +966,7 @@ function parseRunResult(value: unknown): RunResultV1 {
       ),
       episodeSeconds: positiveNumber(metadata.episodeSeconds, "episodeSeconds"),
       fixedTimeStep: positiveNumber(metadata.fixedTimeStep, "fixedTimeStep"),
-      simulationContractVersion: requiredVersion(
+      simulationContractVersion: requiredSimulationVersion(
         metadata.simulationContractVersion,
         "simulation contract",
       ),
@@ -1229,6 +1247,11 @@ function parseAlgorithm(value: unknown): "fixed-ga" | "neat" {
   if (value !== "fixed-ga" && value !== "neat") {
     throw new Error("Unknown evolution algorithm.");
   }
+  return value;
+}
+
+function requiredSimulationVersion(value: unknown, label: string): number {
+  if (value !== 1 && value !== 2) throw new Error(`Unsupported ${label}.`);
   return value;
 }
 

@@ -223,6 +223,59 @@ describe("Phase 8 run library contract", () => {
       ),
     ).toThrow("inconsistent state");
   });
+
+  it("uses the Python resume decision and explanation for legacy interruptions", () => {
+    const run = {
+      ...completedRun,
+      status: "paused",
+      generation: 1,
+      resumable: false,
+      championFitness: null,
+      championProgress: null,
+      resumeUnavailableReason: "Earlier physics: start a new experiment.",
+    };
+    expect(parseRunLibraryResponse(library(run)).runs[0]).toEqual(run);
+  });
+});
+
+describe("Physics revision compatibility", () => {
+  it("retains the physics revision when exporting an interrupted checkpoint", () => {
+    const document = structuredClone(runDocumentFixture) as {
+      checkpoint: { snapshot: Record<string, unknown> };
+    };
+    document.checkpoint.snapshot.simulationContractVersion = 2;
+    expect(
+      parseRunDocument(document).checkpoint.snapshot.simulationContractVersion,
+    ).toBe(2);
+  });
+  it("opens historical recorded replay and accepts v2 result metadata", () => {
+    const document = parseRunDocument(
+      JSON.parse(
+        readFileSync(
+          new URL(
+            "../contracts/physics-v1-completed-run.json",
+            import.meta.url,
+          ),
+          "utf8",
+        ),
+      ),
+    );
+    const result = document.checkpoint.snapshot.result;
+    if (!result) throw new Error("Fixture requires a result.");
+    expect(
+      parseRunDocument(document).checkpoint.snapshot.result?.metadata
+        .simulationContractVersion,
+    ).toBe(1);
+    result.metadata.simulationContractVersion = 2;
+    expect(
+      parseRunDocument(document).checkpoint.snapshot.result?.metadata
+        .simulationContractVersion,
+    ).toBe(2);
+    result.metadata.simulationContractVersion = 3;
+    expect(() => parseRunDocument(document)).toThrow(
+      "Unsupported simulation contract",
+    );
+  });
 });
 
 describe("Phase 7 observation and results contract", () => {

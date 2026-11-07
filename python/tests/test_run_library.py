@@ -4,7 +4,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -23,6 +23,60 @@ from evo_racer.track_library import library_payload, save_track_payload
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase8-run-document.json"
+
+
+@pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
+def test_v2_terminal_record_survives_restart_and_export(tmp_path: Path, algorithm: str) -> None:
+    session = _session(algorithm=algorithm, generations=1)
+    session.advance()
+    document = save_run_document(session.to_run_document(), tmp_path)
+    restarted = RunManager(tmp_path)
+    exported = restarted.export(session.run_id)
+    assert exported["run"] == document
+    assert validate_run_document(json.loads(cast(str, exported["serializedRun"]))) == document
+    assert read_run_document(session.run_id, tmp_path) == document
+    assert cast(Any, restarted.library())["runs"][0]["simulationContractVersion"] == 2
+
+
+def test_legacy_terminal_replay_and_export_are_preserved(tmp_path: Path) -> None:
+    document = json.loads(
+        (CONTRACT_PATH.parent / "physics-v1-completed-run.json").read_text(encoding="utf-8")
+    )
+    saved = save_run_document(document, tmp_path)
+    assert RunManager(tmp_path).export(document["runId"])["run"] == saved
+    assert (
+        cast(Any, saved)["checkpoint"]["snapshot"]["result"]["replay"]
+        == (document["checkpoint"]["snapshot"]["result"]["replay"])
+    )
+
+
+def test_legacy_interruption_is_preserved_but_cannot_resume(tmp_path: Path) -> None:
+    document = cast(Any, _session().to_run_document())
+    snapshot = document["checkpoint"]["snapshot"]
+    snapshot.pop("simulationContractVersion")
+    document["checkpoint"]["sha256"] = checkpoint_sha256(snapshot)
+    saved = save_run_document(document, tmp_path)
+    manager = RunManager(tmp_path)
+    summary = cast(Any, manager.library())["runs"][0]
+    assert summary["resumable"] is False
+    assert "Start a new experiment" in summary["resumeUnavailableReason"]
+    response = manager.resume({"contractVersion": 1, "runId": document["runId"]})
+    assert cast(Any, response)["errors"][0]["code"] == "RUN_PHYSICS_INCOMPATIBLE"
+    assert manager.export(document["runId"])["run"] == saved
+
+
+def test_comparison_excludes_other_physics(tmp_path: Path) -> None:
+    current = _session(generations=1, run_id="current-v2")
+    current.advance()
+    legacy = _session(generations=1, run_id="legacy-v1")
+    legacy.advance()
+    document = cast(Any, legacy.to_run_document())
+    snapshot = document["checkpoint"]["snapshot"]
+    snapshot["simulationContractVersion"] = 1
+    snapshot["result"]["metadata"]["simulationContractVersion"] = 1
+    document["checkpoint"]["sha256"] = checkpoint_sha256(snapshot)
+    save_run_document(document, tmp_path)
+    assert cast(Any, RunManager(tmp_path)._response(current))["snapshot"]["previousRuns"] == []
 
 
 def _session(
