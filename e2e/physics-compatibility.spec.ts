@@ -70,9 +70,7 @@ test("legacy interruption explains recovery and completed v1 replay opens", asyn
   await open.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByText("Champion vs baselines")).toBeVisible();
-  await expect(
-    page.locator(".replay-stage .track-replay-marker"),
-  ).toBeVisible();
+  await expect(page.locator(".replay-stage canvas.race-canvas")).toBeVisible();
   expect(
     await page.evaluate(
       () =>
@@ -127,7 +125,7 @@ for (const algorithm of ["fixed-ga", "neat"]) {
     await expect(open).toBeEnabled();
     await open.click();
     await expect(page.getByText("Champion vs baselines")).toBeVisible();
-    await page.getByRole("button", { name: "Start a new run" }).click();
+    await page.getByRole("button", { name: "New race" }).click();
     await page.getByText("Saved runs", { exact: true }).click();
     const downloadPromise = page.waitForEvent("download");
     await page

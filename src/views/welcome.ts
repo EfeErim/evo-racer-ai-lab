@@ -1,10 +1,6 @@
 import type { PresetGeometryState, RunLibraryState } from "../app-store";
 import { escapeHtml } from "../html";
-import {
-  maximumCandidateEpisodes,
-  TRACK_PRESETS,
-  TRAINING_PRESETS,
-} from "../onboarding";
+import { TRACK_PRESETS, TRAINING_PRESETS } from "../onboarding";
 import { renderTrackSvg, trackLengthMeters } from "../track-renderer";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -107,15 +103,12 @@ export function renderWelcome(
         <div class="welcome-intro">
           <h1 id="page-title" tabindex="-1">AI cars learn to race by evolution, and you watch.</h1>
           <div class="welcome-actions">
-            <button class="button primary" type="button" data-action="review-recommended" ${pending?.action === "resume" ? "disabled" : ""}>
-              Review recommended experiment
+            <button class="button primary" type="button" data-action="begin-setup" ${pending?.action === "resume" ? "disabled" : ""}>
+              Set up a race
               <span aria-hidden="true">→</span>
             </button>
-            <button class="button secondary" type="button" data-action="begin-setup" ${pending?.action === "resume" ? "disabled" : ""}>
-              Choose track and settings
-            </button>
           </div>
-          <p class="next-hint">Next you check the setup. Training begins only when you press Start.</p>
+          <p class="next-hint">A good first track and plan are already picked. Nothing starts until you press Start training.</p>
         </div>
         <aside class="recommended" aria-label="Recommended first experiment">
           <div class="recommended-preview" aria-hidden="true">
@@ -124,7 +117,7 @@ export function renderWelcome(
           <dl class="fact-list">
             <div><dt>Track</dt><dd>${recommendedTrack.name}${compiled === undefined ? "" : ` · ${String(Math.round(trackLengthMeters(compiled)))} m`}</dd></div>
             <div><dt>Training plan</dt><dd>${recommendedPlan.name}</dd></div>
-            <div><dt>Budget</dt><dd>Up to ${String(maximumCandidateEpisodes(recommendedPlan.settings))} candidate evaluations</dd></div>
+            <div><dt>Cars</dt><dd>${String(recommendedPlan.settings.populationSize)} per generation, ${String(recommendedPlan.settings.generations)} generations</dd></div>
           </dl>
         </aside>
       </div>

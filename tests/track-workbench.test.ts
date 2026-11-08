@@ -108,10 +108,7 @@ describe("Sequential editor and JSON document UI", () => {
     const compiledFixture = JSON.parse(
       readFileSync(
         fileURLToPath(
-          new URL(
-            "../contracts/easy-oval-geometry.json",
-            import.meta.url,
-          ),
+          new URL("../contracts/easy-oval-geometry.json", import.meta.url),
         ),
         "utf8",
       ),

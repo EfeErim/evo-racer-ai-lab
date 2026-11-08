@@ -5,7 +5,8 @@ import {
   motionIsReduced,
   type RunLibraryNotice,
 } from "./app-store";
-import { bindActions } from "./bind-actions";
+import { installActions } from "./bind-actions";
+import { patchHtml } from "./dom-patch";
 import { createRacePlayback } from "./controllers/race-playback";
 import { attachRaceCanvases } from "./race-canvas";
 import { createRunLibraryController } from "./controllers/run-library";
@@ -17,13 +18,14 @@ import {
   TRACK_LIBRARY_REFRESHED_NOTICE,
 } from "./controllers/track-commands";
 import { shutdownApplication } from "./ipc";
-import { type AppAction, type AppState, transition } from "./onboarding";
-import { syncSelectedTrack } from "./track-builder";
 import {
-  captureRenderState,
-  restoreDisclosures,
-  restoreFocus,
-} from "./render-state";
+  type AppAction,
+  type AppState,
+  canRequestReview,
+  transition,
+} from "./onboarding";
+import { syncSelectedTrack } from "./track-builder";
+import { captureRenderState, restoreFocus } from "./render-state";
 import { updateEditorDetails } from "./track-workbench";
 import { renderShell } from "./views/shell";
 
@@ -100,7 +102,9 @@ export function mountApp(root: HTMLElement): AppController {
     const enteredWelcome = routeChanged && store.state.route === "welcome";
     const enteredTrack = routeChanged && store.state.route === "track";
     const retryPresetGeometry =
-      enteredTrack && store.presetGeometry.status === "unavailable";
+      routeChanged &&
+      (store.state.route === "track" || store.state.route === "setup") &&
+      store.presetGeometry.status === "unavailable";
     const retryTrackLibrary =
       enteredTrack && store.trackWorkspace.libraryStatus === "unavailable";
     const welcomeRefreshNotice: RunLibraryNotice =
@@ -112,8 +116,8 @@ export function mountApp(root: HTMLElement): AppController {
             message: "Saved runs refreshed from local storage.",
           };
     if (
-      previousRoute === "review" &&
-      store.state.route !== "review" &&
+      previousRoute === "setup" &&
+      store.state.route !== "setup" &&
       validationWasChecking
     ) {
       store.setupValidationRequestVersion += 1;
@@ -202,6 +206,13 @@ export function mountApp(root: HTMLElement): AppController {
         },
       };
     }
+    // The Track Builder is open exactly while its page is shown.
+    if (store.trackWorkspace.toolsOpen !== (store.state.route === "track")) {
+      store.trackWorkspace = {
+        ...store.trackWorkspace,
+        toolsOpen: store.state.route === "track",
+      };
+    }
     render(routeChanged);
     if (enteredWelcome) {
       void refreshRuns(welcomeRefreshNotice);
@@ -273,132 +284,127 @@ export function mountApp(root: HTMLElement): AppController {
     }
   };
 
-  let pointerPressed = false;
-  let renderDeferred = false;
-  const releasePointer = (): void => {
-    pointerPressed = false;
-    if (renderDeferred) {
-      // The click from this release fires first, then the waiting render runs.
-      window.setTimeout(() => {
-        render();
-      }, 0);
-    }
-  };
-  root.addEventListener("pointerdown", () => {
-    pointerPressed = true;
-  });
-  window.addEventListener("pointerup", releasePointer);
-  window.addEventListener("pointercancel", releasePointer);
+  let autoReviewedState: AppState | undefined;
 
   const render = (focusHeading = false): void => {
     if (store.applicationLifecycle !== "active") {
       return;
     }
-    // Replacing a pressed button would lose its click, so a poll waits for release.
-    if (pointerPressed && !focusHeading) {
-      renderDeferred = true;
-      return;
-    }
-    renderDeferred = false;
-    const renderState = focusHeading ? undefined : captureRenderState(root);
-    const focusSnapshot = renderState?.focus ?? store.deferredFocus;
-    root.innerHTML = renderShell(
-      store.state,
-      store.presetGeometry,
-      store.trackWorkspace,
-      store.simulation,
-      store.runLibrary,
-      {
-        frameIndex: store.replayFrameIndex,
-        paused: store.replayPaused,
-      },
-      motionIsReduced(store, reducedMotionQuery),
-      reducedMotionQuery.matches,
-      trainingStageInfo(),
-      store.raceSpeed,
+    const focusSnapshot = focusHeading
+      ? undefined
+      : (captureRenderState(root).focus ?? store.deferredFocus);
+    patchHtml(
+      root,
+      renderShell(
+        store.state,
+        store.presetGeometry,
+        store.trackWorkspace,
+        store.simulation,
+        store.runLibrary,
+        {
+          frameIndex: store.replayFrameIndex,
+          paused: store.replayPaused,
+        },
+        motionIsReduced(store, reducedMotionQuery),
+        reducedMotionQuery.matches,
+        trainingStageInfo(),
+        store.raceSpeed,
+      ),
     );
     attachRaceCanvases(root);
     syncRacePlayback();
-    bindActions(root, store.state, {
-      dispatch,
-      review,
-      startSession,
-      controlSession,
-      moveReplay,
-      toggleReplay,
-      seekReplay,
-      setRaceSpeed: (speed) => {
-        if (speed === 1 || speed === 2 || speed === 4) {
-          const now = window.performance.now();
-          const showing = store.showingRace;
-          if (showing !== undefined) {
-            // Keep the cars where they are while the clock changes speed.
-            const elapsed =
-              ((now - showing.startedAt) / 1000) * store.raceSpeed;
-            store.showingRace = {
-              ...showing,
-              startedAt: now - (elapsed / speed) * 1000,
-            };
-          }
-          store.raceSpeed = speed;
-          render();
-        }
-      },
-      reviewRecommended: () => {
-        dispatch({ type: "use-recommended" });
-        void review();
-      },
-      reviseSetup: () => {
-        resetRunPresentation();
-        dispatch({ type: "revise-setup" });
-      },
-      handleRunAction,
-      handleTrackAction,
-      dropEditorPiece,
-      importTrack,
-      retryPresetTracks,
-      retryRunLibrary,
-      exitApplication,
-      toggleReducedMotion: () => {
-        if (reducedMotionQuery.matches) {
-          store.systemMotionOptIn = !store.systemMotionOptIn;
-        } else {
-          store.reducedMotionOverride = !store.reducedMotionOverride;
-        }
-        render();
-      },
-      updateEditor: (name, roadWidth) => {
-        setEditorDraft(
-          updateEditorDetails(store.trackWorkspace.editor, name, roadWidth),
-          "Track details changed. Python is checking the draft.",
-        );
-      },
-      updateGenerator: (seed, length, difficulty) => {
-        store.trackWorkspace = {
-          ...store.trackWorkspace,
-          generator: { seed, length, difficulty },
-        };
-        syncGeneratorDraftPresentation(root, store.trackWorkspace);
-      },
-    });
-
-    if (renderState !== undefined) {
-      restoreDisclosures(root, renderState.disclosures);
-    }
 
     if (focusHeading) {
       store.deferredFocus = undefined;
       const pageTitle = root.querySelector<HTMLElement>("#page-title");
       pageTitle?.focus();
-    } else if (focusSnapshot !== undefined) {
+    } else if (
+      focusSnapshot !== undefined &&
+      (document.activeElement === null ||
+        document.activeElement === document.body ||
+        !root.contains(document.activeElement))
+    ) {
+      // Focus survives patching unless its element left the page.
       const result = restoreFocus(root, focusSnapshot);
       store.deferredFocus = result === "disabled" ? focusSnapshot : undefined;
+    }
+
+    if (
+      store.state.route === "setup" &&
+      store.state.validation.status === "not-checked" &&
+      canRequestReview(store.state) &&
+      autoReviewedState !== store.state
+    ) {
+      autoReviewedState = store.state;
+      void review();
     }
   };
 
   const handleReducedMotionChange = (): void => {
     render();
   };
+
+  installActions(root, {
+    dispatch,
+    review,
+    startSession,
+    controlSession,
+    moveReplay,
+    toggleReplay,
+    seekReplay,
+    setRaceSpeed: (speed) => {
+      if (speed === 1 || speed === 2 || speed === 4) {
+        const now = window.performance.now();
+        const showing = store.showingRace;
+        if (showing !== undefined) {
+          // Keep the cars where they are while the clock changes speed.
+          const elapsed = ((now - showing.startedAt) / 1000) * store.raceSpeed;
+          store.showingRace = {
+            ...showing,
+            startedAt: now - (elapsed / speed) * 1000,
+          };
+        }
+        store.raceSpeed = speed;
+        render();
+      }
+    },
+    reviewRecommended: () => {
+      dispatch({ type: "use-recommended" });
+      void review();
+    },
+    reviseSetup: () => {
+      resetRunPresentation();
+      dispatch({ type: "revise-setup" });
+    },
+    handleRunAction,
+    handleTrackAction,
+    dropEditorPiece,
+    importTrack,
+    retryPresetTracks,
+    retryRunLibrary,
+    exitApplication,
+    toggleReducedMotion: () => {
+      if (reducedMotionQuery.matches) {
+        store.systemMotionOptIn = !store.systemMotionOptIn;
+      } else {
+        store.reducedMotionOverride = !store.reducedMotionOverride;
+      }
+      render();
+    },
+    updateEditor: (name, roadWidth) => {
+      setEditorDraft(
+        updateEditorDetails(store.trackWorkspace.editor, name, roadWidth),
+        "Track details changed. Python is checking the draft.",
+      );
+    },
+    updateGenerator: (seed, length, difficulty) => {
+      store.trackWorkspace = {
+        ...store.trackWorkspace,
+        generator: { seed, length, difficulty },
+      };
+      syncGeneratorDraftPresentation(root, store.trackWorkspace);
+    },
+  });
 
   render(true);
   document.addEventListener("visibilitychange", handleVisibilityChange);

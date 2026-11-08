@@ -37,16 +37,21 @@ test("Track recovers failed preset and local-library startup reads without reloa
   await page.goto("/");
   await expect.poll(() => presetRequests).toBe(1);
   await expect.poll(() => trackLibraryRequests).toBe(1);
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
 
+  // Set up retries the preset read; the Track Builder retries its library.
   await expect.poll(() => presetRequests).toBe(2);
-  await expect.poll(() => trackLibraryRequests).toBe(2);
   await expect(
     page.getByText(
       "Preset track request has no confirmed response yet (status 503). Try again.",
     ),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Retry preset previews" }),
+  ).toBeVisible();
+
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
+  await expect.poll(() => trackLibraryRequests).toBe(2);
   const builder = page.getByTestId("track-builder");
   await builder.getByRole("tab", { name: /Library/ }).click();
   await expect(
@@ -57,23 +62,25 @@ test("Track recovers failed preset and local-library startup reads without reloa
   await expect(
     builder.getByText("Loading local library…", { exact: true }),
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Retry preset previews" }).click();
   await builder.getByRole("button", { name: "Retry local library" }).click();
-
-  await expect.poll(() => presetRequests).toBe(3);
   await expect.poll(() => trackLibraryRequests).toBe(3);
-  await expect(page.locator(".choice-card .track-geometry")).toHaveCount(3);
   await expect(
     builder.getByText(
       "Track library request has no confirmed response yet (status 503). Try again.",
     ),
   ).toHaveCount(0);
   await expect(
-    builder.getByText("Loading local library…", { exact: true }),
-  ).toHaveCount(0);
-  await expect(
     builder.getByText("Local track library refreshed.", { exact: true }),
   ).toBeVisible();
+
+  await page.getByRole("button", { name: /Done/ }).click();
+  await expect.poll(() => presetRequests).toBe(3);
+  await expect(page.locator(".choice-card .track-geometry")).toHaveCount(3);
+  await expect(
+    page.getByText(
+      "Preset track request has no confirmed response yet (status 503). Try again.",
+    ),
+  ).toHaveCount(0);
 });
 
 test("Saved runs recovers a failed startup read without reload", async ({
@@ -135,8 +142,8 @@ test("Saved runs recovers a failed startup read without reload", async ({
     page.getByRole("button", { name: "Retry saved runs" }),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await page.getByRole("button", { name: "1 Welcome" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
+  await page.getByRole("link", { name: "EvoRacer home" }).click();
   await expect.poll(() => runLibraryRequests).toBe(2);
   await expect(savedRuns).toHaveAttribute("open", "");
   await expect(

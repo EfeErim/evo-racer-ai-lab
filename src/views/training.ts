@@ -49,13 +49,13 @@ export function renderTraining(
       status === undefined ? undefined : RUN_STATUS_GLYPHS[status];
     return `
       <header class="training-header">
-        <h1 id="page-title" tabindex="-1">Training</h1>
+        <h1 id="page-title" tabindex="-1">Race</h1>
         ${
           status === undefined || statusGlyph === undefined
             ? ""
             : `<span class="chip is-${statusGlyph.tone}"><span aria-hidden="true">${statusGlyph.glyph}</span> ${escapeHtml(RUN_STATUS_LABELS[status] ?? status)}</span>`
         }
-        <p>${escapeHtml(state.draft.track?.name ?? activeTrack?.track.name ?? "Selected track")}. Settings are locked. You are watching, not driving.</p>
+        <p>${escapeHtml(state.draft.track?.name ?? activeTrack?.track.name ?? "Selected track")}. The AI drives; you watch it learn.</p>
       </header>
     `;
   };
@@ -199,7 +199,9 @@ function renderRaceStage(
           ).join("")}
         </div>
       `
-      : `<span class="chip is-info">${reducedMotion ? "Motion reduced" : info.mode === "champion" ? "Replay" : "Waiting"}</span>`;
+      : reducedMotion && info.mode !== "waiting"
+        ? '<button class="button secondary compact" type="button" data-action="toggle-motion">▶ Play the race</button>'
+        : `<span class="chip is-info">${info.mode === "champion" ? "Replay" : "Waiting"}</span>`;
   const legend =
     info.mode === "race"
       ? `
@@ -296,15 +298,14 @@ function renderRunOverview(snapshot: ObservationSnapshotV1): string {
   return `
     <section class="run-overview" aria-label="Live run status">
       <dl class="stat-list">
-        <div><dt>Current generation</dt><dd>${String(currentGeneration)} of ${String(snapshot.totalGenerations)}</dd></div>
-        <div><dt>Completed generations</dt><dd>${String(snapshot.generation)}</dd></div>
-        <div><dt>Best fitness so far</dt><dd>${bestSoFar === null ? "None yet" : bestSoFar.toFixed(1)}</dd></div>
-        <div><dt>Active candidates</dt><dd>${evaluating ? `Car ${String(active.index)} of ${String(active.total)}` : "None right now"}</dd></div>
+        <div><dt>Generation</dt><dd>${String(currentGeneration)} of ${String(snapshot.totalGenerations)}</dd></div>
+        <div><dt>Best score so far</dt><dd>${bestSoFar === null ? "None yet" : bestSoFar.toFixed(1)}</dd></div>
+        <div><dt>Now testing</dt><dd>${evaluating ? `Car ${String(active.index)} of ${String(active.total)}` : "Nothing right now"}</dd></div>
       </dl>
-      <p class="field-help">Fitness is the score a car earns on track. Higher is better.</p>
+      <p class="field-help">The score (fitness) rewards distance and finishing the lap. Higher is better.</p>
       <div class="run-progress">
-        <div><span>Evaluation progress</span><strong>${progress.percent}</strong></div>
-        <progress max="1" value="${String(progress.fraction)}" aria-label="Evaluation progress">${progress.percent}</progress>
+        <div><span>Overall progress</span><strong>${progress.percent}</strong></div>
+        <progress max="1" value="${String(progress.fraction)}" aria-label="Overall progress">${progress.percent}</progress>
         <p>${escapeHtml(progress.label)}</p>
       </div>
     </section>
@@ -367,7 +368,7 @@ function renderFitnessDisclosure(
   return `
     <details class="disclosure fitness-disclosure">
       <summary>
-        <h2>Fitness over generations</h2>
+        <h2>Score over generations</h2>
         <span class="disclosure-hint">${latest === undefined ? "No finished generation yet" : `Latest best ${latest.bestFitness.toFixed(1)}`}</span>
       </summary>
       <div class="disclosure-body">${renderFitnessChart(history)}</div>

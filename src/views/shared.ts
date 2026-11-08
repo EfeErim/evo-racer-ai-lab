@@ -1,5 +1,5 @@
 import { escapeHtml } from "../html";
-import { type AppState, type RouteId, TRACK_PRESETS } from "../onboarding";
+import { type AppState, TRACK_PRESETS } from "../onboarding";
 import { type CompiledTrackV1, trackLengthMeters } from "../track-renderer";
 
 export function pageHeader(title: string, description: string): string {
@@ -8,34 +8,6 @@ export function pageHeader(title: string, description: string): string {
       <h1 id="page-title" tabindex="-1">${title}</h1>
       <p class="page-lead">${description}</p>
     </header>
-  `;
-}
-
-export function renderActions(
-  backRoute: RouteId,
-  nextRoute: RouteId,
-  nextLabel: string,
-  nextDisabled: boolean,
-  nextHint: string,
-  review = false,
-): string {
-  return `
-    <div class="page-actions">
-      <button class="button secondary" type="button" data-route="${backRoute}">
-        <span aria-hidden="true">←</span>
-        Back
-      </button>
-      <p class="next-hint">${nextHint}</p>
-      <button
-        class="button primary"
-        type="button"
-        ${review ? 'data-action="review"' : `data-route="${nextRoute}"`}
-        ${nextDisabled ? "disabled" : ""}
-      >
-        ${nextLabel}
-        <span aria-hidden="true">→</span>
-      </button>
-    </div>
   `;
 }
 

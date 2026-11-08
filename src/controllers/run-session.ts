@@ -30,8 +30,6 @@ export function createRunSession(
 
   const review = async (): Promise<void> => {
     if (!canRequestReview(store.state)) {
-      store.state = { ...store.state, route: "settings" };
-      render(true);
       return;
     }
 

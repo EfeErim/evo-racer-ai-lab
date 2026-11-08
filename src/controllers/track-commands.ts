@@ -382,7 +382,6 @@ export function createTrackCommands(context: AppContext) {
             store.trackWorkspace.editorValidation.status === "unchecked";
           store.trackWorkspace = {
             ...store.trackWorkspace,
-            toolsOpen: true,
             notice: shouldValidate
               ? {
                   tone: "info",
@@ -390,7 +389,7 @@ export function createTrackCommands(context: AppContext) {
                 }
               : store.trackWorkspace.notice,
           };
-          render();
+          dispatch({ type: "navigate", route: "track" });
           root
             .querySelector<HTMLElement>("#track-builder-title")
             ?.focus({ preventScroll: true });
@@ -416,7 +415,7 @@ export function createTrackCommands(context: AppContext) {
                 message: "Selected track loaded into the piece editor.",
               },
             };
-            render();
+            dispatch({ type: "navigate", route: "track" });
             root
               .querySelector<HTMLElement>("#track-builder-title")
               ?.focus({ preventScroll: true });
@@ -448,7 +447,7 @@ export function createTrackCommands(context: AppContext) {
                     ),
                   },
           };
-          render();
+          dispatch({ type: "navigate", route: "setup" });
           root
             .querySelector<HTMLElement>('[data-track-action="open-builder"]')
             ?.focus({ preventScroll: true });

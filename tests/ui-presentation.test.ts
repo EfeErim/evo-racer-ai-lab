@@ -78,7 +78,7 @@ describe("recommended experiment", () => {
   });
 });
 
-describe("returning to Review from Results", () => {
+describe("returning to Set up from Results", () => {
   it("keeps the setup, requires a new check, and does not start training", () => {
     const started = {
       ...createInitialState(),
@@ -88,7 +88,7 @@ describe("returning to Review from Results", () => {
 
     const next = transition(started, { type: "revise-setup" });
 
-    expect(next.route).toBe("review");
+    expect(next.route).toBe("setup");
     expect(next.draft).toBe(started.draft);
     expect(next.sessionStarted).toBe(false);
     expect(next.validation).toEqual({ status: "not-checked" });
@@ -152,7 +152,7 @@ describe("Results verdict", () => {
       ),
     );
 
-    expect(verdict.headline).toBe("Yes, best fitness improved over the run");
+    expect(verdict.headline).toBe("Yes, the cars got better over the run");
     expect(verdict.evidence).toContain("rose by 20.0");
     expect(verdict.tone).toBe("success");
   });
@@ -169,7 +169,7 @@ describe("Results verdict", () => {
     );
 
     expect(verdict.headline).toBe(
-      "No, best fitness did not improve over the run",
+      "No, the cars did not get better over the run",
     );
     expect(verdict.tone).toBe("warning");
   });

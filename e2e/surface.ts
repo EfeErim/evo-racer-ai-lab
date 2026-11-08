@@ -127,6 +127,12 @@ export async function measureSurface(page: Page) {
 }
 
 export async function expectSurfaceMeetsLimits(page: Page, surface: string) {
+  // Measure settled colors, not a hover or enable transition in flight.
+  await page.evaluate(() =>
+    Promise.all(
+      document.getAnimations().map((animation) => animation.finished),
+    ),
+  );
   const measured = await measureSurface(page);
   expect(measured, surface).toEqual({
     overflowX: 0,

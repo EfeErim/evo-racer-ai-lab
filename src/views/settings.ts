@@ -4,11 +4,9 @@ import {
   type NumericSetting,
   type TrainingSettings,
   TRAINING_PRESETS,
-  canRequestReview,
   getPresentationIssues,
   maximumCandidateEpisodes,
 } from "../onboarding";
-import { pageHeader, renderActions } from "./shared";
 
 export function selectedTrainingPreset(settings: TrainingSettings) {
   return TRAINING_PRESETS.find(
@@ -21,7 +19,7 @@ export function selectedTrainingPreset(settings: TrainingSettings) {
   );
 }
 
-export function renderSettings(state: AppState): string {
+export function renderPlanSection(state: AppState): string {
   const { settings } = state.draft;
   const maximumEpisodes = maximumCandidateEpisodes(settings);
   const selectedPreset = selectedTrainingPreset(settings);
@@ -39,7 +37,7 @@ export function renderSettings(state: AppState): string {
           <span class="preset-check" aria-hidden="true">${selected ? "✓ Selected" : ""}</span>
         </span>
         <span>${preset.outcome}</span>
-        <span class="preset-budget">Up to ${String(maximumCandidateEpisodes(preset.settings))} candidate evaluations</span>
+        <span class="preset-budget">${String(preset.settings.populationSize)} cars × ${String(preset.settings.generations)} generations</span>
       </button>
     `;
   }).join("");
@@ -49,19 +47,19 @@ export function renderSettings(state: AppState): string {
   const budgetIsKnown = Number.isFinite(maximumEpisodes);
 
   return `
-    <section class="page" aria-labelledby="page-title">
-      ${pageHeader(
-        "Choose a training plan",
-        "Longer plans give evolution more chances to improve, and cost more compute.",
-      )}
+    <section class="setup-section" aria-labelledby="plan-title">
+      <header class="setup-section-header">
+        <h2 id="plan-title"><span class="step-number" aria-hidden="true">2</span>Training plan</h2>
+        <p>Longer plans give evolution more chances to improve, and take longer.</p>
+      </header>
 
       <div class="preset-grid" role="group" aria-label="Training plan">${presets}</div>
 
       <p class="budget-note" role="status">
         ${
           budgetIsKnown
-            ? `<strong>${selectedPreset?.name ?? "Custom settings"}: up to ${String(maximumEpisodes)} candidate evaluations.</strong>
-        That is ${String(settings.populationSize)} cars × ${String(settings.generations)} generations. One evaluation is one car attempting the track for up to ${String(settings.episodeSeconds)} simulated seconds, and it can end early after a crash or a finished lap.`
+            ? `<strong>${selectedPreset?.name ?? "Custom settings"}: ${String(settings.populationSize)} cars × ${String(settings.generations)} generations.</strong>
+        Each car gets up to ${String(settings.episodeSeconds)} simulated seconds per attempt, so at most ${String(maximumEpisodes)} attempts in total.`
             : "<strong>Enter valid numbers to see the evaluation budget.</strong>"
         }
       </p>
@@ -117,16 +115,6 @@ export function renderSettings(state: AppState): string {
         </div>
       </details>
 
-      ${renderActions(
-        "track",
-        "review",
-        "Review experiment",
-        !canRequestReview(state),
-        issues.length > 0
-          ? "Fix the highlighted setting to continue."
-          : "Next you check the setup. Nothing starts yet.",
-        true,
-      )}
     </section>
   `;
 }

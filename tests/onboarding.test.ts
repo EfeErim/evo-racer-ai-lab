@@ -72,7 +72,7 @@ describe("Onboarding contract", () => {
   });
 
   it("requires an explicit Start action to enter Training", () => {
-    let state = createInitialState();
+    let state = transition(createInitialState(), { type: "begin-setup" });
     state = transition(state, {
       type: "select-track",
       trackPreset: "easy-oval",
@@ -88,7 +88,7 @@ describe("Onboarding contract", () => {
       response: fixture.response,
     });
 
-    expect(state.route).toBe("review");
+    expect(state.route).toBe("setup");
     expect(state.sessionStarted).toBe(false);
 
     state = transition(state, { type: "start-session" });
@@ -121,12 +121,12 @@ describe("Onboarding contract", () => {
       value: 96,
     });
     expect(state).toBe(started);
-    expect(transition(state, { type: "navigate", route: "settings" })).toBe(
+    expect(transition(state, { type: "navigate", route: "setup" })).toBe(
       started,
     );
   });
 
-  it("returns a rejected Start to Review and requires fresh validation", () => {
+  it("returns a rejected Start to Set up and requires fresh validation", () => {
     let state = createInitialState();
     const reviewedDraft = state.draft;
     state = transition(state, {
@@ -154,7 +154,7 @@ describe("Onboarding contract", () => {
       },
     });
 
-    expect(state.route).toBe("review");
+    expect(state.route).toBe("setup");
     expect(state.sessionStarted).toBe(false);
     expect(state.startFailure).toEqual({
       kind: "rejected",
@@ -163,7 +163,7 @@ describe("Onboarding contract", () => {
     expect(canStartSession(state)).toBe(false);
   });
 
-  it("returns an unconfirmed Start to Review without discarding valid setup", () => {
+  it("returns an unconfirmed Start to Set up without discarding valid setup", () => {
     let state = createInitialState();
     const reviewedDraft = state.draft;
     state = transition(state, {
@@ -182,7 +182,7 @@ describe("Onboarding contract", () => {
         "Run start has no confirmed response yet (status 503). Try again.",
     });
 
-    expect(state.route).toBe("review");
+    expect(state.route).toBe("setup");
     expect(state.sessionStarted).toBe(false);
     expect(state.startFailure).toEqual({
       kind: "unconfirmed",

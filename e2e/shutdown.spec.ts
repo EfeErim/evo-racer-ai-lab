@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { openMenu } from "./flow";
 
 test("late startup responses cannot resurrect the interface after shutdown", async ({
   page,
@@ -42,7 +43,8 @@ test("late startup responses cannot resurrect the interface after shutdown", asy
   await page.goto("/");
   await runLibraryCaptured;
   page.once("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("button", { name: "Exit application" }).click();
+  await openMenu(page);
+  await page.getByRole("button", { name: "Exit EvoRacer" }).click();
   await expect(
     page.getByRole("heading", { name: "EvoRacer has shut down." }),
   ).toBeVisible();
@@ -80,16 +82,17 @@ test("shutdown exposes pending state and the exact local failure before recoveri
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Exit application" }).click();
+  await openMenu(page);
+  await page.getByRole("button", { name: "Exit EvoRacer" }).click();
   await expect(
     page.getByRole("heading", { name: "Shutting down EvoRacer…" }),
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Shutting down EvoRacer…" }),
   ).toBeFocused();
-  await expect(
-    page.getByRole("button", { name: "Exit application" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Exit EvoRacer" })).toHaveCount(
+    0,
+  );
   await expect
     .poll(() => alerts)
     .toContain(
@@ -100,7 +103,8 @@ test("shutdown exposes pending state and the exact local failure before recoveri
       name: "AI cars learn to race by evolution, and you watch.",
     }),
   ).toBeVisible();
+  await openMenu(page);
   await expect(
-    page.getByRole("button", { name: "Exit application" }),
+    page.getByRole("button", { name: "Exit EvoRacer" }),
   ).toBeVisible();
 });

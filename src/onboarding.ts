@@ -1,10 +1,16 @@
 export const ROUTES = [
-  { id: "welcome", label: "Welcome" },
-  { id: "track", label: "Track" },
-  { id: "settings", label: "Settings" },
-  { id: "review", label: "Review" },
-  { id: "training", label: "Training" },
+  { id: "welcome", label: "Home" },
+  { id: "setup", label: "Set up" },
+  { id: "track", label: "Track Builder" },
+  { id: "training", label: "Race" },
   { id: "results", label: "Results" },
+] as const;
+
+/** The three steps the top bar shows; the Track Builder belongs to Set up. */
+export const JOURNEY_STEPS = [
+  { id: "setup", label: "Set up", covers: ["setup", "track"] },
+  { id: "training", label: "Race", covers: ["training"] },
+  { id: "results", label: "Results", covers: ["results"] },
 ] as const;
 
 export type RouteId = (typeof ROUTES)[number]["id"];
@@ -287,7 +293,7 @@ export function transition(state: AppState, action: AppAction): AppState {
 
   switch (action.type) {
     case "begin-setup":
-      return { ...state, route: "track" };
+      return { ...state, route: "setup" };
     case "use-recommended":
       if (state.sessionStarted) {
         return state;
@@ -296,7 +302,7 @@ export function transition(state: AppState, action: AppAction): AppState {
     case "revise-setup":
       return {
         ...state,
-        route: "review",
+        route: "setup",
         ...invalidate(),
       };
     case "navigate":
@@ -317,7 +323,7 @@ export function transition(state: AppState, action: AppAction): AppState {
         ...state,
         route: action.route,
         validation:
-          state.validation.status === "checking" && action.route !== "review"
+          state.validation.status === "checking" && action.route !== "setup"
             ? { status: "not-checked" }
             : state.validation,
       };
@@ -374,7 +380,6 @@ export function transition(state: AppState, action: AppAction): AppState {
       }
       return {
         ...state,
-        route: "review",
         validation: { status: "checking", draft: action.draft },
         startFailure: null,
       };
@@ -388,7 +393,6 @@ export function transition(state: AppState, action: AppAction): AppState {
       }
       return {
         ...state,
-        route: "review",
         validation: { status: "checked", response: action.response },
       };
     case "start-session":
@@ -407,7 +411,7 @@ export function transition(state: AppState, action: AppAction): AppState {
       }
       return {
         ...state,
-        route: "review",
+        route: "setup",
         validation: { status: "checked", response: action.response },
         sessionStarted: false,
         startFailure: {
@@ -423,7 +427,7 @@ export function transition(state: AppState, action: AppAction): AppState {
       }
       return {
         ...state,
-        route: "review",
+        route: "setup",
         sessionStarted: false,
         startFailure: { kind: "unconfirmed", message: action.message },
       };

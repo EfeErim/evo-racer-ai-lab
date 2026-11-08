@@ -24,7 +24,7 @@ export function fitnessVerdict(result: RunResultV1): ResultVerdict {
   if (first === undefined || result.fitnessHistory.length < 2) {
     return {
       headline: "Too early to say: only one generation finished",
-      evidence: `Best fitness is ${result.champion.fitness.toFixed(1)}. Improvement needs at least two finished generations to compare.`,
+      evidence: `The best score is ${result.champion.fitness.toFixed(1)}. Improvement needs at least two finished generations to compare.`,
       tone: "info",
       glyph: "–",
     };
@@ -33,14 +33,14 @@ export function fitnessVerdict(result: RunResultV1): ResultVerdict {
   const span = `from ${first.bestFitness.toFixed(1)} in the first generation to ${result.champion.fitness.toFixed(1)}`;
   return gain > 1e-6
     ? {
-        headline: "Yes, best fitness improved over the run",
-        evidence: `It rose by ${gain.toFixed(1)}, ${span}.`,
+        headline: "Yes, the cars got better over the run",
+        evidence: `The best score rose by ${gain.toFixed(1)}, ${span}.`,
         tone: "success",
         glyph: "↑",
       }
     : {
-        headline: "No, best fitness did not improve over the run",
-        evidence: `It went ${span}. A longer plan may give evolution more chances.`,
+        headline: "No, the cars did not get better over the run",
+        evidence: `The best score went ${span}. A longer plan may give evolution more chances.`,
         tone: "warning",
         glyph: "→",
       };
@@ -75,7 +75,7 @@ function championAnswer(result: RunResultV1): string {
   const collisions = comparison?.collisionCount ?? 0;
   return `
     <strong>${lap}</strong>
-    <p>${collisions === 0 ? "No collisions" : collisions === 1 ? "1 collision" : `${String(collisions)} collisions`}. Ideal-line match: ${racingLine === undefined ? "not available for this older run" : racingLine.matched ? "matched" : `not matched (${racingLine.meanDeviationMeters.toFixed(1)} m average deviation, target ${racingLine.meanToleranceMeters.toFixed(1)} m)`}.</p>
+    <p>${collisions === 0 ? "No collisions" : collisions === 1 ? "1 collision" : `${String(collisions)} collisions`}. ${racingLine === undefined ? "" : racingLine.matched ? "It stayed close to the smooth reference line." : `It strayed from the smooth reference line by ${racingLine.meanDeviationMeters.toFixed(1)} m on average.`}</p>
   `;
 }
 
@@ -218,10 +218,10 @@ export function renderResults(
         <div class="results-actions">
           <button class="button secondary" type="button" data-action="revise-setup">
             <span aria-hidden="true">←</span>
-            Back to Review
+            Change setup and race again
           </button>
           <button class="button primary" type="button" data-action="new-setup">
-            Start a new run
+            New race
           </button>
         </div>
       </header>
@@ -236,7 +236,7 @@ export function renderResults(
           <dd>${compareAnswer(result)}</dd>
         </div>
         <div>
-          <dt>Can the comparison be trusted?</dt>
+          <dt>How sure is this?</dt>
           <dd>${trustAnswer(result, snapshot.previousRuns)}</dd>
         </div>
       </dl>
@@ -252,7 +252,7 @@ export function renderResults(
         )}
         <div class="results-side">
           <section class="panel" aria-labelledby="fitness-chart-title">
-            <h2 id="fitness-chart-title">Fitness over generations</h2>
+            <h2 id="fitness-chart-title">Score over generations</h2>
             ${renderFitnessChart(result.fitnessHistory)}
           </section>
           <section class="panel" aria-labelledby="baseline-title">

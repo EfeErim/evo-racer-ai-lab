@@ -53,9 +53,9 @@ test("track builder previews invalid drafts, repairs them, and generates technic
 
   await page.goto("/");
   await initialTrackLibraryCaptured;
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
   await expect(
-    page.getByRole("heading", { name: "Choose a track" }),
+    page.getByRole("heading", { name: "Set up a race" }),
   ).toBeVisible();
   await expect(
     page.getByRole("radio", {
@@ -288,7 +288,7 @@ test("placed track pieces can be dragged to a new connector", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
   await expect(page.locator(".track-preview .track-geometry")).toHaveCount(3);
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
@@ -325,7 +325,7 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
@@ -355,7 +355,7 @@ test("a generated track stays a candidate until Use this track, then reaches Sta
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
@@ -391,12 +391,11 @@ test("a generated track stays a candidate until Use this track, then reaches Sta
   ).toBeVisible();
   await expect(builder.getByText("Active for Review and Start")).toBeVisible();
 
-  await page.getByRole("button", { name: "Continue to settings" }).click();
-  await page.getByRole("button", { name: "Review experiment" }).click();
-  await expect(page.locator(".review-summary")).toContainText(
+  await page.getByRole("button", { name: /Done/ }).click();
+  await expect(page.locator(".start-summary")).toContainText(
     "Technical Long 90210",
   );
-  await expect(page.locator(".review-summary")).toContainText("24 pieces");
+  await expect(page.locator(".custom-track-card")).toContainText("24 pieces");
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
 
   let submittedTrackName = "";
@@ -457,7 +456,7 @@ test("a dismissed track save refreshes the Python-owned library without taking o
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   const builder = page.getByTestId("track-builder");
@@ -469,10 +468,10 @@ test("a dismissed track save refreshes the Python-owned library without taking o
   await builder.getByRole("button", { name: "Save locally" }).click();
   await saveCaptured;
 
-  await page.locator('.progress-list [data-route="settings"]').click();
+  await page.getByRole("button", { name: /Done/ }).click();
   releaseSave?.();
   await page.waitForTimeout(300);
-  await page.locator('.progress-list [data-route="track"]').click();
+  await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   await expect(page.getByTestId("track-builder")).toBeVisible();
   await expect(

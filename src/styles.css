@@ -2424,9 +2424,11 @@ thead th {
   .app-shell[data-motion="full"] .tool-button,
   .app-shell[data-motion="full"] .choice-card,
   .app-shell[data-motion="full"] .preset-button {
+    /* Text and fill change together, so contrast holds mid-transition. */
     transition:
       border-color 120ms ease,
-      background-color 120ms ease;
+      background-color 120ms ease,
+      color 120ms ease;
   }
 }
 
@@ -2679,4 +2681,193 @@ thead th {
     clip: rect(0, 0, 0, 0);
     white-space: nowrap;
   }
+}
+
+/* Set up: one page for track, plan, and Start. */
+
+.setup-page {
+  gap: var(--space-6);
+}
+
+.setup-section {
+  display: grid;
+  gap: var(--space-3);
+  scroll-margin-top: calc(var(--topbar-height) + var(--space-4));
+}
+
+.setup-section-header h2 {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.setup-section-header p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+}
+
+.step-number {
+  display: inline-grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+}
+
+.setup-page .choice-grid {
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.custom-track-card {
+  align-content: space-between;
+  border-style: dashed;
+}
+
+.custom-track-card.is-selected {
+  border-style: solid;
+}
+
+.custom-track-card .button {
+  justify-self: start;
+}
+
+.setup-page .start-panel {
+  position: sticky;
+  z-index: 2;
+  bottom: var(--space-3);
+  box-shadow: var(--shadow-raised);
+}
+
+.start-summary {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 22rem;
+  gap: var(--space-2);
+}
+
+.start-summary h2 {
+  margin: 0;
+  font-size: var(--text-md);
+}
+
+.start-summary > p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-md);
+}
+
+.start-summary > p strong {
+  display: inline;
+}
+
+.start-budget {
+  color: var(--text-muted);
+}
+
+.start-summary .validation-status {
+  padding: var(--space-2) var(--space-3);
+}
+
+.page-header.with-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.builder-page .track-builder {
+  margin-top: 0;
+}
+
+/* The top-bar menu holds settings that are rarely changed. */
+
+.app-menu {
+  position: relative;
+}
+
+.app-menu > summary {
+  list-style: none;
+}
+
+.app-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.app-menu[open] > summary {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.app-menu-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  display: grid;
+  width: min(20rem, calc(100vw - 2rem));
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-raised);
+}
+
+.menu-item {
+  display: flex;
+  min-height: var(--target-primary);
+  gap: var(--space-2);
+  align-items: center;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: var(--surface-raised);
+}
+
+.menu-item:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.menu-item > span:first-of-type {
+  flex: 1;
+}
+
+.menu-state {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunken);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.menu-item[aria-pressed="true"] .menu-state {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.menu-item.is-danger {
+  color: var(--danger);
+}
+
+.menu-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-sm);
 }

@@ -1,4 +1,5 @@
 import AxeBuilder from "@axe-core/playwright";
+import { openSetup } from "./flow";
 import { expect, test, type Page } from "@playwright/test";
 import { expectSurfaceMeetsLimits } from "./surface";
 
@@ -40,11 +41,11 @@ async function visitEveryScreen(
   await expect(page.locator(".recommended .track-geometry")).toBeVisible();
   await check("Welcome");
 
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Choose a track" }),
-  ).toBeVisible();
-  await check("Track");
+  await openSetup(page);
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
+  await check("Set up");
+  await page.getByText("Exact settings").click();
+  await check("Set up with exact settings open");
 
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
   await expect(
@@ -53,20 +54,8 @@ async function visitEveryScreen(
       .getByText("Draft geometry is valid and ready to use."),
   ).toBeVisible();
   await check("Track Builder");
-  await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-
-  await page.getByRole("button", { name: /Continue to settings/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "Choose a training plan" }),
-  ).toBeVisible();
-  await check("Settings");
-  await page.getByText("Exact settings").click();
-  await check("Settings with exact settings open");
-
-  await page.getByRole("button", { name: /Review experiment/ }).click();
+  await page.getByRole("button", { name: /Done/ }).click();
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
-  await check("Review");
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(page.getByLabel("Live run status")).toBeVisible({
