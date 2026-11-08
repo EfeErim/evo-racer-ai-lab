@@ -180,11 +180,18 @@ test("Windows reduced motion holds the race still until the player presses Play"
 
   const selector = '[data-race-host="training"] canvas';
   await expect(page.locator(selector)).toBeVisible();
+  await expect(page.getByRole("button", { name: "4×" })).toHaveCount(0);
+
+  // A new still frame appears whenever a generation finishes, so measure
+  // stillness once the run has stopped producing generations.
+  await page.getByRole("button", { name: /Stop after generation/ }).click();
+  await expect(page.getByRole("button", { name: "Open results" })).toBeVisible({
+    timeout: 90_000,
+  });
   await page.waitForTimeout(300);
   expect(await distinctCanvasFrames(page, selector, 500)).toBeLessThanOrEqual(
-    2,
+    1,
   );
-  await expect(page.getByRole("button", { name: "4×" })).toHaveCount(0);
 
   await page.getByRole("button", { name: /Play the race/ }).click();
   await expect(page.getByRole("button", { name: "2×" })).toHaveAttribute(
@@ -197,7 +204,6 @@ test("Windows reduced motion holds the race still until the player presses Play"
   await expect(
     page.getByRole("button", { name: /Animate races/ }),
   ).toHaveAttribute("aria-pressed", "true");
-  await page.getByRole("button", { name: /Stop after generation/ }).click();
 });
 
 test("recommended offline run reaches results without starting automatically", async ({
