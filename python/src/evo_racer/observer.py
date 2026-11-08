@@ -1,4 +1,4 @@
-"""Deterministic run control, observation, replay, and Phase 8 recovery."""
+"""Deterministic run control, observation, replay, and recovery."""
 
 from __future__ import annotations
 
@@ -595,7 +595,7 @@ class RunSession:
 
 
 class RunManager:
-    """Own active sessions and their atomic Phase 8 generation-boundary files."""
+    """Own active sessions and their atomic generation-boundary files."""
 
     def __init__(self, data_root: Path | None = None) -> None:
         self._sessions: dict[str, RunSession] = {}

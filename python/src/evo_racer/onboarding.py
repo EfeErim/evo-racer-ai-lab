@@ -1,4 +1,4 @@
-"""Authoritative Phase 1 setup validation contract."""
+"""Authoritative setup validation contract."""
 
 from __future__ import annotations
 

@@ -26,3 +26,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Personal notes, agent configuration and working files
+.local/
+.agents/
+.claude/
+AGENTS.md
+CLAUDE.md
+PROJECT_STATE.md

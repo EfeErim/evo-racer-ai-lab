@@ -1,4 +1,4 @@
-"""Deterministic Phase 10 regression and performance smoke matrix."""
+"""Deterministic regression and performance smoke matrix."""
 
 from __future__ import annotations
 
@@ -159,7 +159,7 @@ def _assert_fixture(actual: dict[str, object], fixture_path: Path) -> None:
     expected: object = json.loads(fixture_path.read_text(encoding="utf-8"))
     if actual != expected:
         raise RuntimeError(
-            f"Phase 10 deterministic regression drifted from {fixture_path.as_posix()}."
+            f"Deterministic regression matrix drifted from {fixture_path.as_posix()}."
         )
 
 
@@ -174,7 +174,7 @@ def _run_matrix(
         for algorithm_value in SMOKE_ALGORITHMS:
             algorithm = algorithm_value
             if algorithm not in {"fixed-ga", "neat"}:
-                raise AssertionError("Phase 10 contains an unsupported algorithm.")
+                raise AssertionError("The regression matrix contains an unsupported algorithm.")
             for seed in SMOKE_SEEDS:
                 case_started = time.perf_counter()
                 case = _run_case(
@@ -237,7 +237,7 @@ def _run_case(
         }
     )
     if validation["valid"] is not True:
-        raise RuntimeError("A Phase 10 smoke case is outside the product setup contract.")
+        raise RuntimeError("A regression-matrix case is outside the product setup contract.")
     session = RunSession(
         run_id=f"phase10-{preset_id}-{algorithm}-{seed}",
         compiled_track=compiled_track,
@@ -252,13 +252,13 @@ def _run_case(
     session.advance()
     snapshot = session.snapshot()
     if snapshot["status"] != "completed":
-        raise RuntimeError("A Phase 10 smoke case did not complete.")
+        raise RuntimeError("A regression-matrix case did not complete.")
     result = cast(dict[str, object], snapshot["result"])
     metadata = cast(dict[str, object], result["metadata"])
     champion = cast(dict[str, object], result["champion"])
     comparisons = cast(list[dict[str, object]], result["baselineComparisons"])
     if len(comparisons) != 3:
-        raise RuntimeError("A Phase 10 result is missing a baseline comparison.")
+        raise RuntimeError("A regression-matrix result is missing a baseline comparison.")
     random_comparison = comparisons[1]
     pursuit_comparison = comparisons[2]
     replay = cast(dict[str, object], result["replay"])

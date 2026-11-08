@@ -1,4 +1,4 @@
-"""Predeclared training-plan measurement; see docs/verification/training-plan-plan.md."""
+"""Predeclared training-plan measurement; see docs/experiments/training-plan.md."""
 
 from __future__ import annotations
 
@@ -158,7 +158,7 @@ def main() -> None:
     suffix = f"-{int(args.episode_seconds)}s" if args.episode_seconds else ""
     Path(f"contracts/training-plans-{args.stage}{suffix}-summary.json").write_text(
         json.dumps(
-            {"plan": "docs/verification/training-plan-plan.md", "rows": rows},
+            {"plan": "docs/experiments/training-plan.md", "rows": rows},
             indent=2,
             sort_keys=True,
         )

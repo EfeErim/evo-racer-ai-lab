@@ -415,7 +415,7 @@ def make_neat_episode_evaluator(
     *,
     max_seconds: float,
 ) -> NEATFitnessEvaluator:
-    """Create the NEAT adapter over the shared Phase 4 physics and Phase 5 fitness."""
+    """Create the NEAT adapter over the shared physics and fitness."""
     if not math.isfinite(max_seconds) or max_seconds <= 0.0:
         raise ValueError("max_seconds must be finite and positive.")
 

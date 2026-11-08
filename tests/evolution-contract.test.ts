@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 const fixturePath = fileURLToPath(
-  new URL("../contracts/phase5-fixed-ga.json", import.meta.url),
+  new URL("../contracts/fixed-ga.json", import.meta.url),
 );
 const fixture: unknown = JSON.parse(readFileSync(fixturePath, "utf8"));
 
@@ -29,7 +29,7 @@ function finiteNumbers(value: unknown): number[] {
   return numbers;
 }
 
-describe("Phase 5 fixed GA contract", () => {
+describe("Fixed GA contract", () => {
   it("exposes a versioned runtime-neutral network and vehicle-gene fixture", () => {
     const genome = record(fixture);
     const network = record(genome.network);

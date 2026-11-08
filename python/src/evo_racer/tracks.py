@@ -1,4 +1,4 @@
-"""Canonical Phase 2 track schema, catalogue, compiler, and validator."""
+"""Canonical track schema, catalogue, compiler, and validator."""
 
 from __future__ import annotations
 

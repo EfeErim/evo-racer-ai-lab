@@ -5,7 +5,7 @@ $zipPath = Join-Path $repoRoot "release\EvoRacer-Windows-x64.zip"
 $checksumPath = "$zipPath.sha256"
 $directBundleRoot = Join-Path $repoRoot "release\EvoRacer"
 $directExecutable = Join-Path $directBundleRoot "EvoRacer.exe"
-$acceptanceRoot = Join-Path $repoRoot ".runtime_tmp\phase9-acceptance"
+$acceptanceRoot = Join-Path $repoRoot ".runtime_tmp\release-acceptance"
 $extractRoot = Join-Path $acceptanceRoot "extract"
 $dataRoot = Join-Path $acceptanceRoot "local-data"
 $appOrigin = "http://127.0.0.1:8765"
@@ -252,7 +252,7 @@ function Test-ExecutableStarter {
 
 if (-not (Test-Path -LiteralPath $zipPath) -or
     -not (Test-Path -LiteralPath $checksumPath)) {
-    throw "Build the Phase 9 release before running acceptance: npm run build:release"
+    throw "Build the release before running acceptance: npm run build:release"
 }
 if (-not (Test-Path -LiteralPath $directExecutable)) {
     throw "The outside-ZIP release executable is missing: $directExecutable"
@@ -461,7 +461,7 @@ try {
     Stop-AcceptanceApp -AppProcess $secondProcess
     $secondProcess = $null
 
-    Write-Host "Phase 9 release acceptance passed."
+    Write-Host "Release acceptance passed."
     Write-Host "Archive SHA-256: $actualHash"
     Write-Host "Run restored and completed: $runId"
     Write-Host "Packaged minimum-curvature result contract verified."

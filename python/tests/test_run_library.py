@@ -22,7 +22,7 @@ from evo_racer.run_library import (
 from evo_racer.track_library import library_payload, save_track_payload
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase8-run-document.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "run-document.json"
 
 
 @pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
@@ -429,7 +429,7 @@ def test_terminal_result_rejects_a_mismatched_champion_comparison(algorithm: str
         validate_run_document(document)
 
 
-def test_shared_phase8_run_document_validates_in_python() -> None:
+def test_shared_run_document_validates_in_python() -> None:
     fixture: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
     assert validate_run_document(fixture) == fixture

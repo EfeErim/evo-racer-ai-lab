@@ -1,4 +1,4 @@
-"""Deterministic Phase 4 arcade physics, sensing, evaluation, and baselines."""
+"""Deterministic arcade physics, sensing, evaluation, and baselines."""
 
 from __future__ import annotations
 

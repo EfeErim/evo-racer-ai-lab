@@ -13,23 +13,23 @@ import {
 } from "../src/simulation";
 
 const fixturePath = fileURLToPath(
-  new URL("../contracts/phase4-telemetry.json", import.meta.url),
+  new URL("../contracts/telemetry.json", import.meta.url),
 );
 const fixture: unknown = JSON.parse(readFileSync(fixturePath, "utf8"));
 const observationFixturePath = fileURLToPath(
-  new URL("../contracts/phase7-observation.json", import.meta.url),
+  new URL("../contracts/observation.json", import.meta.url),
 );
 const observationFixture: unknown = JSON.parse(
   readFileSync(observationFixturePath, "utf8"),
 );
 const runDocumentFixturePath = fileURLToPath(
-  new URL("../contracts/phase8-run-document.json", import.meta.url),
+  new URL("../contracts/run-document.json", import.meta.url),
 );
 const runDocumentFixture: unknown = JSON.parse(
   readFileSync(runDocumentFixturePath, "utf8"),
 );
 
-describe("Phase 4 selected-car telemetry contract", () => {
+describe("Selected-car telemetry contract", () => {
   it("parses the shared Python telemetry fixture without domain logic", () => {
     expect(parseSelectedCarTelemetry(fixture)).toEqual(fixture);
   });
@@ -77,7 +77,7 @@ describe("Phase 4 selected-car telemetry contract", () => {
   });
 });
 
-describe("Phase 4 preview result contract", () => {
+describe("Preview result contract", () => {
   const preview = {
     contractVersion: 1,
     valid: true,
@@ -138,7 +138,7 @@ describe("Phase 4 preview result contract", () => {
   });
 });
 
-describe("Phase 7 run response envelope", () => {
+describe("Run response envelope", () => {
   const issue = { code: "FAILED", field: "run", message: "Invalid." };
 
   it("rejects contradictory response validity and errors", () => {
@@ -151,7 +151,7 @@ describe("Phase 7 run response envelope", () => {
   });
 });
 
-describe("Phase 8 run file contract", () => {
+describe("Run file contract", () => {
   it("parses the shared versioned checkpoint without domain rules", () => {
     expect(parseRunDocument(runDocumentFixture)).toEqual(runDocumentFixture);
   });
@@ -166,7 +166,7 @@ describe("Phase 8 run file contract", () => {
   });
 });
 
-describe("Phase 8 run library contract", () => {
+describe("Run library contract", () => {
   const completedRun = {
     runId: "run-completed",
     status: "completed",
@@ -278,7 +278,7 @@ describe("Physics revision compatibility", () => {
   });
 });
 
-describe("Phase 7 observation and results contract", () => {
+describe("Observation and results contract", () => {
   it("parses the shared Python observation fixture without simulation rules", () => {
     expect(parseObservationSnapshot(observationFixture)).toEqual(
       observationFixture,

@@ -26,7 +26,7 @@ $localChecksum = Join-Path $repoRoot "release\$checksumName"
 $apiHeaders = @{
     Accept                 = "application/vnd.github+json"
     "X-GitHub-Api-Version" = "2026-03-10"
-    "User-Agent"           = "EvoRacer-Phase11-Release-Verifier"
+    "User-Agent"           = "EvoRacer-Release-Verifier"
 }
 
 $package = Get-Content -Raw -LiteralPath (Join-Path $repoRoot "package.json") |
@@ -106,7 +106,7 @@ Assert-Equal $checksumAsset[0].state "uploaded" "Checksum asset state"
 Assert-Equal $zipAsset[0].size (Get-Item -LiteralPath $localZip).Length "ZIP asset size"
 Assert-Equal $checksumAsset[0].size (Get-Item -LiteralPath $localChecksum).Length "Checksum asset size"
 
-$downloadRoot = Join-Path $repoRoot ".runtime_tmp\phase11-public-release"
+$downloadRoot = Join-Path $repoRoot ".runtime_tmp\public-release"
 $runtimeRoot = Join-Path $repoRoot ".runtime_tmp"
 if (-not (Test-Path -LiteralPath $runtimeRoot)) {
     New-Item -ItemType Directory -Path $runtimeRoot | Out-Null
@@ -136,7 +136,7 @@ try {
     Assert-Equal $publishedChecksum $localChecksumValue "Published checksum value"
     Assert-Equal $downloadedHash $publishedChecksum "Downloaded ZIP SHA-256"
 
-    Write-Host "Phase 11 public release verification passed."
+    Write-Host "Public release verification passed."
     Write-Host "Release: $($release.html_url)"
     Write-Host "Tag:     $Tag"
     Write-Host "SHA-256: $downloadedHash"

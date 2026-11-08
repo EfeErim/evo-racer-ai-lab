@@ -1,4 +1,4 @@
-"""Predeclared lap-time weight experiment; see docs/verification/lap-weight-plan.md.
+"""Predeclared lap-time weight experiment; see docs/experiments/lap-weight-plan.md.
 
 Fitness is patched only inside this process. The application is unchanged.
 """
@@ -171,7 +171,7 @@ def main() -> None:
         cases = list(pool.map(run_case, keys))
     summary = {
         "stage": args.stage,
-        "plan": "docs/verification/lap-weight-plan.md",
+        "plan": "docs/experiments/lap-weight-plan.md",
         "rows": summarize(cases),
         "pairedLapSeconds": {
             str(int(w)): paired_laps(cases, w) for w in weights if w != CURRENT_WEIGHT

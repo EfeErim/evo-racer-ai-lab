@@ -17,25 +17,25 @@ function Invoke-GateStep {
 }
 
 $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
-$reportPath = Join-Path $repoRoot ".runtime_tmp\phase10\performance.json"
+$reportPath = Join-Path $repoRoot ".runtime_tmp\release-gate\performance.json"
 . (Join-Path $PSScriptRoot "venv-python.ps1")
 $python = Resolve-VenvPython $repoRoot
 
 Push-Location -LiteralPath $repoRoot
 try {
     Invoke-GateStep "Full automated regression suite" { npm run check --silent }
-    Invoke-GateStep "Development loopback smoke" { npm run smoke:m0 --silent }
+    Invoke-GateStep "Development loopback smoke" { npm run smoke --silent }
     Invoke-GateStep "Chromium recommended offline user flow" { npm run test:e2e --silent }
     Invoke-GateStep "Three-seed, three-preset algorithm matrix" {
         & $python python/tools/hardening.py `
-            --fixture contracts/phase10-regression-v2.json `
+            --fixture contracts/regression-matrix-v2.json `
             --report $reportPath
     }
     Invoke-GateStep "Windows release build" { npm run build:release --silent }
     Invoke-GateStep "Clean-runtime release acceptance" { npm run test:release --silent }
     Invoke-GateStep "Git whitespace validation" { git diff --check }
 
-    Write-Host "Phase 10 gate passed."
+    Write-Host "Release gate passed."
     Write-Host "Performance report: $reportPath"
 }
 finally {

@@ -11,7 +11,7 @@ function Assert-LastExitCode {
 $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 . (Join-Path $PSScriptRoot "venv-python.ps1")
 $pythonPath = Resolve-VenvPython $repoRoot
-$buildRoot = Join-Path $repoRoot ".runtime_tmp\phase9-release"
+$buildRoot = Join-Path $repoRoot ".runtime_tmp\release-build"
 $frontendRoot = Join-Path $repoRoot "dist"
 $artifactRoot = Join-Path $repoRoot "release"
 $bundleRoot = Join-Path $buildRoot "dist\EvoRacer"

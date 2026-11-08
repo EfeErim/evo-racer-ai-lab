@@ -1,4 +1,4 @@
-"""Predeclared v2 experiment; see docs/verification/heldout-v2-plan.md."""
+"""Predeclared v2 experiment; see docs/experiments/heldout-v2-plan.md."""
 
 from __future__ import annotations
 

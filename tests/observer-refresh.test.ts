@@ -16,7 +16,7 @@ import type {
 } from "../src/simulation";
 
 const observationFixturePath = fileURLToPath(
-  new URL("../contracts/phase7-observation.json", import.meta.url),
+  new URL("../contracts/observation.json", import.meta.url),
 );
 const observationFixture: unknown = JSON.parse(
   readFileSync(observationFixturePath, "utf8"),

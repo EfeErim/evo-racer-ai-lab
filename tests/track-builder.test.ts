@@ -18,7 +18,7 @@ interface GeometryFixture {
 const fixture = JSON.parse(
   readFileSync(
     fileURLToPath(
-      new URL("../contracts/phase2-easy-oval-geometry.json", import.meta.url),
+      new URL("../contracts/easy-oval-geometry.json", import.meta.url),
     ),
     "utf8",
   ),

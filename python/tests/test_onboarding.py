@@ -6,7 +6,7 @@ from typing import Any
 
 from evo_racer.onboarding import validate_setup
 
-FIXTURE_PATH = Path(__file__).parents[2] / "contracts" / "phase1-setup-validation-valid.json"
+FIXTURE_PATH = Path(__file__).parents[2] / "contracts" / "setup-validation-valid.json"
 
 
 def test_shared_valid_setup_fixture() -> None:
