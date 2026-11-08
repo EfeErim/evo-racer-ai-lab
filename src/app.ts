@@ -18,6 +18,7 @@ import {
 import { shutdownApplication } from "./ipc";
 import { type AppAction, type AppState, transition } from "./onboarding";
 import { raceStage } from "./race-buffer";
+import { syncSelectedTrack } from "./track-builder";
 import {
   captureRenderState,
   restoreDisclosures,
@@ -88,6 +89,10 @@ export function mountApp(root: HTMLElement): AppController {
     const previousRoute = store.state.route;
     const validationWasChecking = store.state.validation.status === "checking";
     store.state = transition(store.state, action);
+    store.trackWorkspace = syncSelectedTrack(
+      store.trackWorkspace,
+      store.state.draft.track,
+    );
     const routeChanged = store.state.route !== previousRoute;
     const enteredWelcome = routeChanged && store.state.route === "welcome";
     const enteredTrack = routeChanged && store.state.route === "track";

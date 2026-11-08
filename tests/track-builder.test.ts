@@ -7,6 +7,7 @@ import {
   createTrackWorkspaceState,
   generatorInputsChanged,
   renderTrackBuilder,
+  syncSelectedTrack,
 } from "../src/track-builder";
 import type { CompiledTrackV1 } from "../src/track-renderer";
 
@@ -305,6 +306,41 @@ describe("Track Builder workspace", () => {
     );
     expect(html).toContain(
       "<strong>Library</strong>\n      <span>1 saved</span>",
+    );
+  });
+});
+
+describe("Track Builder active selection", () => {
+  const generated: CompiledTrackV1 = {
+    ...fixture.compiled,
+    track: {
+      ...fixture.compiled.track,
+      id: "generated-test",
+      name: "Generated",
+    },
+  };
+  const selectedWorkspace = {
+    ...createTrackWorkspaceState("custom-track-test"),
+    toolsOpen: true,
+    tab: "generate" as const,
+    generatedPreview: generated,
+    selected: generated,
+    selectedSeed: 42,
+  };
+
+  it("stops calling a custom track active once the draft falls back to a preset", () => {
+    const synced = syncSelectedTrack(selectedWorkspace, null);
+
+    expect(synced.selected).toBeUndefined();
+    expect(synced.selectedSeed).toBeUndefined();
+    const html = renderTrackBuilder(synced);
+    expect(html).toContain("Candidate, not active");
+    expect(html).not.toContain("✓</span> Active track");
+  });
+
+  it("keeps the selection while the draft still sends that track", () => {
+    expect(syncSelectedTrack(selectedWorkspace, generated.track)).toBe(
+      selectedWorkspace,
     );
   });
 });
