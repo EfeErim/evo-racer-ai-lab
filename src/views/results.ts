@@ -1,5 +1,4 @@
 import type { RunLibraryState, SimulationState } from "../app-store";
-import { replayTrackTrail } from "../generation-trails";
 import { escapeHtml } from "../html";
 import { type AppState, TRACK_PRESETS } from "../onboarding";
 import type {
@@ -7,7 +6,7 @@ import type {
   ReplayFrameV1,
   RunResultV1,
 } from "../simulation";
-import { type CompiledTrackV1, renderTrackSvg } from "../track-renderer";
+import type { CompiledTrackV1 } from "../track-renderer";
 import { pageHeader } from "./shared";
 import type { ReplayPresentation } from "./shell";
 import { renderFitnessChart } from "./training";
@@ -316,34 +315,25 @@ function renderReplay(
     `;
   }
   const playing = !replay.paused && !reducedMotion && frames.length > 1;
-  const currentTrail = replayTrackTrail({ candidateId, frames });
-  const referenceTrail =
-    racingLine === undefined
-      ? undefined
-      : { candidateId: racingLine.method, points: racingLine.referenceLine };
   const stepDisabled = frames.length <= 1 ? "disabled" : "";
   const status = playing
     ? "Playing at 1× speed"
-    : `Frame ${String(heldIndex + 1)} of ${String(frames.length)} · ${frame.simulatedSeconds.toFixed(2)} simulated s`;
+    : `${frame.simulatedSeconds.toFixed(1)} s · ${(frame.progress * 100).toFixed(0)}% of the lap`;
   return `
     <section class="panel replay-panel" aria-labelledby="replay-title">
       <div class="race-heading">
         <h2 id="replay-title">Champion replay</h2>
         <span class="chip" role="status">${status}</span>
       </div>
-      <div class="replay-stage" role="img" aria-label="Champion path overlaid with the minimum-curvature ideal racing-line reference">
-        ${
-          replayTrack === undefined
-            ? '<p class="track-preview-status">Track preview is not available.</p>'
-            : renderTrackSvg(
-                replayTrack,
-                frame,
-                [],
-                currentTrail,
-                referenceTrail,
-              )
-        }
-      </div>
+      ${
+        replayTrack === undefined
+          ? '<div class="replay-stage"><p class="track-preview-status">Track preview is not available.</p></div>'
+          : `<div class="replay-stage" data-race-host="results" data-race-label="Champion lap${racingLine === undefined ? "" : ", drawn over the smoothest reference line"}"></div>`
+      }
+      <label class="replay-scrub">
+        <span class="sr-only">Replay position</span>
+        <input type="range" data-replay-scrub data-focus-key="replay-scrub" min="0" max="${String(Math.max(0, frames.length - 1))}" step="1" value="${String(heldIndex)}" ${stepDisabled} aria-valuetext="${frame.simulatedSeconds.toFixed(1)} seconds" />
+      </label>
       <div class="replay-controls" role="group" aria-label="Replay controls">
         <button class="button secondary" type="button" data-focus-key="replay-toggle" data-action="replay-toggle" ${reducedMotion || frames.length <= 1 ? "disabled" : ""}>
           <span aria-hidden="true">${playing ? "‖" : "▶"}</span>
@@ -361,12 +351,12 @@ function renderReplay(
           Restart
         </button>
       </div>
-      ${reducedMotion ? '<p class="field-help">Motion is reduced, so Play is off. Use the step buttons, or change motion in the top bar.</p>' : ""}
+      ${reducedMotion ? '<p class="field-help">Motion is reduced, so Play is off. Drag the slider or use the step buttons.</p>' : ""}
       <div class="line-legend">
         <span><i class="line-key is-current" aria-hidden="true"></i>Champion path</span>
-        <span><i class="line-key is-ideal" aria-hidden="true"></i>Ideal line (smoothest curve)</span>
-        <span class="data-id">${escapeHtml(candidateId)}</span>
+        ${racingLine === undefined ? "" : '<span><i class="line-key is-ideal" aria-hidden="true"></i>Smoothest reference line</span>'}
       </div>
+      <p class="sr-only">Champion ${escapeHtml(candidateId)}</p>
     </section>
   `;
 }

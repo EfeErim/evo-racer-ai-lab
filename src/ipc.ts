@@ -88,7 +88,7 @@ export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
 export async function observeRun(
   runId: string,
   knownGenerationReplayCandidateId?: string,
-  includeRaceClip = false,
+  knownGenerationRace?: number,
 ): Promise<RunResponseV1> {
   return parseRunResponse(
     await postJson<unknown>(
@@ -99,7 +99,7 @@ export async function observeRun(
         ...(knownGenerationReplayCandidateId === undefined
           ? {}
           : { knownGenerationReplayCandidateId }),
-        ...(includeRaceClip ? { includeRaceClip } : {}),
+        ...(knownGenerationRace === undefined ? {} : { knownGenerationRace }),
       },
       "Run observation",
     ),

@@ -80,10 +80,23 @@ export interface GenerationReplayV1 {
   frames: ReplayFrameV1[];
 }
 
-export interface RaceClipV1 extends GenerationReplayV1 {
-  candidateIndex: number;
-  populationSize: number;
+export type RaceTerminationV1 = "lap_complete" | "collision" | "timeout";
+
+/** One car of a generation race. Poses are flat `[t, x, y, heading, speed, ...]`. */
+export interface GenerationRaceCarV1 {
+  candidateId: string;
+  rank: number;
+  fitness: number;
+  termination: RaceTerminationV1;
+  progress: number;
+  poses: Float64Array;
+}
+
+/** Presentation-only race of the best cars of one finished generation. */
+export interface GenerationRaceV1 {
   generation: number;
+  populationSize: number;
+  cars: GenerationRaceCarV1[];
 }
 
 export interface GenerationTrailV1 {
@@ -231,7 +244,7 @@ export interface ObservationSnapshotV1 {
   } | null;
   pendingCommand?: "pause" | "stop" | null;
   generationReplay?: GenerationReplayV1 | null;
-  raceClip?: RaceClipV1 | null;
+  generationRace?: GenerationRaceV1;
   generationTrails?: GenerationTrailV1[];
   generationReport: GenerationReportV1 | null;
   fitnessHistory: FitnessPointV1[];
@@ -603,10 +616,10 @@ export function parseObservationSnapshot(
       };
     }
   }
-  const raceClip =
-    snapshot.raceClip === undefined || snapshot.raceClip === null
-      ? snapshot.raceClip
-      : parseRaceClip(snapshot.raceClip);
+  const generationRace =
+    snapshot.generationRace === undefined
+      ? undefined
+      : parseGenerationRace(snapshot.generationRace);
   const generationTrails =
     snapshot.generationTrails === undefined
       ? undefined
@@ -654,7 +667,7 @@ export function parseObservationSnapshot(
     ...(activeCandidate === undefined ? {} : { activeCandidate }),
     ...(pendingCommand === undefined ? {} : { pendingCommand }),
     ...(generationReplay === undefined ? {} : { generationReplay }),
-    ...(raceClip === undefined ? {} : { raceClip }),
+    ...(generationRace === undefined ? {} : { generationRace }),
     ...(generationTrails === undefined ? {} : { generationTrails }),
     generationReport,
     fitnessHistory,
@@ -664,30 +677,64 @@ export function parseObservationSnapshot(
   };
 }
 
-function parseRaceClip(value: unknown): RaceClipV1 {
-  const clip = asRecord(value, "raceClip");
-  if (!Array.isArray(clip.frames)) {
-    throw new Error("Race clip frames must be an array.");
-  }
-  const candidateIndex = integerNumber(
-    clip.candidateIndex,
-    "raceClip.candidateIndex",
+const RACE_TERMINATIONS = new Set(["lap_complete", "collision", "timeout"]);
+
+export function parseGenerationRace(value: unknown): GenerationRaceV1 {
+  const race = asRecord(value, "generationRace");
+  const generation = integerNumber(
+    race.generation,
+    "generationRace.generation",
   );
   const populationSize = integerNumber(
-    clip.populationSize,
-    "raceClip.populationSize",
+    race.populationSize,
+    "generationRace.populationSize",
   );
-  const generation = integerNumber(clip.generation, "raceClip.generation");
-  if (candidateIndex < 1 || candidateIndex > populationSize || generation < 1) {
-    throw new Error("Race clip counters are invalid.");
+  if (generation < 1 || populationSize < 1 || !Array.isArray(race.cars)) {
+    throw new Error("Generation race counters are invalid.");
   }
-  return {
-    candidateId: requiredString(clip.candidateId, "raceClip.candidateId"),
-    candidateIndex,
-    populationSize,
-    generation,
-    frames: parseReplayFrames(clip.frames, "Race clip"),
-  };
+  const cars = race.cars.map((entry: unknown, index): GenerationRaceCarV1 => {
+    const car = asRecord(entry, `generationRace.cars[${String(index)}]`);
+    const termination = requiredString(
+      car.termination,
+      "generationRace.termination",
+    );
+    if (!RACE_TERMINATIONS.has(termination)) {
+      throw new Error("Generation race car has an unknown termination.");
+    }
+    if (
+      !Array.isArray(car.poses) ||
+      car.poses.length < 10 ||
+      car.poses.length % 5 !== 0
+    ) {
+      throw new Error("Generation race poses must be complete 5-value groups.");
+    }
+    const poses = Float64Array.from(car.poses as unknown[], (item) => {
+      if (typeof item !== "number" || !Number.isFinite(item)) {
+        throw new Error("Generation race poses must be finite numbers.");
+      }
+      return item;
+    });
+    for (let offset = 5; offset < poses.length; offset += 5) {
+      if ((poses[offset] ?? 0) <= (poses[offset - 5] ?? 0)) {
+        throw new Error("Generation race pose times must increase.");
+      }
+    }
+    return {
+      candidateId: requiredString(
+        car.candidateId,
+        "generationRace.candidateId",
+      ),
+      rank: integerNumber(car.rank, "generationRace.rank"),
+      fitness: finiteNumber(car.fitness, "generationRace.fitness"),
+      termination: termination as RaceTerminationV1,
+      progress: finiteNumber(car.progress, "generationRace.progress"),
+      poses,
+    };
+  });
+  if (cars.length === 0) {
+    throw new Error("Generation race has no cars.");
+  }
+  return { generation, populationSize, cars };
 }
 
 function validateObservationLiveState(value: {

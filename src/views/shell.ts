@@ -3,14 +3,13 @@ import type {
   RunLibraryState,
   SimulationState,
 } from "../app-store";
-import type { GenerationTrail } from "../generation-trails";
 import { type AppState, ROUTES, type RouteId } from "../onboarding";
 import type { TrackWorkspaceState } from "../track-builder";
 import { renderResults } from "./results";
 import { renderReview } from "./review";
 import { renderSettings } from "./settings";
 import { renderTrack } from "./track";
-import type { RaceStage } from "../race-buffer";
+import type { TrainingStageInfo } from "../controllers/race-playback";
 import { renderTraining } from "./training";
 import { renderWelcome } from "./welcome";
 
@@ -53,10 +52,10 @@ export function renderShell(
   simulation: SimulationState,
   runLibrary: RunLibraryState,
   replay: ReplayPresentation,
-  generationTrails: readonly GenerationTrail[],
   reducedMotion: boolean,
   systemReducedMotion: boolean,
-  raceStage: RaceStage,
+  stageInfo: TrainingStageInfo,
+  raceSpeed: number,
 ): string {
   const activeIndex = ROUTE_ORDER.get(state.route) ?? 0;
   const steps = ROUTES.map((route, index) => {
@@ -127,9 +126,9 @@ export function renderShell(
           simulation,
           runLibrary,
           replay,
-          generationTrails,
           reducedMotion,
-          raceStage,
+          stageInfo,
+          raceSpeed,
         )}
       </main>
     </div>
@@ -143,9 +142,9 @@ function renderRoute(
   simulation: SimulationState,
   runLibrary: RunLibraryState,
   replay: ReplayPresentation,
-  generationTrails: readonly GenerationTrail[],
   reducedMotion: boolean,
-  raceStage: RaceStage,
+  stageInfo: TrainingStageInfo,
+  raceSpeed: number,
 ): string {
   const activeTrack =
     state.draft.track === null
@@ -169,9 +168,9 @@ function renderRoute(
         state,
         simulation,
         activeTrack,
-        generationTrails,
         reducedMotion,
-        raceStage,
+        stageInfo,
+        raceSpeed,
       );
     case "results":
       return renderResults(

@@ -23,6 +23,8 @@ SENSOR_ANGLES: Final[tuple[float, ...]] = tuple(
     math.radians(degrees) for degrees in (-75.0, -45.0, -22.5, 0.0, 22.5, 45.0, 75.0)
 )
 TELEMETRY_INTERVAL_STEPS: Final = 30
+type TracePose = tuple[float, float, float, float, float]
+"""Presentation-only pose: simulated seconds, x, y, heading, forward speed."""
 type Point = tuple[float, float]
 
 
@@ -208,6 +210,7 @@ class EpisodeResult:
     setup: VehicleSetup
     controller_parameters: tuple[float, ...]
     telemetry: tuple[TelemetrySnapshot, ...]
+    trace: tuple[TracePose, ...] = ()
 
     def to_payload(self) -> dict[str, object]:
         """Serialize a compact baseline or preview result."""
@@ -710,8 +713,13 @@ def evaluate_episode(
     selected_car_id: str = "baseline-01",
     telemetry_interval_steps: int = TELEMETRY_INTERVAL_STEPS,
     telemetry_callback: Callable[[TelemetrySnapshot], None] | None = None,
+    trace_interval_steps: int | None = None,
 ) -> EpisodeResult:
-    """Run one deterministic episode independently of render cadence."""
+    """Run one deterministic episode independently of render cadence.
+
+    ``trace_interval_steps`` records a dense presentation-only pose trace. It
+    reads the state after each step and never feeds anything back.
+    """
     if (
         not isinstance(max_seconds, (int, float))
         or isinstance(max_seconds, bool)
@@ -724,6 +732,12 @@ def evaluate_episode(
         or telemetry_interval_steps <= 0
     ):
         raise ValueError("telemetry_interval_steps must be a positive integer.")
+    if trace_interval_steps is not None and (
+        not isinstance(trace_interval_steps, int)
+        or isinstance(trace_interval_steps, bool)
+        or trace_interval_steps <= 0
+    ):
+        raise ValueError("trace_interval_steps must be a positive integer.")
     max_steps = round(max_seconds / FIXED_TIME_STEP)
     if max_steps <= 0:
         raise ValueError("max_seconds must include at least one fixed step.")
@@ -736,6 +750,11 @@ def evaluate_episode(
     fixed_setup = setup if setup is not None else VehicleSetup()
     fixed_parameters = controller.parameters
     telemetry: list[TelemetrySnapshot] = []
+    trace: list[TracePose] = (
+        []
+        if trace_interval_steps is None
+        else [(0.0, state.x, state.y, state.heading, state.forward_speed)]
+    )
     controls = Controls(0.0, 0.0, 0.0)
     termination = "timeout"
     steps = 0
@@ -772,6 +791,16 @@ def evaluate_episode(
         best_progress = max(best_progress, travelled_progress)
         previous_path_distance = next_projection.path_distance
         projection = next_projection
+
+        if trace_interval_steps is not None and (
+            steps % trace_interval_steps == 0
+            or result.collided
+            or travelled_progress >= geometry.length
+            or steps == max_steps
+        ):
+            trace.append(
+                (steps * FIXED_TIME_STEP, state.x, state.y, state.heading, state.forward_speed)
+            )
 
         if step_index % telemetry_interval_steps == 0 or result.collided:
             snapshot = TelemetrySnapshot(
@@ -818,6 +847,7 @@ def evaluate_episode(
         setup=fixed_setup,
         controller_parameters=fixed_parameters,
         telemetry=tuple(telemetry),
+        trace=tuple(trace),
     )
 
 

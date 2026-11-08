@@ -66,6 +66,8 @@ from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 LOGGER: Final = logging.getLogger(__name__)
 OBSERVATION_CONTRACT_VERSION: Final = 1
 REPLAY_INTERVAL_STEPS: Final = 6
+RACE_TRACE_INTERVAL_STEPS: Final = 3
+GENERATION_RACE_CAR_LIMIT: Final = 12
 GENERATION_TRAIL_LIMIT: Final = 8
 GENERATION_TRAIL_POINT_LIMIT: Final = 64
 PURE_PURSUIT_CAUTION_LEVELS: Final = (1.5, 1.0, 0.6, 0.35)
@@ -110,7 +112,7 @@ class RunSession:
         self._active_candidate_id: str | None = None
         self._active_candidate_index: int | None = None
         self._live_telemetry: TelemetrySnapshot | None = None
-        self._latest_race_clip: tuple[int, int, EpisodeResult] | None = None
+        self._generation_race: dict[str, object] | None = None
         self._pending_command: Literal["pause", "stop"] | None = None
         self._fixed_ga: FixedGA | None = None
         self._neat_population: Any | None = None
@@ -158,8 +160,12 @@ class RunSession:
             raise
         with self._lock:
             self.reports.append(report)
-            champion = _ranked(report.results)[0]
+            ranked_results = _ranked(report.results)
+            champion = ranked_results[0]
             self.current_episode = episodes[champion.candidate.candidate_id]
+            self._generation_race = _generation_race_payload(
+                len(self.reports), ranked_results, episodes, self.settings.population_size
+            )
             self._generation_trails.append(
                 {
                     "runId": self.run_id,
@@ -212,7 +218,7 @@ class RunSession:
         *,
         include_live: bool = True,
         known_generation_replay_candidate_id: str | None = None,
-        include_race_clip: bool = False,
+        known_generation_race: int | None = None,
     ) -> dict[str, object]:
         """Return the current versioned observer value."""
         with self._lock:
@@ -284,8 +290,9 @@ class RunSession:
                             _replay_frame(frame) for frame in self.current_episode.telemetry
                         ],
                     }
-                if include_race_clip:
-                    response["raceClip"] = self._race_clip_payload()
+                race = self._generation_race
+                if race is not None and race["generation"] != known_generation_race:
+                    response["generationRace"] = race
             return response
 
     def to_run_document(self) -> dict[str, object]:
@@ -376,23 +383,6 @@ class RunSession:
         with self._lock:
             self._live_telemetry = snapshot
 
-    def _publish_race_clip(self, index: int, episode: EpisodeResult) -> None:
-        """Keep the latest finished episode for presentation; evolution never reads it."""
-        with self._lock:
-            self._latest_race_clip = (len(self.reports) + 1, index, episode)
-
-    def _race_clip_payload(self) -> dict[str, object] | None:
-        if self._latest_race_clip is None:
-            return None
-        generation, index, episode = self._latest_race_clip
-        return {
-            "candidateId": episode.telemetry[0].selected_car_id,
-            "candidateIndex": index,
-            "populationSize": self.settings.population_size,
-            "generation": generation,
-            "frames": [_replay_frame(frame) for frame in episode.telemetry],
-        }
-
     def _advance_fixed_ga(
         self,
     ) -> tuple[GenerationReport, dict[str, EpisodeResult]]:
@@ -413,9 +403,9 @@ class RunSession:
                 max_seconds=self.settings.episode_seconds,
                 selected_car_id=candidate.candidate_id,
                 telemetry_callback=self._publish_live_telemetry,
+                trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
             )
             episodes[candidate.candidate_id] = episode
-            self._publish_race_clip(candidate_index, episode)
             return episode_fitness(
                 episode,
                 round(self.settings.episode_seconds / FIXED_TIME_STEP),
@@ -463,6 +453,7 @@ class RunSession:
                     max_seconds=self.settings.episode_seconds,
                     selected_car_id=candidate.candidate_id,
                     telemetry_callback=self._publish_live_telemetry,
+                    trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
                 )
                 if raw_value.vehicle_genome != before_vehicle:
                     raise RuntimeError("Vehicle genes changed during active evaluation.")
@@ -472,7 +463,6 @@ class RunSession:
                 )
                 raw_value.fitness = evaluation.fitness
                 episodes[candidate.candidate_id] = episode
-                self._publish_race_clip(candidate_index, episode)
                 scored.append(NEATScoredCandidate(candidate, evaluation))
             ranked = _ranked(tuple(scored))
             values = [item.evaluation.fitness for item in scored]
@@ -647,12 +637,14 @@ class RunManager:
                 "knownGenerationReplayCandidateId",
                 "Known generation replay candidate id must be a non-empty string.",
             )
-        include_race_clip = payload.get("includeRaceClip", False)
-        if not isinstance(include_race_clip, bool):
+        known_race = payload.get("knownGenerationRace")
+        if known_race is not None and (
+            not isinstance(known_race, int) or isinstance(known_race, bool) or known_race < 1
+        ):
             return _run_error(
-                "INCLUDE_RACE_CLIP_INVALID",
-                "includeRaceClip",
-                "includeRaceClip must be a boolean.",
+                "KNOWN_RACE_INVALID",
+                "knownGenerationRace",
+                "Known generation race must be a positive integer.",
             )
         with self._lock:
             worker_error = self._worker_errors.get(session.run_id)
@@ -678,7 +670,7 @@ class RunManager:
             )
         snapshot = session.snapshot(
             known_generation_replay_candidate_id=known_replay,
-            include_race_clip=include_race_clip,
+            known_generation_race=known_race,
         )
         if snapshot["result"] is not None and worker is not None and worker.is_alive():
             worker.join()
@@ -692,7 +684,7 @@ class RunManager:
                 )
             snapshot = session.snapshot(
                 known_generation_replay_candidate_id=known_replay,
-                include_race_clip=include_race_clip,
+                known_generation_race=known_race,
             )
         return self._response(session, snapshot=snapshot)
 
@@ -1061,6 +1053,7 @@ def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
         "activeCandidate",
         "pendingCommand",
         "generationReplay",
+        "generationRace",
     }
     projection = {key: value for key, value in snapshot.items() if key not in transient}
     result = projection.get("result")
@@ -1074,6 +1067,42 @@ def _resume_projection(snapshot: dict[str, object]) -> dict[str, object]:
             key: value for key, value in selected.items() if key not in {"x", "y", "heading"}
         }
     return projection
+
+
+def _generation_race_payload(
+    generation: int,
+    ranked: Sequence[ScoredCandidateValue],
+    episodes: dict[str, EpisodeResult],
+    population_size: int,
+) -> dict[str, object]:
+    """Presentation-only race of the best cars of one finished generation.
+
+    Evolution never reads it and it is never persisted. Poses are flattened as
+    ``[t, x, y, heading, speed, ...]`` to keep the loopback payload small.
+    """
+    cars: list[dict[str, object]] = []
+    for rank, scored in enumerate(ranked[:GENERATION_RACE_CAR_LIMIT], start=1):
+        episode = episodes[scored.candidate.candidate_id]
+        poses: list[float] = []
+        for seconds, x, y, heading, speed in episode.trace:
+            poses.extend(
+                (round(seconds, 3), round(x, 3), round(y, 3), round(heading, 4), round(speed, 2))
+            )
+        cars.append(
+            {
+                "candidateId": scored.candidate.candidate_id,
+                "rank": rank,
+                "fitness": _rounded(scored.evaluation.fitness),
+                "termination": episode.termination,
+                "progress": _rounded(episode.progress_fraction),
+                "poses": poses,
+            }
+        )
+    return {
+        "generation": generation,
+        "populationSize": population_size,
+        "cars": cars,
+    }
 
 
 def _sample_generation_trail(telemetry: Sequence[TelemetrySnapshot]) -> list[list[float]]:

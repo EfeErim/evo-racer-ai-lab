@@ -125,12 +125,12 @@ describe("observer replay deltas", () => {
       knownGenerationReplayCandidateId: replay.candidateId,
     });
 
-    await observeRun("run-observer-refresh", replay.candidateId, true);
-    const clipBody = fetchMock.mock.calls[1]?.[1]?.body;
-    if (typeof clipBody !== "string") {
+    await observeRun("run-observer-refresh", replay.candidateId, 3);
+    const raceBody = fetchMock.mock.calls[1]?.[1]?.body;
+    if (typeof raceBody !== "string") {
       throw new Error("Observe request body was not JSON text.");
     }
-    expect(JSON.parse(clipBody)).toMatchObject({ includeRaceClip: true });
+    expect(JSON.parse(raceBody)).toMatchObject({ knownGenerationRace: 3 });
   });
 
   it("identifies an observation HTTP failure as a run error", async () => {
