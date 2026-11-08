@@ -4,7 +4,7 @@
 
 EvoRacer AI Lab is a local Windows x64 application for observing Fixed GA or
 feed-forward NEAT controllers learn on deterministic arcade racing tracks. You
-select or build a track, configure an experiment, review it, and press Start.
+select or build a track, choose a training plan, and press Start.
 There are no vehicle-driving controls.
 
 The application uses the browser only as its interface. Simulation, physics,
@@ -35,37 +35,35 @@ extracted `EvoRacer` folder together when moving it.
 
 ## Run a first experiment
 
-For the simplest first run:
-
-1. On Welcome, choose **Review recommended experiment**. This always selects
-   **Easy Oval** and **Quick check**, even if you changed the setup earlier.
-2. Wait for **Setup is valid** on Review.
-3. Read the track and settings, then choose **Start training**.
-
-Welcome also summarizes the player loop: set up, watch, and compare. This
-introduction is only guidance; it does not create or start a run.
-
-Choose **Choose track and settings** instead when you want a different track or
-training plan. That path is:
+The application has three steps, shown in the top bar:
 
 ```text
-Welcome -> Track -> Settings -> Review -> Start -> Training -> Results
+Home -> Set up -> Race -> Results
 ```
 
-Opening a screen or validating settings never starts training. Only the Start
+1. On Home, choose **Set up a race**. **Easy Oval** and **Quick check** are
+   already selected for a first run.
+2. Set up shows the track, the training plan, and a **Ready to race** panel at
+   the bottom. Python checks the setup automatically; wait for
+   **Setup is valid**.
+3. Choose **Start training**.
+
+Opening a screen or checking a setup never starts training. Only the Start
 button creates a run.
 
-Validation belongs to the current Review visit. If you choose Edit or otherwise
-leave Review while Python is checking, that request is released from the UI and
-Start remains locked. Returning to Review starts a fresh check; a late response
-from the earlier visit cannot bring Review back, unlock Start, or complete the
-newer check.
+Changing the track or plan while Python is checking starts a fresh check. A late
+answer for an earlier choice cannot unlock Start or move keyboard focus. If the
+setup is invalid, the panel lists the issue with a link to the section to fix and
+a **Check again** button.
 
-If Python rejects Start, Review stays open, shows the exact issue, and requires
+If Python rejects Start, Set up stays open, shows the exact issue, and requires
 another check before another attempt. If the Start response is interrupted,
-Review keeps the valid setup and says **No response yet. Try again.** A run may
-or may not have started, so open **Welcome and Saved runs** to check before
+Set up keeps the valid setup and says **No response yet. Try again.** A run may
+or may not have started, so open **Open Home and Saved runs** to check before
 choosing **Start training** again.
+
+Returning to Home keeps your Set up choices. **New race** on Results starts over
+from the recommended setup.
 
 ## Tracks
 
@@ -75,10 +73,12 @@ Three bundled presets are ready to use:
 - **Technical Circuit** mixes corner types.
 - **Chicane Challenge** emphasizes rapid direction changes.
 
-The Track screen always shows the active track's name, length, and seed in a bar
-that stays in view. Presets have no seed because their layout is fixed.
+The Track section of Set up marks the selected track. A track you made in the
+Track Builder appears there as **Your own track** with its name and length. The
+Track Builder page shows the active track's name, length, and seed. Presets have
+no seed because their layout is fixed.
 
-Select **Open Track Builder** on the Track screen. This is optional. The
+Select **Open Track Builder** in the Track section of Set up. This is optional. The Track Builder opens as its own page; **Done** returns to Set up. The
 workspace has three focused tabs, and each tab shows its current status:
 
 - **Editor** provides a large Python-compiled preview, track name and road-width
@@ -102,13 +102,14 @@ workspace has three focused tabs, and each tab shows its current status:
 
 With a keyboard, Left Arrow and Right Arrow move between Builder tabs; Home and
 End move to the first and last tab. Opening the Builder moves focus to its
-heading, closing it returns focus to **Open Track Builder**, and reopening it
+heading, closing it with × returns focus to **Open Track Builder** on Set up, and reopening it
 returns to the last-used tool instead of replacing a generated result with the
 starter Build draft.
 
 Builder drafts, generated candidates, and imported previews never select
 themselves. Only **Use this track** makes one active, and the result is then
-identified by **Active track** and **Active for Review and Start**.
+identified by **Active track** and **Active for this race**, and Set up
+shows it as the selected track.
 
 Every source passes through the same Python compiler and validator before it can
 be selected. An invalid import is rejected with a stable error instead of being
@@ -118,7 +119,7 @@ exact local record was removed.
 
 While an imported JSON file is being read and validated, the picker shows
 **Importing…** and cannot accept a second file. Closing Track Builder or leaving
-the Track screen invalidates that pending presentation. A late Python response
+the Track Builder page invalidates that pending presentation. A late Python response
 cannot reopen the Builder or replace the current editor after you leave.
 
 Library refreshes are ordered. A delayed older response cannot close the Track
@@ -164,54 +165,48 @@ The bundled presets expose their maximum workload directly:
 - **Thorough** is an extended NEAT experiment: 48 candidates, 40 generations,
   and 60 simulated seconds per episode.
 
-The Settings and Review screens show the maximum number of candidate evaluations
-before Start. One evaluation is one car attempting the track once, and a
+Set up shows the number of cars, generations, and the maximum number of
+attempts before Start. One evaluation is one car attempting the track once, and a
 collision or completed lap can end it early. Existing saved
 runs keep their original frozen settings; choose New setup to use a newer
 preset.
 
 ## Observe and control a run
 
-The race is the largest element on the Training screen. Beside it are the current
-generation, completed generations, best fitness so far, the active candidate,
-evaluation progress, and the run controls. Evaluation progress is real work done
-by Python. The race panel labelled **Replay** is presentation only, and training
-does not wait for it.
+The race is the largest element on the Race screen. Beside it are the current
+generation, the best score so far, the car being tested now, overall progress,
+and the run controls. Overall progress is real work done by Python. The race
+drawing is presentation only, and training never waits for it.
 
-Training evaluates cars much faster than real time, so the race view uses a
-two-second buffer. The panel first shows **Buffering 2 s**. Every two seconds
-after that, it plays the car that most recently finished during the previous two
-seconds, fitting that car's complete recorded run into the next two seconds. A
-run shorter than two simulated seconds plays at real speed and holds its last
-frame. The heading names the car's generation and position in the population, and
-the footer shows its simulated time, playback speed, and lap progress. This view
-is about two seconds behind Python; the selected-car summary still shows the car
-racing now. The buffered car is a recent sample, not a ranking: it can be weak.
+Training evaluates cars much faster than real time, so the race shows the most
+recently finished generation. When a generation finishes, Python sends the best
+12 of its cars, and they race together on the track from the start line: the
+generation's best car is bright green, the others are blue, and a car that
+crashed turns red where it stopped. The heading names the generation, and the
+footer says when training has already moved on to a later one. When a race ends,
+the newest finished generation starts; if none is newer, the same race plays
+again. Choose **1×**, **2×**, or **4×** to change how fast the race plays.
 
-After a pause or stop, the car on screen finishes and the panel returns to the
-latest Python generation champion at `2x` simulated speed. The browser fills only
-the visual frames between recorded Python positions, so motion stays smooth while
-training continues at full speed. The car's complete Python-recorded route is the
-solid green **Displayed car** or **Displayed champion** path. As new generations
-finish, the track keeps up to seven earlier champion paths as faint dashed
-context below the road markings.
-Off-road sections remain visible instead of being snapped back onto the track.
-Up to eight sampled paths are saved with the run, so reopening that same run
-restores its own comparison without inheriting paths from another experiment.
+Python records each car's position every three physics steps (20 times per
+simulated second). The browser draws smooth curves between those recorded
+positions using the recorded speed and heading, at the display's frame rate, so
+cars move without jumps. The race is drawn on one canvas that stays in place
+while the rest of the screen updates. Earlier generations' best paths stay on the
+track as faint dashed lines. Before the first generation finishes, the track
+shows a short note instead of cars.
 
-**Fitness over generations** and **Car telemetry** sit below the race and are
+**Score over generations** and **Car telemetry** sit below the race and are
 collapsed by default. Open **Car telemetry** whenever you want the full
 six-metric and seven-sensor inspection view; closing it keeps the race and
 generation progress as the primary workspace.
 
-Use **Reduce motion** in the top bar to hold replay and interpolated car motion
-still without pausing or changing Python evaluation. If Windows animation effects
-are off, EvoRacer reduces motion automatically, skips the two-second race buffer,
-and labels the control **Show race motion**. Select it to turn on the buffered
-race and smooth replays until you close EvoRacer. This setting changes
-presentation only; it cannot alter a candidate, physics step, fitness value, or
-deterministic result. The static marker uses the replay's final recorded frame,
-while the complete path remains visible.
+**Menu** in the top bar holds **Animate races** and **Exit EvoRacer**. Turn
+**Animate races** off to show still frames: the race holds each car at the end of
+its attempt, and the Results replay holds its frame. If Windows animation effects
+are off, races start still; choose **Play the race** on the Race screen, or turn
+**Animate races** on, to animate them until you close EvoRacer. This setting
+changes presentation only; it cannot alter a candidate, physics step, fitness
+value, or deterministic result.
 
 If the EvoRacer tab is in the background, training still runs at full speed but
 the interface checks for new observations less often. Returning to the tab
@@ -246,17 +241,18 @@ manage the experiment only; they do not drive the vehicle.
 
 ## Read results
 
-Results lead with the answer to whether best fitness improved over the run, plus
-whether the run is saved on this computer. **Back to Review** returns to the same
-setup, and **Start a new run** returns to Welcome. Results also contain:
+Results lead with the answer to whether the cars got better over the run (whether
+the best score improved), plus whether the run is saved on this computer.
+**Change setup and race again** returns to Set up with the same choices, and
+**New race** returns to Home. Results also contain:
 
-- three more answers: what the champion achieved (lap, collisions, ideal-line
-  match), how it compares with the references, and whether the comparison can be
-  trusted;
-- a champion replay with **Play**/**Pause**, **Step back**, **Step forward**, and
-  **Restart**, drawing a solid recorded champion path over a dashed
+- three more answers: what the champion achieved (lap, collisions, and whether
+  it stayed close to the smooth reference line), how it compares with the
+  references, and how sure the comparison is;
+- a champion replay with **Play**/**Pause**, **Step back**, **Step forward**,
+  **Restart**, and a **Replay position** slider, drawing a solid recorded champion path over a dashed
   minimum-curvature reference calculated by Python;
-- a fitness-over-generations chart with labeled axes and a legend, plus the
+- a score-over-generations chart with labeled axes and a legend, plus the
   champion compared with a seeded random network and Pure Pursuit using the
   champion's vehicle setup. Pure Pursuit shows its best of several caution levels
   for that car, and the table says if a reference crashed;
@@ -265,7 +261,7 @@ setup, and **Start a new run** returns to Welcome. Results also contain:
 - earlier saved champions only when their track, population, generation budget,
   completed generations, and episode duration match.
 
-The **Ideal-line match** is intentionally strict. Python reports the mean and
+The smooth reference line comparison is intentionally strict. Python reports the mean and
 95th-percentile distance between the recorded champion and its deterministic
 minimum-curvature reference. A match requires the champion to finish the lap
 and stay within both displayed tolerances. This geometric reference is useful
@@ -280,8 +276,9 @@ does not establish that one algorithm generally learns better.
 Results plays the Python-recorded champion automatically at `1x` simulated
 speed and fills visual positions between its timestamped frames. **Pause** holds
 the current recorded frame, and the step buttons move one recorded frame at a
-time. **Reduce motion** in the top bar holds the final frame without hiding
-either route; Play is then off and the step buttons still work.
+time; drag the slider to jump to any recorded frame. With **Animate races** off
+(in **Menu**), the replay holds its final frame without hiding either route;
+Play is then off and the slider and step buttons still work.
 Empty replays, non-positive sampling intervals, negative times, and frames whose
 simulated times do not increase are treated as corrupt local run data instead
 of being animated. When a Saved results record fails this check, its exact
@@ -300,7 +297,7 @@ Runs are written atomically at complete generation boundaries. Restarting the
 application never restarts training automatically. Choose Resume on a supported
 interrupted run to reconstruct and verify its checkpoint before continuing.
 
-Use the Welcome library to resume, export, or delete an exact run. Exported
+Use Saved runs on Home to resume, export, or delete an exact run. Exported
 files are versioned JSON records suitable for backup and inspection. Library
 actions lock while pending. If one action fails, its exact error is shown while
 the rest of the valid run library remains available.
@@ -308,8 +305,8 @@ the rest of the valid run library remains available.
 Saved-run refreshes are ordered as well. A delayed startup list cannot replace
 a newer terminal-run list or make a newly saved run temporarily disappear.
 
-Saved-run actions also belong to the Welcome screen where they were started.
-If you leave Welcome before a response returns, that late response cannot open
+Saved-run actions also belong to Home, where they were started.
+If you leave Home before a response returns, that late response cannot open
 Results, restore Training, or start a download after you come back. Open and
 Export responses are ignored. Because Python may already have completed a
 requested Resume or Delete, EvoRacer refreshes the run library in the
@@ -323,7 +320,7 @@ generation correctly shows **No results** instead.
 
 ## Exit and troubleshoot
 
-Use **Exit application** in the top bar for graceful shutdown. Closing the browser
+Use **Exit EvoRacer** in the top-bar **Menu** for graceful shutdown. Closing the browser
 tab leaves EvoRacer running in the background. Opening `EvoRacer.exe` again opens
 that running copy in a new tab.
 

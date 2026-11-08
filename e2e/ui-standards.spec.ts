@@ -1,10 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { distinctCanvasFrames, openSetup } from "./flow";
 import { expectSurfaceMeetsLimits } from "./surface";
 
 async function startRecommendedRun(page: Page) {
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
+  await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 }
@@ -24,16 +23,17 @@ for (const colorScheme of ["dark", "light"] as const) {
       await expect(page.locator(".recommended .track-geometry")).toBeVisible();
       await expectSurfaceMeetsLimits(page, `Welcome ${label}`);
       await expect(
-        page.getByRole("button", { name: "Review recommended experiment" }),
+        page.getByRole("button", { name: "Set up a race" }),
       ).toBeInViewport();
 
-      await page
-        .getByRole("button", { name: "Review recommended experiment" })
-        .click();
+      await openSetup(page);
       await expect(
         page.getByText("Setup is valid", { exact: true }),
       ).toBeVisible();
-      await expectSurfaceMeetsLimits(page, `Review ${label}`);
+      await expectSurfaceMeetsLimits(page, `Set up ${label}`);
+      await expect(
+        page.getByRole("button", { name: /Start training/ }),
+      ).toBeInViewport();
 
       await page.getByRole("button", { name: /Start training/ }).click();
       await expect(page.getByLabel("Live run status")).toBeVisible({
@@ -107,7 +107,7 @@ for (const viewport of [
       throw new Error(`Tab never reached ${String(name)}`);
     };
 
-    await tabTo(/Review recommended experiment/);
+    await tabTo(/Set up a race/);
     await page.keyboard.press("Enter");
     await expect(
       page.getByText("Setup is valid", { exact: true }),
@@ -155,30 +155,29 @@ test("a slow press on a run control survives observation updates", async ({
   });
 });
 
-test("the recommended action always reviews the recommended setup", async ({
+test("Set up keeps the player's choices when they step back to Home", async ({
   page,
 }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await openSetup(page);
   await page
     .locator('input[name="trackPreset"][value="chicane-challenge"]')
     .check({ force: true });
-  await page.getByRole("button", { name: "Continue to settings" }).click();
   await page.locator('[data-training-preset="balanced"]').click();
-  await page.locator('.progress-list [data-route="welcome"]').click();
+  await page.getByRole("link", { name: "EvoRacer home" }).click();
 
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
+  await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
-  await expect(page.locator(".review-summary")).toContainText("Easy Oval");
-  await expect(page.locator(".review-summary")).toContainText("Quick check");
-  await expect(page.locator(".review-summary")).toContainText(
-    "Up to 160 candidate evaluations",
+  await expect(page.locator(".start-summary")).toContainText(
+    "Chicane Challenge",
+  );
+  await expect(page.locator(".start-summary")).toContainText("Balanced");
+  await expect(page.locator(".start-summary")).toContainText(
+    "24 cars × 20 generations",
   );
 });
 
-test("Review and Start submit exactly the active track", async ({ page }) => {
+test("Set up and Start submit exactly the active track", async ({ page }) => {
   let submitted: unknown;
   await page.route("**/v1/runs/start", async (route) => {
     submitted = (route.request().postDataJSON() as { track: unknown }).track;
@@ -203,15 +202,14 @@ test("Review and Start submit exactly the active track", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
+  await openSetup(page);
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
   const builder = page.getByTestId("track-builder");
   await builder.getByRole("tab", { name: /Generate/ }).click();
   await builder.locator("[data-generator-seed]").fill("555");
   await builder.getByRole("button", { name: "Generate track" }).click();
   await builder.getByRole("button", { name: "Use this track" }).click();
-  await page.getByRole("button", { name: "Continue to settings" }).click();
-  await page.getByRole("button", { name: "Review experiment" }).click();
+  await page.getByRole("button", { name: /Done/ }).click();
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Start training" }).click();
   await expect(
@@ -222,7 +220,7 @@ test("Review and Start submit exactly the active track", async ({ page }) => {
   expect(submitted).toEqual(generated);
 });
 
-test("Results replay can be paused, stepped, and restarted, and Review is reachable", async ({
+test("Results replay can be paused, stepped, and restarted, and Set up is reachable", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
@@ -236,14 +234,13 @@ test("Results replay can be paused, stepped, and restarted, and Review is reacha
     .getByRole("button", { name: "Open results" })
     .click({ timeout: 90_000 });
 
-  const marker = page.locator(".replay-stage .track-replay-marker");
+  const canvas = ".replay-stage canvas";
   await expect(page.getByText("Playing at 1× speed")).toBeVisible();
+  expect(await distinctCanvasFrames(page, canvas, 400)).toBeGreaterThan(5);
   await page.getByRole("button", { name: "Pause" }).click();
   const status = page.getByText(/Frame \d+ of \d+/);
   await expect(status).toBeVisible();
-  const held = await marker.getAttribute("transform");
-  await page.waitForTimeout(150);
-  expect(await marker.getAttribute("transform")).toBe(held);
+  expect(await distinctCanvasFrames(page, canvas, 300)).toBeLessThanOrEqual(2);
 
   const before = /Frame (\d+)/.exec(await status.innerText())?.[1];
   await page.getByRole("button", { name: "Step forward" }).click();
@@ -253,9 +250,15 @@ test("Results replay can be paused, stepped, and restarted, and Review is reacha
   await page.getByRole("button", { name: "Play" }).click();
   await expect(page.getByText("Playing at 1× speed")).toBeVisible();
 
-  await page.getByRole("button", { name: "Back to Review" }).click();
+  const slider = page.getByLabel("Replay position");
+  await slider.fill("3");
+  await expect(status).toContainText("Frame 4 of");
+
+  await page
+    .getByRole("button", { name: "Change setup and race again" })
+    .click();
   await expect(
-    page.getByRole("heading", { name: "Review and start" }),
+    page.getByRole("heading", { name: "Set up a race" }),
   ).toBeVisible();
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await expect(
@@ -285,11 +288,15 @@ test("reduced motion holds still without changing what the run produces", async 
   await page
     .getByRole("button", { name: "Open results" })
     .click({ timeout: 90_000 });
-  const marker = page.locator(".replay-stage .track-replay-marker");
-  const held = await marker.getAttribute("transform");
+  const canvas = page.locator(".replay-stage canvas");
+  await expect(canvas).toBeVisible();
   await page.waitForTimeout(200);
-  expect(await marker.getAttribute("transform")).toBe(held);
+  expect(
+    await distinctCanvasFrames(page, ".replay-stage canvas", 400),
+  ).toBeLessThanOrEqual(2);
   await expect(page.getByRole("button", { name: "Play" })).toBeDisabled();
+  const status = page.getByText(/Frame \d+ of \d+/);
+  const held = await status.innerText();
   await page.getByRole("button", { name: "Step back" }).click();
-  expect(await marker.getAttribute("transform")).not.toBe(held);
+  await expect(status).not.toHaveText(held);
 });

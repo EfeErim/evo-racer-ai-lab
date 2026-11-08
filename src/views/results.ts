@@ -318,7 +318,7 @@ function renderReplay(
   const stepDisabled = frames.length <= 1 ? "disabled" : "";
   const status = playing
     ? "Playing at 1× speed"
-    : `${frame.simulatedSeconds.toFixed(1)} s · ${(frame.progress * 100).toFixed(0)}% of the lap`;
+    : `Frame ${String(heldIndex + 1)} of ${String(frames.length)} · ${frame.simulatedSeconds.toFixed(1)} s · ${(frame.progress * 100).toFixed(0)}% of the lap`;
   return `
     <section class="panel replay-panel" aria-labelledby="replay-title">
       <div class="race-heading">

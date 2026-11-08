@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
-test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
+import { distinctCanvasFrames, openMenu, openSetup, raceStage } from "./flow";
+
+test("an unconfirmed Start refreshes Saved runs when Home opens", async ({
   page,
 }) => {
   let runLibraryRequests = 0;
@@ -57,9 +59,7 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
 
   await page.goto("/");
   await expect.poll(() => runLibraryRequests).toBe(1);
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
+  await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
@@ -68,13 +68,13 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
     ),
   ).toBeVisible();
 
-  await page.getByRole("button", { name: "Welcome and Saved runs" }).click();
+  await page.getByRole("button", { name: "Open Home and Saved runs" }).click();
   await expect.poll(() => runLibraryRequests).toBe(2);
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
+  await page.getByRole("link", { name: "EvoRacer home" }).click();
   await expect.poll(() => runLibraryRequests).toBe(3);
   await expect(
     page.getByText(
@@ -85,8 +85,8 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
   await expect(
     page.getByRole("button", { name: "Retry saved runs" }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await page.getByRole("button", { name: "Back" }).click();
+  await page.getByRole("button", { name: "Set up a race" }).click();
+  await page.getByRole("link", { name: "EvoRacer home" }).click();
   await expect.poll(() => runLibraryRequests).toBe(4);
   await expect(
     page.getByText(
@@ -97,118 +97,63 @@ test("an unconfirmed Start refreshes Saved runs when Welcome opens", async ({
   await expect(page.getByRole("button", { name: "Resume" })).toBeVisible();
 });
 
-test("reduced-motion Training shows the displayed champion's complete recorded path", async ({
-  page,
-}) => {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/");
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
-  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: /Start training/ }).click();
-
-  const currentPath = page.locator(".current-generation-path");
-  await expect(currentPath).toBeVisible({ timeout: 90_000 });
-  await expect(page.getByText("Displayed champion")).toBeVisible();
-  await expect(page.locator(".live-race-stage")).toHaveAttribute(
-    "aria-label",
-    /with its complete recorded path/,
-  );
-
-  const pathIdentity = await page
-    .locator(".live-race-stage")
-    .evaluate((stage) => {
-      const path = stage.querySelector(".current-generation-path");
-      const marker = stage.querySelector(".track-replay-marker");
-      const lastPoint = path?.getAttribute("d")?.split(" L ").at(-1);
-      return {
-        candidateId: path?.getAttribute("data-current-candidate"),
-        markerTransform: marker?.getAttribute("transform"),
-        lastPoint,
-      };
-    });
-  expect(pathIdentity.candidateId).toBeTruthy();
-  await expect(
-    page
-      .locator(".live-race-panel")
-      .getByText(pathIdentity.candidateId ?? "missing candidate", {
-        exact: true,
-      }),
-  ).toBeVisible();
-  expect(pathIdentity.lastPoint).toBeTruthy();
-  expect(pathIdentity.markerTransform).toContain(
-    `translate(${pathIdentity.lastPoint ?? "missing point"})`,
-  );
-});
-
-test("Training shows the car from the previous two seconds on a two-second cadence", async ({
+test("Training races a whole generation together on one smooth canvas", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "no-preference" });
-  const clipRequestTimes: number[] = [];
+  const observeBodies: string[] = [];
   page.on("request", (request) => {
-    if (
-      request.url().endsWith("/v1/runs/observe") &&
-      request.postData()?.includes('"includeRaceClip":true') === true
-    ) {
-      clipRequestTimes.push(Date.now());
+    if (request.url().endsWith("/v1/runs/observe")) {
+      observeBodies.push(request.postData() ?? "");
     }
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await page.getByRole("button", { name: "Continue to settings" }).click();
+  await openSetup(page);
   await page.locator('[data-training-preset="balanced"]').click();
-  await page.getByRole("button", { name: "Review experiment" }).click();
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 
-  const stage = page.locator(".live-race-stage");
-  await expect(page.getByText("Buffering 2 s")).toBeVisible({
-    timeout: 10_000,
-  });
-  await expect(stage.locator(".track-replay-marker")).toHaveCount(0);
-
-  const marker = stage.locator(".track-replay-marker");
-  await expect(marker).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("Displayed car")).toBeVisible();
-  await expect(page.getByText("Raced in the previous 2 seconds")).toBeVisible();
-
-  const heading = page.locator("#live-race-title");
-  const firstCar = await heading.innerText();
-  const distinctPositions = await page.evaluate(
-    () =>
-      new Promise<number>((resolve) => {
-        const seen = new Set<string | null | undefined>();
-        const startedAt = performance.now();
-        const sample = (): void => {
-          seen.add(
-            document
-              .querySelector(".live-race-stage .track-replay-marker")
-              ?.getAttribute("transform"),
-          );
-          if (performance.now() - startedAt < 1000) {
-            requestAnimationFrame(sample);
-          } else {
-            resolve(seen.size);
-          }
-        };
-        requestAnimationFrame(sample);
-      }),
+  await expect(
+    page.getByRole("heading", { name: /Generation \d+ race/ }),
+  ).toBeVisible({ timeout: 60_000 });
+  const canvas = raceStage(page).locator("canvas.race-canvas");
+  await expect(canvas).toBeVisible();
+  await expect(
+    page.locator(".live-race-panel").getByText("Best car", { exact: true }),
+  ).toBeVisible();
+  await expect(raceStage(page)).toHaveAttribute(
+    "data-race-label",
+    /cars of generation \d+, racing together/,
   );
-  expect(distinctPositions).toBeGreaterThan(20);
-  await expect
-    .poll(() => heading.innerText(), { timeout: 5000 })
-    .not.toBe(firstCar);
 
-  await expect.poll(() => clipRequestTimes.length).toBeGreaterThan(2);
-  const intervals = clipRequestTimes
-    .slice(1)
-    .map((time, index) => time - (clipRequestTimes[index] ?? time));
-  for (const interval of intervals) {
-    expect(interval).toBeGreaterThanOrEqual(1900);
-    expect(interval).toBeLessThan(2400);
-  }
+  // The canvas is created once and survives every observation poll.
+  await canvas.evaluate((element) => {
+    (window as unknown as { raceCanvas?: Element }).raceCanvas = element;
+  });
+  const frames = await distinctCanvasFrames(
+    page,
+    '[data-race-host="training"] canvas',
+    1000,
+  );
+  expect(frames).toBeGreaterThan(30);
+  expect(
+    await canvas.evaluate(
+      (element) =>
+        (window as unknown as { raceCanvas?: Element }).raceCanvas === element,
+    ),
+  ).toBe(true);
+
+  // Each race is sent once; later polls name the generation already held.
+  await expect
+    .poll(() =>
+      observeBodies.some((body) => body.includes("knownGenerationRace")),
+    )
+    .toBe(true);
+
+  const fast = page.getByRole("button", { name: "4×" });
+  await fast.click();
+  await expect(fast).toHaveAttribute("aria-pressed", "true");
+  await expect(fast).toBeFocused();
 
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
@@ -221,25 +166,38 @@ test("Training shows the car from the previous two seconds on a two-second caden
   await page.getByRole("button", { name: /Stop after generation/ }).click();
 });
 
-test("Windows reduced motion stays the default until the user shows race motion", async ({
+test("Windows reduced motion holds the race still until the player presses Play", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
+  await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
-  await expect(page.locator(".live-race-panel")).toBeVisible({
-    timeout: 15_000,
-  });
-  await expect(page.getByText("Buffering 2 s")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Show race motion" }).click();
   await expect(
-    page.getByRole("button", { name: "Race motion on" }),
-  ).toBeFocused();
+    page.getByRole("heading", { name: /Generation \d+ race/ }),
+  ).toBeVisible({ timeout: 60_000 });
+
+  const selector = '[data-race-host="training"] canvas';
+  await expect(page.locator(selector)).toBeVisible();
+  await page.waitForTimeout(300);
+  expect(await distinctCanvasFrames(page, selector, 500)).toBeLessThanOrEqual(
+    2,
+  );
+  await expect(page.getByRole("button", { name: "4×" })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /Play the race/ }).click();
+  await expect(page.getByRole("button", { name: "2×" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(await distinctCanvasFrames(page, selector, 800)).toBeGreaterThan(10);
+
+  await openMenu(page);
+  await expect(
+    page.getByRole("button", { name: /Animate races/ }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: /Stop after generation/ }).click();
 });
 
 test("recommended offline run reaches results without starting automatically", async ({
@@ -343,37 +301,22 @@ test("recommended offline run reaches results without starting automatically", a
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "5 Training", exact: true }),
+    page.getByRole("button", { name: "2 Race", exact: true }),
   ).toBeDisabled();
 
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Review and start" }),
-  ).toBeVisible();
+  await openSetup(page);
   await initialValidationCaptured;
-  const editTrack = page.locator('.review-summary [data-route="track"]');
-  await editTrack.click();
-  await expect(
-    page.getByRole("heading", { name: "Choose a track" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "Continue to settings" }).click();
-  await page.getByRole("button", { name: "Review experiment" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Review and start" }),
-  ).toBeVisible();
-  const refreshedEditTrack = page.locator(
-    '.review-summary [data-route="track"]',
-  );
-  await refreshedEditTrack.focus();
-  await expect(refreshedEditTrack).toBeFocused();
+  // Changing the track while a check is in flight starts a new check; the
+  // stale answer must not unlock Start or move focus.
+  const technical = page.getByRole("radio", { name: /^Technical Circuit/ });
+  await technical.check();
+  await expect(technical).toBeFocused();
   await expect(page.getByText("Checking the setup")).toBeVisible();
   releaseInitialValidation?.();
   await page.waitForTimeout(200);
   await expect(page.getByText("Checking the setup")).toBeVisible();
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
-  await expect(refreshedEditTrack).toBeFocused();
+  await expect(technical).toBeFocused();
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
@@ -394,7 +337,7 @@ test("recommended offline run reaches results without starting automatically", a
 
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Review and start" }),
+    page.getByRole("heading", { name: "Set up a race" }),
   ).toBeVisible();
   await expect(
     page.getByText(
@@ -411,7 +354,7 @@ test("recommended offline run reaches results without starting automatically", a
   ).toBeEnabled();
   await page.getByRole("button", { name: /Start training/ }).click();
   await expect(
-    page.getByRole("heading", { name: "Training", exact: true }),
+    page.getByRole("heading", { name: "Race", exact: true }),
   ).toBeVisible();
   const telemetryDetails = page.locator("details.telemetry-disclosure");
   await expect(telemetryDetails).toBeVisible({ timeout: 15_000 });
@@ -434,24 +377,16 @@ test("recommended offline run reaches results without starting automatically", a
   await page.getByRole("button", { name: /Open results/ }).click();
 
   await expect(
-    page.getByRole("heading", { name: /best fitness|Too early/ }),
+    page.getByRole("heading", { name: /got better|Too early/ }),
   ).toBeVisible();
-  await expect(page.getByText(/Ideal-line match/)).toBeVisible();
+  await expect(page.getByText(/smooth reference line/)).toBeVisible();
   await expect(page.getByText("Champion vs baselines")).toBeVisible();
   await expect(page.getByText("Playing at 1× speed")).toBeVisible();
-  await expect(page.locator(".current-generation-path")).toBeVisible();
-  await expect(page.locator(".ideal-racing-line")).toBeVisible();
-  await expect(page.locator(".ideal-racing-line")).toHaveAttribute(
-    "data-reference-method",
-    "minimum-curvature-v1",
-  );
-  const marker = page.locator(".replay-stage .track-replay-marker");
-  const firstTransform = await marker.getAttribute("transform");
-  await page.waitForTimeout(80);
-  const secondTransform = await marker.getAttribute("transform");
-  expect(secondTransform).not.toBe(firstTransform);
-  await page.waitForTimeout(80);
-  expect(await marker.getAttribute("transform")).not.toBe(secondTransform);
+  await expect(page.getByText("Smoothest reference line")).toBeVisible();
+  await expect(page.locator(".replay-stage canvas.race-canvas")).toBeVisible();
+  expect(
+    await distinctCanvasFrames(page, ".replay-stage canvas", 500),
+  ).toBeGreaterThan(10);
   await page.setViewportSize({ width: 390, height: 844 });
   expect(
     await page.evaluate(
@@ -473,7 +408,7 @@ test("recommended offline run reaches results without starting automatically", a
       .evaluate((element) => element.scrollWidth - element.clientWidth),
   ).toBe(0);
 
-  await page.getByRole("button", { name: "Start a new run" }).click();
+  await page.getByRole("button", { name: "New race" }).click();
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Open results" }).first(),
@@ -505,11 +440,8 @@ test("recommended offline run reaches results without starting automatically", a
   );
   await page.getByRole("button", { name: "Open results" }).first().click();
   await savedOpenCaptured;
-  await page.getByRole("button", { name: "Choose track and settings" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Choose a track" }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: /Back/ }).click();
+  await openSetup(page);
+  await page.getByRole("link", { name: "EvoRacer home" }).click();
   await expect(
     page.getByRole("heading", {
       name: "AI cars learn to race by evolution, and you watch.",
@@ -523,11 +455,11 @@ test("recommended offline run reaches results without starting automatically", a
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", { name: /best fitness|Too early/ }),
+    page.getByRole("heading", { name: /got better|Too early/ }),
   ).toBeHidden();
   await page.getByText("Saved runs", { exact: true }).click();
   await expect(
-    page.getByText("Saved run response ignored after leaving Welcome."),
+    page.getByText("Saved run response ignored after leaving Home."),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Open results" }).first(),
@@ -568,16 +500,15 @@ test("recommended offline run reaches results without starting automatically", a
   ).toBeEnabled();
   await page.getByRole("button", { name: "Open results" }).first().click();
   await expect(
-    page.getByRole("heading", { name: /best fitness|Too early/ }),
+    page.getByRole("heading", { name: /got better|Too early/ }),
   ).toBeVisible();
-  await expect(page.getByText(/Ideal-line match/)).toBeVisible();
+  await expect(page.getByText(/smooth reference line/)).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Champion replay" }),
   ).toBeVisible();
-  await expect(page.locator(".current-generation-path")).toBeVisible();
-  await expect(page.locator(".ideal-racing-line")).toBeVisible();
+  await expect(page.locator(".replay-stage canvas.race-canvas")).toBeVisible();
 
-  await page.getByRole("button", { name: "Start a new run" }).click();
+  await page.getByRole("button", { name: "New race" }).click();
   await page.getByText("Saved runs", { exact: true }).click();
   await page.route("**/v1/runs/library/*/export", async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 500));
@@ -676,9 +607,7 @@ test("a transient run-command failure preserves controls and recovers", async ({
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
-  await page
-    .getByRole("button", { name: "Review recommended experiment" })
-    .click();
+  await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
 

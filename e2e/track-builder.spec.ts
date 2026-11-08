@@ -156,7 +156,7 @@ test("track builder previews invalid drafts, repairs them, and generates technic
   await expect(
     builder.locator(".generated-preview .validation-badge"),
   ).toHaveText(/Active track/);
-  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+  await expect(builder.getByText("Active for this race")).toBeVisible();
   await expect(
     page.getByRole("region", { name: "Active track" }),
   ).toContainText("Hard Long 731");
@@ -287,6 +287,8 @@ test("track builder previews invalid drafts, repairs them, and generates technic
 test("placed track pieces can be dragged to a new connector", async ({
   page,
 }) => {
+  // Keep the source piece and the target connector on screen together.
+  await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/");
   await page.getByRole("button", { name: "Set up a race" }).click();
   await expect(page.locator(".track-preview .track-geometry")).toHaveCount(3);
@@ -305,7 +307,7 @@ test("placed track pieces can be dragged to a new connector", async ({
   );
 });
 
-test("a late generated track cannot overwrite Track Builder after leaving Track", async ({
+test("a late generated track cannot overwrite Track Builder after leaving it", async ({
   page,
 }) => {
   let markGenerationCaptured: (() => void) | undefined;
@@ -334,10 +336,10 @@ test("a late generated track cannot overwrite Track Builder after leaving Track"
   await generationCaptured;
   await expect(builder.locator(".generator-submit")).toHaveText("Generating…");
 
-  await page.locator('.progress-list [data-route="settings"]').click();
+  await page.getByRole("button", { name: /Done/ }).click();
   releaseGeneration?.();
   await page.waitForTimeout(300);
-  await page.locator('.progress-list [data-route="track"]').click();
+  await page.getByRole("button", { name: /Open Track Builder/ }).click();
 
   await expect(page.getByTestId("track-builder")).toBeVisible();
   await expect(page.locator(".generated-preview .track-geometry")).toHaveCount(
@@ -378,7 +380,7 @@ test("a generated track stays a candidate until Use this track, then reaches Sta
   await expect(
     page.getByRole("region", { name: "Active track" }),
   ).toContainText("90210");
-  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+  await expect(builder.getByText("Active for this race")).toBeVisible();
 
   await builder.getByRole("button", { name: "Close Track Builder" }).click();
   await page.getByRole("button", { name: /Open Track Builder/ }).click();
@@ -389,7 +391,7 @@ test("a generated track stays a candidate until Use this track, then reaches Sta
   await expect(
     builder.getByRole("heading", { name: "Technical Long 90210" }),
   ).toBeVisible();
-  await expect(builder.getByText("Active for Review and Start")).toBeVisible();
+  await expect(builder.getByText("Active for this race")).toBeVisible();
 
   await page.getByRole("button", { name: /Done/ }).click();
   await expect(page.locator(".start-summary")).toContainText(

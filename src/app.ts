@@ -162,7 +162,7 @@ export function mountApp(root: HTMLElement): AppController {
         pending: undefined,
         notice: {
           tone: "neutral",
-          message: "Saved run response ignored after leaving Welcome.",
+          message: "Saved run response ignored after leaving Home.",
         },
       };
       if (

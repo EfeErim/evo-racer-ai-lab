@@ -155,10 +155,12 @@ export function createRunLibraryController(
         if (store.state.route !== "welcome") {
           return;
         }
+        // Use Python's canonical track so the draft and the compiled
+        // selection compare equal, whatever key order the saved file used.
         const restoredDraft = {
           contractVersion: 1 as const,
-          trackPreset: document.track.id,
-          track: document.track,
+          trackPreset: compiled.compiled.track.id,
+          track: compiled.compiled.track,
           settings: document.settings,
         };
         store.trackWorkspace = {
@@ -205,6 +207,7 @@ export function createRunLibraryController(
         render();
         return;
       }
+      let restoredSetup = response.setup;
       if (response.setup.track !== null) {
         const compiled = await compileTrack(response.setup.track);
         if (!isCurrentAction() || requestVersion !== store.runRequestVersion) {
@@ -220,6 +223,7 @@ export function createRunLibraryController(
           ...store.trackWorkspace,
           selected: compiled.compiled,
         };
+        restoredSetup = { ...response.setup, track: compiled.compiled.track };
       }
       if (store.state.route !== "welcome") {
         return;
@@ -230,7 +234,7 @@ export function createRunLibraryController(
         notice: { tone: "success", message: "Local run restored." },
       };
       store.generationTrails = [];
-      dispatch({ type: "restore-session", draft: response.setup });
+      dispatch({ type: "restore-session", draft: restoredSetup });
       applyRunResponse(response);
     } catch (error) {
       if (!isCurrentAction()) {

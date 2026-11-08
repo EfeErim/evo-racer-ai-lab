@@ -253,7 +253,7 @@ describe("Track Builder workspace", () => {
     const html = renderTrackBuilder(state);
 
     expect(html).toContain("Active track");
-    expect(html).toContain("Active for Review and Start");
+    expect(html).toContain("Active for this race");
     expect(html).toContain("This exact track will be used.");
     expect(html).not.toContain('data-track-action="use-generated"');
   });
@@ -282,7 +282,7 @@ describe("Track Builder workspace", () => {
     expect(html).toContain("Regenerate seed 731");
     expect(html).toContain("<dt>Seed</dt><dd>731</dd>");
     expect(html).toContain("1 straight · 8 corners · 2 chicanes");
-    expect(html).not.toContain("Active for Review and Start");
+    expect(html).not.toContain("Active for this race");
   });
 
   it("shows each tool's status on its tab", () => {

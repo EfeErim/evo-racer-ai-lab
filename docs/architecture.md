@@ -59,8 +59,8 @@ build will be static local assets served by the packaged launcher.
 ## Onboarding boundary
 
 The TypeScript shell owns route state, presentation-only range feedback,
-accessible interaction, and rendering for Welcome, Track, Settings,
-Review, Training, and Results. It cannot enter Training until a versioned
+accessible interaction, and rendering for Home, Set up (track, training plan,
+and Start on one page), the Track Builder, Race, and Results. It cannot enter Training until a versioned
 validation response from Python is valid and the user explicitly presses Start.
 After Start, setup transitions and field mutations are rejected so the reviewed
 configuration remains frozen.
@@ -257,7 +257,8 @@ made from the recorded telemetry of that generation's champion. This observer
 field is deliberately omitted from persisted run documents. Once the first
 generation is available, the browser presents those authoritative frames at
 `2x` simulated speed with `requestAnimationFrame`, interpolating position and
-the shortest heading arc between adjacent timestamps. The interpolation creates
+the shortest heading arc between adjacent timestamps when no generation race is
+available. The interpolation creates
 visual frames only: training continues in the background at full speed and no
 predicted state is returned to Python.
 
@@ -270,16 +271,30 @@ inherit it. Python still sends `generationReplay: null` before any replay exists
 so absence has the narrow meaning of "the acknowledged replay is unchanged."
 
 Training evaluates a complete episode in roughly 50–130 ms on the development
-machine, so one `250 ms` position sample usually belongs to a different car than
-the last. The two-second race buffer therefore does not stitch those samples
-together. Every two seconds, the browser sets `includeRaceClip: true` on one
-observe command, and Python answers with a transient `raceClip`: the recorded
-frames of the most recently finished episode, or `null` if none has finished.
-Python never builds this field otherwise, and it is omitted from persisted run
-documents. The browser plays the clip fitted into two seconds, at no less than
-real speed, and retains it only for the same run. Requesting clips cannot select
-or alter a candidate; `python/tests/test_race_clip.py` compares run documents
-with and without requests.
+machine, far faster than real time, so the Race screen shows the most recently
+finished generation rather than live samples. `evaluate_episode` accepts an
+optional `trace_interval_steps`; the observer passes `3`, which records a
+presentation-only pose `(t, x, y, heading, forward speed)` every three physics
+steps plus the final step. The trace only reads state after each step and is
+never fed back; the regression matrix is unchanged by it.
+
+When a generation finishes, Python builds a transient `generationRace` from the
+ranked top 12 cars of that generation: candidate id, rank, fitness,
+termination, progress, and the flattened poses. The browser sends the generation
+it already holds as `knownGenerationRace` on later observe commands, so each
+race crosses loopback once. The field is excluded from persisted run documents
+and from the resume comparison; `python/tests/test_generation_race.py` checks
+that observing races cannot change a run document and that checkpoints still
+resume.
+
+The browser plays a race on its own clock at a player-chosen `1x`, `2x`, or
+`4x`, joining poses with cubic Hermite curves whose tangents are the recorded
+velocities, so sparse samples draw arcs instead of polygons. All races and
+replays are drawn on one long-lived `<canvas>` per surface, which keeps a cached
+layer for the track and earlier paths and redraws only the cars each frame. Page
+renders patch the existing DOM in place (`src/dom-patch.ts`) and actions are
+delegated from the root, so a 250 ms observation never recreates the canvas,
+moves focus, or interrupts a pointer press.
 
 Python samples each generation champion's telemetry to at most 64 recorded
 `(x, y)` points and keeps a bounded history of eight paths in the versioned
@@ -287,8 +302,8 @@ observation checkpoint. The browser draws the currently displayed champion's
 replay as a solid green path and up to seven earlier champions as progressively
 faded dashed paths below the centerline and boundaries. It never snaps an
 off-road point back onto the road or derives predicted motion. Reduced-motion
-presentation holds the marker on the replay's final authoritative frame while
-retaining the full recorded path. Restored runs reproduce the same bounded
+presentation holds each car at its final recorded pose while retaining the
+recorded paths. Restored runs reproduce the same bounded
 Python-owned history without inheriting paths from another run.
 
 Observation delivery is visibility-aware: the browser schedules at `250 ms`
@@ -323,7 +338,8 @@ TypeScript parses and renders these values only. It owns the live status view,
 pause/resume/stop buttons, SVG fitness chart, comparison tables, and replay
 presentation. Results plays the recorded champion automatically at `1x` with
 `requestAnimationFrame` interpolation and overlays the solid green recorded
-path with the dashed cyan Python reference. The replay marker is placed on
+path with the dashed cyan Python reference on the shared race canvas. A slider
+selects any recorded frame. The replay car is placed on
 geometry already returned by the Python track compiler; presentation
 interpolation never performs browser physics, scoring, track construction, or
 racing-line optimization. Reduced motion holds the terminal frame while both

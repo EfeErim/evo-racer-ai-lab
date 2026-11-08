@@ -328,7 +328,7 @@ function renderActiveCallout(): string {
     <div class="active-track-callout" role="status">
       <span class="status-glyph is-success" aria-hidden="true">✓</span>
       <div>
-        <strong>Active for Review and Start</strong>
+        <strong>Active for this race</strong>
         <p>This exact track will be used.</p>
       </div>
     </div>

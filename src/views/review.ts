@@ -117,7 +117,10 @@ function renderValidationStatus(state: AppState): string {
         <strong>Start is locked.</strong>
         <ul>${errorList || "<li>Check the setup again to continue.</li>"}</ul>
       </div>
-      ${fix === null ? '<button class="button secondary compact" type="button" data-action="review">Check again</button>' : `<a class="button secondary compact" href="#${fix.target}">${fix.label}</a>`}
+      <div class="validation-actions">
+        ${fix === null ? "" : `<a class="button secondary compact" href="#${fix.target}">${fix.label}</a>`}
+        <button class="button secondary compact" type="button" data-action="review">Check again</button>
+      </div>
     </div>
   `;
 }

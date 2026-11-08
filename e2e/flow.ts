@@ -27,3 +27,44 @@ export async function openMenu(page: Page): Promise<void> {
 export function raceStage(page: Page) {
   return page.locator('[data-race-host="training"]');
 }
+
+/** Distinct canvas images seen over `ms`, sampled once per animation frame. */
+export async function distinctCanvasFrames(
+  page: Page,
+  selector: string,
+  ms: number,
+): Promise<number> {
+  return page.evaluate(
+    ({ selector, ms }) =>
+      new Promise<number>((resolve) => {
+        const canvas = document.querySelector<HTMLCanvasElement>(selector);
+        const context = canvas?.getContext("2d");
+        if (canvas === null || !context) {
+          resolve(0);
+          return;
+        }
+        const seen = new Set<number>();
+        const startedAt = performance.now();
+        const sample = (): void => {
+          const { data } = context.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          );
+          let hash = 0;
+          for (let index = 0; index < data.length; index += 16) {
+            hash = (hash * 31 + (data[index] ?? 0)) | 0;
+          }
+          seen.add(hash);
+          if (performance.now() - startedAt < ms) {
+            requestAnimationFrame(sample);
+          } else {
+            resolve(seen.size);
+          }
+        };
+        requestAnimationFrame(sample);
+      }),
+    { selector, ms },
+  );
+}
