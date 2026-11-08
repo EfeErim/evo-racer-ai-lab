@@ -3,6 +3,7 @@ import {
   renderTrackSvg,
   trackLengthMeters,
   type CompiledTrackV1,
+  type TrackV1,
 } from "./track-renderer";
 import {
   SEGMENT_DEFINITIONS,
@@ -76,6 +77,28 @@ export function createTrackWorkspaceState(
     },
     generator: { seed: 42, length: "medium", difficulty: "technical" },
   };
+}
+
+/**
+ * Keep the builder's "active" track equal to the track the setup draft will
+ * send at Start. When the draft falls back to a preset (New setup, the
+ * recommended experiment, or a preset card), the builder must stop calling
+ * its earlier custom track active.
+ */
+export function syncSelectedTrack(
+  workspace: TrackWorkspaceState,
+  draftTrack: TrackV1 | null,
+): TrackWorkspaceState {
+  if (workspace.selected === undefined) {
+    return workspace;
+  }
+  if (
+    draftTrack !== null &&
+    JSON.stringify(draftTrack) === JSON.stringify(workspace.selected.track)
+  ) {
+    return workspace;
+  }
+  return { ...workspace, selected: undefined, selectedSeed: undefined };
 }
 
 function sameTrack(
