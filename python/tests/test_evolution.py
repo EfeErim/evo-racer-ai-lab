@@ -25,7 +25,7 @@ from evo_racer.evolution import (
 )
 from evo_racer.simulation import RandomNetworkBaseline, evaluate_episode, preset_geometry
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase5-fixed-ga.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "fixed-ga.json"
 
 
 def _landscape_evaluator(candidate: FixedCandidate) -> CandidateEvaluation:

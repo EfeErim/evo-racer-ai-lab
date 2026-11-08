@@ -1,11 +1,10 @@
 # EvoRacer Architecture Decisions
 
-## Status
+## Scope
 
-These decisions define the complete Phase 10 application: foundation,
-onboarding, track authoring, simulation, Fixed GA, feed-forward NEAT,
-observer/results, persistence, packaging, and hardening. Product-level
-constraints remain authoritative in the repository product contract.
+This document records the architecture decisions behind each part of the
+application: onboarding, track authoring, simulation, Fixed GA, feed-forward
+NEAT, observer/results, persistence, packaging, and verification.
 
 ## Runtime boundary
 
@@ -21,7 +20,7 @@ Python application, simulation, and evolution core
 ```
 
 No component may bind to a LAN/public interface or call a non-loopback runtime
-resource. The Phase 0 Python service uses the standard library HTTP server and
+resource. The Python service uses the standard library HTTP server and
 hard-codes `127.0.0.1`; it has no runtime third-party dependency.
 
 ## Responsibility split
@@ -57,7 +56,7 @@ proves they are needed.
 Vite development and preview hosts are explicitly loopback-only. The release
 build will be static local assets served by the packaged launcher.
 
-## Phase 1 onboarding boundary
+## Onboarding boundary
 
 The TypeScript shell owns route state, presentation-only range feedback,
 accessible interaction, and rendering for Welcome, Track, Settings,
@@ -72,7 +71,7 @@ algorithm, and numeric-range rules. The browser submits the setup to
 creates or starts a run. The shared valid fixture under `contracts/` is consumed
 by both TypeScript and Python tests.
 
-## Phase 2 track boundary
+## Track boundary
 
 `TrackV1` is the only canonical track representation. It stores schema version,
 identity, road width, and ordered catalogue pieces; it does not persist
@@ -95,7 +94,7 @@ TypeScript validates the response shape and draws the supplied centerline,
 boundaries, and start line as SVG; it contains no track construction or
 validation rules.
 
-## Phase 3 track-authoring boundary
+## Track-authoring boundary
 
 The browser editor owns only interaction history and the ordered `TrackV1`
 piece list. Add, delete, undo, redo, reset, naming, and road-width controls are
@@ -109,7 +108,7 @@ motif under rotational symmetry to close a balanced loop. Length selects exactly
 12, 18, or 24 canonical pieces. Easy mixes flowing 45-degree and 90-degree
 corners without chicanes or hairpins, Technical requires direction changes and
 chicanes, and Hard requires direction changes, chicanes, and hairpins. Every
-candidate is accepted only by the existing Phase 2 compiler. A successful
+candidate is accepted only by the existing track compiler. A successful
 Generate command also makes that compiled TrackV1 the active setup track; the
 browser does not alter its geometry.
 
@@ -131,7 +130,7 @@ library commands. Preset, edited, generated, imported, and reloaded tracks
 therefore converge on `compile_track_payload`; no TypeScript track-domain path
 exists.
 
-## Phase 4 simulation boundary
+## Simulation boundary
 
 `python/src/evo_racer/simulation.py` owns the complete fixed-step evaluator.
 `VehicleState` stays limited to position, heading, forward and lateral speed,
@@ -170,13 +169,13 @@ Start action and returns version 1 selected-car telemetry. TypeScript validates
 and renders that snapshot only. Telemetry sampling frequency is an observer
 concern and cannot alter fixed physics results.
 
-## Phase 5 Fixed GA boundary
+## Fixed GA boundary
 
 `python/src/evo_racer/evolution.py` owns the complete Fixed GA lifecycle. Its
 runtime-neutral version 1 network representation fixes 10 normalized observation
 inputs, one six-node `tanh` hidden layer, and three continuous control outputs.
 The canonical Python controller executes this representation through the
-unchanged Phase 4 `evaluate_episode` path.
+unchanged `evaluate_episode` path.
 
 Every immutable `FixedGenome` combines the network with five vehicle performance
 logits and two bias genes. A numerically stable softmax makes the five
@@ -192,13 +191,13 @@ controller or vehicle setup. The isolated-generator choice follows Python
 while tournament selection follows the convergence model studied by
 [Miller and Goldberg](https://www.complex-systems.com/abstracts/v09_i03_a02/).
 
-Fitness uses net forward progress already produced by the Phase 4 evaluator.
+Fitness uses net forward progress already produced by the episode evaluator.
 Speed, survival time, and repeated local motion receive no reward. A completion
 and efficiency bonus is available only after a full lap, and collisions are
 penalized. Versioned generation reports preserve per-candidate audit fields and
 summary statistics without moving scoring logic into TypeScript.
 
-## Phase 6 NEAT boundary
+## NEAT boundary
 
 `python/src/evo_racer/neat_evolution.py` is the only neat-python integration
 boundary. The project pins `neat-python 2.0.0`, requires its explicit
@@ -219,17 +218,17 @@ The NEAT compiler converts enabled feed-forward topology into a version 1 DAG
 of ordered nodes and weighted links. Only `identity` output nodes, `tanh` hidden
 nodes, and `sum` aggregation are accepted. `NEATController` consumes that
 runtime-neutral value and the same normalized observation features as Fixed GA.
-Both algorithms then call `evaluate_candidate`, which owns the single Phase 4
-physics and Phase 5 fitness path.
+Both algorithms then call `evaluate_candidate`, which owns the single
+physics and fitness path.
 
 Checkpointing uses the pinned library's generation-boundary `Checkpointer`.
 Version 2.0 stores the population, species, innovation tracker, generation, and
 Python random state for the next generation to evaluate. Restore supplies the
 current explicit config and continues from that saved state. Durable application
 run persistence, checkpoint discovery, and corrupt-record isolation use the
-Phase 8 run-file boundary below.
+run-file boundary below.
 
-## Phase 7 observer and results boundary
+## Observer and results boundary
 
 `python/src/evo_racer/observer.py` owns run identity, frozen configuration,
 algorithm state, generation advancement, observation snapshots, terminal
@@ -307,7 +306,7 @@ baselines run on the same track, episode limit, physics, fitness, and champion
 vehicle setup. Because evolved setups can turn less sharply than the default car,
 the Pure Pursuit value is the best of its fixed-speed controller and four
 setup-aware caution levels. See
-[the learning benchmark note](verification/learning-benchmark.md).
+[the learning benchmark note](experiments/learning-benchmark.md).
 
 At terminal result construction, `python/src/evo_racer/racing_line.py` also
 builds a deterministic geometric reference from the closed Python centerline.
@@ -330,7 +329,7 @@ interpolation never performs browser physics, scoring, track construction, or
 racing-line optimization. Reduced motion holds the terminal frame while both
 complete paths remain visible.
 
-## Phase 8 persistence and recovery boundary
+## Persistence and recovery boundary
 
 Python owns `RunV1`, stored as
 `%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`. The envelope contains
@@ -368,7 +367,7 @@ whether a checkpoint is resumable.
 
 Python targets exactly the 3.13 release line. The package uses a `src` layout
 under `python/src/evo_racer` and owns the application, simulation, and evolution
-core. Phase 6 introduces the exact runtime dependency `neat-python 2.0.0`; its
+core. NEAT adds the exact runtime dependency `neat-python 2.0.0`; its
 [PyPI metadata](https://pypi.org/project/neat-python/2.0.0/) declares Python
 `>=3.8` and no runtime dependencies. Its bundled feed-forward config follows the
 [official v2.0.0 example](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/examples/xor/config-feedforward),
@@ -390,7 +389,7 @@ implementations.
 - TypeScript remains within the typescript-eslint supported range; it must not be
   upgraded independently.
 
-## Phase 9 Windows offline package
+## Windows offline package
 
 The production entrypoint is `evo_racer.launcher`. It creates the same
 `ThreadingHTTPServer` used by development, always binds the socket to
@@ -429,27 +428,26 @@ rejects any child Node.js or external Python process. The accepted top-level
 process is the extracted root-level `EvoRacer.exe` itself.
 
 User-owned data remains under `%LOCALAPPDATA%\EvoRacerAILab` and uses the
-versioned, atomic files defined in Phase 8.
+versioned, atomic run files described above.
 
-## Phase 10 verification boundary
+## Verification boundary
 
-Phase 10 adds a verification plane without adding a second simulation path.
+Verification never adds a second simulation path.
 `python/tools/hardening.py` creates a bounded matrix through the public
 `RunSession`, bundled preset compiler, Fixed GA, NEAT, canonical evaluator, and
 terminal result builder. It records stable case metadata and SHA-256 signatures
-in `contracts/phase10-regression-v2.json`; timing stays outside that deterministic
-fixture. `contracts/phase10-regression.json` keeps the physics v1 values.
+in `contracts/regression-matrix-v2.json`; timing stays outside that deterministic
+fixture. `contracts/regression-matrix-v1.json` keeps the physics v1 values.
 
 Both Python and TypeScript test the version 1 fixture. Python reruns all 18
 cases and requires exact equality. TypeScript checks that the same file covers
 three seeds, all three presets, both algorithms, complete replay values, and
 valid hashes without reimplementing any domain rule.
 
-`scripts/phase10-gate.ps1` composes the full automated checks, development
+`scripts/release-gate.ps1` composes the full automated checks, development
 loopback smoke, measured matrix, Windows release build, and clean-runtime
 acceptance. The measured JSON report is written under ignored
-`.runtime_tmp/phase10`; reviewed facts are copied into the Phase 10 verification
-document only after the gate passes.
+`.runtime_tmp/release-gate`.
 
 Architecture, user, algorithm-comparison, and demo documents contain no runtime
 assets or calls. The user guide is copied into the release as `USER-GUIDE.md`

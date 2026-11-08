@@ -23,7 +23,7 @@ from evo_racer.neat_evolution import (
 )
 from evo_racer.simulation import preset_geometry
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase6-neat.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "neat.json"
 
 
 def _synthetic_evaluator(candidate: NEATCandidate) -> CandidateEvaluation:

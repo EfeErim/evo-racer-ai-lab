@@ -17,7 +17,7 @@ import {
   undoEditor,
 } from "../src/track-workbench";
 
-describe("Phase 3 sequential editor and JSON document UI", () => {
+describe("Sequential editor and JSON document UI", () => {
   it("supports add, delete, undo, redo, and reset without deriving geometry", () => {
     const initial = createEditorState();
     const added = addEditorPiece(initial, "chicane-left");
@@ -82,7 +82,7 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
 
   it("accepts the shared Python-compiled TrackV1 document fixture", () => {
     const fixturePath = fileURLToPath(
-      new URL("../contracts/phase3-track-document.json", import.meta.url),
+      new URL("../contracts/track-document.json", import.meta.url),
     );
     const source = readFileSync(fixturePath, "utf8");
     expect(parseTrackDocument(source).id).toBe("phase3-shared-oval");
@@ -109,7 +109,7 @@ describe("Phase 3 sequential editor and JSON document UI", () => {
       readFileSync(
         fileURLToPath(
           new URL(
-            "../contracts/phase2-easy-oval-geometry.json",
+            "../contracts/easy-oval-geometry.json",
             import.meta.url,
           ),
         ),

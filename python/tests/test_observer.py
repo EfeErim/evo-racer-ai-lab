@@ -20,7 +20,7 @@ from evo_racer.observer import (
 from evo_racer.simulation import evaluate_episode as simulation_evaluate_episode
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase7-observation.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "observation.json"
 
 
 def _session(
@@ -218,7 +218,7 @@ def test_manager_streams_live_candidate_position_while_generation_runs(
         pytest.fail("Background generation did not complete.")
 
 
-def test_shared_phase7_observation_fixture_round_trips_in_python() -> None:
+def test_shared_observation_fixture_round_trips_in_python() -> None:
     fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
 
     assert parse_observation_snapshot(fixture) == fixture

@@ -21,13 +21,13 @@ interface ValidationFixture {
 }
 
 const fixturePath = fileURLToPath(
-  new URL("../contracts/phase1-setup-validation-valid.json", import.meta.url),
+  new URL("../contracts/setup-validation-valid.json", import.meta.url),
 );
 const fixture = JSON.parse(
   readFileSync(fixturePath, "utf8"),
 ) as ValidationFixture;
 
-describe("Phase 1 onboarding contract", () => {
+describe("Onboarding contract", () => {
   it("opens on Welcome and never starts a session automatically", () => {
     const state = createInitialState();
 

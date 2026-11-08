@@ -85,7 +85,7 @@ try {
         throw "The frontend response does not contain the product title."
     }
 
-    Write-Host "M0 smoke passed: frontend=$frontendUri python=$serviceUri"
+    Write-Host "Smoke test passed: frontend=$frontendUri python=$serviceUri"
 }
 finally {
     if ($null -ne $serviceProcess) {

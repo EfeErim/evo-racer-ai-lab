@@ -1,384 +1,101 @@
 # EvoRacer AI Lab
 
-EvoRacer AI Lab is an offline Windows application for observing neuroevolution
-learn to race on user-built tracks. The user designs or selects a track,
-configures an experiment, reviews the settings, and explicitly starts training.
-The user never drives a vehicle.
+[![CI](https://github.com/EfeErim/evo-racer-ai-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/EfeErim/evo-racer-ai-lab/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/EfeErim/evo-racer-ai-lab)](https://github.com/EfeErim/evo-racer-ai-lab/releases)
+![Platform: Windows x64](https://img.shields.io/badge/platform-Windows%20x64-lightgrey.svg)
 
-![EvoRacer results workspace](docs/media/evoracer-results-demo.svg)
+A desktop app for watching neuroevolution learn to drive. You build or generate a
+track, pick an algorithm (a fixed-topology genetic algorithm or NEAT), press Start,
+and watch generations of cars get better at lapping it. You never drive.
 
-## Windows release
+It runs fully offline: no accounts, no telemetry, no network calls beyond
+`127.0.0.1`.
 
-Version `1.1.1` is an executable-package correction currently verified from
-this source checkout but not yet published. Build it with
-`npm run build:release`, then open `release\EvoRacer\EvoRacer.exe` directly;
-Node.js, Python, a command script, and ZIP extraction are not required for the
-local build.
+![Results screen](docs/media/evoracer-results-demo.svg)
 
-The immutable published `v1.1.0` assets remain available on the
-[release page](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.1.0),
-but that older package used `EvoRacer.cmd` and is superseded by this correction.
+## Download
 
-Repository contributors can create those artifacts with
-`npm run build:release`. Publish both generated files together when attaching a
-binary release.
+Get `EvoRacer-Windows-x64.zip` from the
+[latest release](https://github.com/EfeErim/evo-racer-ai-lab/releases/latest),
+extract it and run `EvoRacer.exe` (`EvoRacer.cmd` in v1.1.0). Python is bundled, so
+nothing needs to be installed. Settings, tracks and saved runs live in
+`%LOCALAPPDATA%\EvoRacerAILab`.
 
-The [user guide](docs/user-guide.md) covers setup, tracks, training, results,
-saved runs, offline behavior, and troubleshooting.
+The [user guide](docs/user-guide.md) covers tracks, training settings, results and
+troubleshooting.
 
-## Product boundary
+## Features
 
-- Runs entirely on the user's Windows x64 computer.
-- Makes no runtime calls to remote APIs, CDNs, telemetry, analytics, update
-  services, model downloads, or remote assets.
-- Uses only `127.0.0.1` for local frontend-to-Python communication.
-- Stores settings, tracks, runs, checkpoints, and replays under
-  `%LOCALAPPDATA%\EvoRacerAILab`.
-- Ships as a self-contained ZIP; users do not need Node.js or Python.
-- Never starts training automatically. Start remains a deliberate user action
-  after track and settings validation.
+- **Tracks:** three presets, a piece-by-piece editor, a seeded generator, and
+  JSON import/export. Every track goes through the same compiler, which checks
+  closure and self-intersection.
+- **Simulation:** fixed-step (60 Hz) arcade physics with slip and grip, seven
+  ray sensors, and continuous steering, throttle and brake outputs.
+- **Learning:** a fixed `10 → 6 → 3` network trained by a genetic algorithm, or
+  NEAT via `neat-python`. Each genome also evolves the car's power budget and
+  brake/drive bias. Fitness rewards only forward lap progress and lap efficiency.
+- **Observation:** live view of the current candidate, fading trails of earlier
+  champions, pause/resume/stop, per-generation fitness and champion replay.
+- **Persistence:** every run is checkpointed at generation boundaries and can be
+  resumed after a restart; resuming reproduces the same results.
 
-## Product experience
-
-The locked user flow is:
-
-```text
-Welcome -> Track -> Settings -> Review -> Start -> Training -> Results
-```
-
-The application includes:
-
-- Three bundled preset tracks, a modular track editor, and a deterministic seeded
-  track generator.
-- Fixed-step arcade vehicle physics with continuous steering, throttle, and brake
-  controller outputs.
-- Fixed-topology genetic algorithm and feed-forward NEAT training.
-- Smooth Python-recorded champion observation, faded prior-generation evolution
-  trails, pause/resume/stop, telemetry, replay, and run comparison.
-- Versioned, local-only tracks, runs, checkpoints, and exports.
-
-The application intentionally excludes human vehicle controls, multiplayer,
-accounts, 3D graphics, simulation-grade vehicle dynamics, and non-loopback
-runtime networking.
-
-## Development setup
-
-Development requires:
-
-- Node.js `24.x` (the repository records `24.13.0` in `.nvmrc`)
-- npm `11.9.0`
-- Python `3.13`
-- PowerShell on Windows
-
-From the repository root:
-
-```powershell
-./scripts/setup.ps1
-npm run dev
-```
-
-`npm run dev` starts the Python service on `127.0.0.1:8765`, starts the Vite
-frontend on `127.0.0.1:5173`, and opens the local frontend. Press `Ctrl+C` to stop
-both processes.
-
-Run all foundation checks:
-
-```powershell
-npm run check
-npm run smoke:m0
-```
-
-The smoke command starts both local processes, verifies their loopback endpoints,
-and shuts them down.
-
-Run the complete portfolio-release gate:
-
-```powershell
-npm run test:phase10
-```
-
-This reruns the full automated suite, development loopback smoke, deterministic
-18-case algorithm matrix, Windows package build, and clean-runtime release
-acceptance.
-
-## Offline onboarding shell
-
-Phase 1 provides the complete local shell flow:
+## How it works
 
 ```text
-Welcome -> Track -> Settings -> Review -> Start -> Training -> Results
+Browser UI (TypeScript, Vite)  ──JSON over 127.0.0.1──▶  Python core
+  views, editor, rendering                                tracks, physics, GA/NEAT,
+                                                          fitness, persistence
 ```
 
-- Welcome explains the offline, observer-only workflow and requires an explicit
-  setup action.
-- Track and training presets provide a safe first-use path.
-- Settings include visible parameter help, bounded inputs, and advanced controls
-  collapsed by default.
-- Review calls the Python-owned versioned validation contract over
-  `127.0.0.1`. Start remains locked until the response is valid.
-- Start is the only action that enters Training. It freezes the reviewed
-  configuration, and the shell exposes no vehicle-driving controls.
-- Training starts a Python-owned evolutionary run only after Start and consumes
-  versioned generation and selected-car observation snapshots. Browser cadence
-  changes only when snapshots are requested; it never supplies physics steps.
+Python is the single source of truth for every domain rule. The TypeScript side only
+renders what Python returns, and the two talk through versioned JSON contracts that
+both test suites check (`contracts/`). Runs are deterministic for a given seed, which
+is what makes resume and replay exact.
 
-## Track core and bundled presets
+More detail is in [architecture](docs/architecture.md). Does the evolution actually
+learn, or just get lucky? The [learning benchmark](docs/experiments/learning-benchmark.md)
+compares it with random search on the same evaluation budget, and
+[algorithm comparison](docs/algorithm-comparison.md) covers GA versus NEAT.
 
-Phase 2 provides a Python-owned `TrackV1` schema and deterministic compiler:
+## Development
 
-- Canonical files contain only ordered catalogue pieces and track metadata.
-- Python derives the centerline, road boundaries, checkpoints, and spawn pose,
-  then validates closure and self-intersection with stable error codes.
-- Easy Oval, Technical Circuit, and Chicane Challenge use the same compiler
-  path that later editor, generator, and import features will use.
-- The Track screen requests versioned compiled geometry from the loopback core.
-  TypeScript only renders that Python output as local SVG.
-
-The shared Phase 2 fixtures under `contracts/` are verified from both Python and
-TypeScript.
-
-## Editor, generator, and local track library
-
-Phase 3 extends the same `TrackV1` path without moving domain rules into the
-browser:
-
-- Track Builder separates piece editing, deterministic generation, and the
-  local library into focused tabs with a large Python-compiled preview.
-- The sequential TypeScript editor changes only ordered canonical pieces and
-  provides reorder, duplicate, delete, undo, redo, reset, and Python-assisted
-  closure actions. Each changed draft must receive a fresh valid Python compile
-  response before **Use this track** becomes available.
-- The Python generator accepts seed, Short/Medium/Long length, and
-  Easy/Technical/Hard difficulty. Its versioned bounded search evaluates at
-  most 200 candidates and returns deterministic canonical JSON.
-- Edited, generated, imported, and saved tracks all pass through the Phase 2
-  Python validator and compiler before the UI can select them.
-- Version 1 track JSON can be imported and exported locally. Saved tracks use
-  atomic files under `%LOCALAPPDATA%\EvoRacerAILab\tracks`; unreadable records
-  are isolated from the valid library. Generated and imported previews require
-  an explicit user selection before they replace the experiment track.
-
-The shared Phase 3 TrackV1 document under `contracts/` is checked from both
-runtimes.
-
-## Physics, sensors, and baselines
-
-Phase 4 adds the deterministic Python evaluator shared by future algorithms:
-
-- Arcade physics advances only at `1/60 s` and models continuous control,
-  speed-dependent steering and turn-rate limit, lateral slip and grip recovery,
-  drag, and documented front/rear drive and brake bias effects.
-- Swept collision checks and seven road-edge rays consume geometry derived by
-  the existing Python track compiler. Progress is measured along the same closed
-  centerline.
-- Episode setup and controller parameters are fixed; only steering, throttle,
-  and brake outputs change during an episode.
-- Seeded random-network and Pure Pursuit baselines use the same physics,
-  sensors, progress, termination, and telemetry path.
-- `npm run test:learning` reruns the saved
-  [learning benchmark](docs/verification/learning-benchmark.md), which compares
-  evolution with the same evaluation budget spent without selection.
-- The browser consumes version 1 selected-car telemetry from
-  `POST /v1/simulation/preview`; it does not reproduce simulation rules.
-
-The shared Phase 4 telemetry fixture under `contracts/` is checked from both
-runtimes.
-
-## Fixed-topology genetic algorithm
-
-Phase 5 adds the first Python-owned training algorithm without changing the
-Phase 4 evaluator:
-
-- A versioned `10 -> 6 -> 3` feed-forward network maps normalized telemetry to
-  continuous steering, throttle, and brake controls.
-- Each immutable genome contains the network parameters, five softmax-normalized
-  vehicle performance-budget logits, and full-domain front brake/drive bias
-  genes.
-- An isolated seeded random generator drives deterministic initialization,
-  tournament selection, uniform crossover, bounded Gaussian mutation, and exact
-  elitism.
-- Fitness rewards only net forward lap progress and verified completion
-  efficiency. Raw speed, survival time, and repeated local motion earn nothing;
-  collisions are penalized.
-- Versioned generation reports retain every candidate's fitness, progress,
-  completion, collision, and step results.
-
-The shared Phase 5 fixed-genome fixture under `contracts/` is checked from both
-Python and TypeScript. The browser test checks only the versioned presentation
-shape; Python remains the sole network, vehicle-budget, fitness, and evolution
-authority.
-
-## Feed-forward NEAT
-
-Phase 6 adds feed-forward NEAT through the pinned local `neat-python 2.0.0`
-runtime dependency:
-
-- `EvoRacerGenome` extends the library genome with the same five vehicle
-  performance-budget logits and two full-domain bias genes used by Fixed GA.
-- Controller topology, weights, and vehicle genes cross over or mutate only
-  while NEAT creates the next generation. Evaluation receives frozen compiled
-  networks and immutable vehicle values.
-- Python compiles each evolved topology into a version 1 runtime-neutral
-  feed-forward DAG. The canonical controller executes that representation
-  without exposing neat-python objects to the evaluator or browser.
-- Fixed GA and NEAT share observation normalization, Phase 4 physics, episode
-  termination, and the Phase 5 fitness function.
-- Seeded runs can save and restore neat-python checkpoints. Restoring a saved
-  generation reproduces the same next-generation result sequence.
-
-The shared Phase 6 NEAT fixture under `contracts/` is round-tripped by Python
-and structurally checked by TypeScript. Checkpoint persistence and run-library
-UX remain later-phase work.
-
-## Observer experience and results
-
-Phase 7 connects both algorithms to one Python-owned, generation-batched run
-session:
-
-- Start freezes the validated track and training settings. Observation commands
-  start or poll one background generation through the existing fixed-step
-  evaluator, independent of browser render cadence.
-- Pause and resume operate only between deterministic generation batches. Stop
-  produces a terminal result after at least one completed generation.
-- Training displays the currently evaluated candidate moving on the compiled
-  track, plus live position, heading, controls, progress, speed, and seven
-  road-edge sensors. Generation fitness values appear at the deterministic
-  generation boundary.
-- Training and Results retain up to seven prior generation-champion paths from
-  recorded Python replay points, with older paths faded behind the current car.
-- Results include complete versioned run metadata, fitness history, champion
-  and identical-setup baseline comparisons, and a recorded champion replay.
-- Replay frames contain Python-recorded position, heading, controls, progress,
-  controller parameters, and the fixed vehicle setup. TypeScript only places
-  those frames on Python-compiled track geometry.
-- Completed runs are compared only when track identity, population, generation
-  count, completed generations, and episode duration match.
-
-The shared Phase 7 observation fixture under `contracts/` is parsed by both
-Python and TypeScript.
-
-## Persistence and recovery
-
-Phase 8 saves every run at a complete generation boundary under
-`%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`:
-
-- Python owns the version 1 run envelope, embedded TrackV1 document, frozen
-  settings, observation checkpoint, and SHA-256 integrity value.
-- Start, observe, pause, resume, stop, and completion replace `run.json`
-  atomically only after a complete deterministic batch.
-- The Welcome screen lists saved runs after a restart. Training never resumes
-  automatically; the user must press Resume.
-- Resume rebuilds the algorithm from the saved track, settings, seed, and
-  completed generation count, then compares the reproduced checkpoint before
-  allowing another generation.
-- Corrupt or changed records are isolated without hiding valid tracks or runs.
-  Valid runs can be exported as versioned JSON or deleted individually.
-- Each checkpoint retains at most eight sampled generation-champion paths so
-  the Evolution trail survives restart without storing full replay payloads.
-
-The shared Phase 8 run document under `contracts/` is validated by Python and
-parsed structurally by TypeScript.
-
-## Windows offline package
-
-Phase 9 ships the production browser UI and Python core as a PyInstaller
-`onedir` Windows x64 application:
-
-- `EvoRacer.exe` is the root-level user entry point. Opening it starts the
-  complete bundled runtime and local frontend without a command script.
-- The local launcher binds only to `127.0.0.1:8765` and opens the user's default
-  browser. Browser and Python contracts remain on the same loopback origin.
-- The application includes an explicit Exit action. It confirms the request,
-  finishes the current HTTP response, shuts down the local server, and closes
-  the packaged process.
-- The application folder bundles Python 3.13, neat-python, the NEAT
-  configuration, and every production frontend asset. Node.js and a system
-  Python installation are not required at runtime.
-- The release includes the README, third-party notices, complete Python and
-  neat-python license texts, the PyInstaller license, and a separate SHA-256
-  checksum.
-
-Build and run the Windows release gate:
+Requires Windows, Node.js 24 (see `.nvmrc`), npm 11 and Python 3.13.
 
 ```powershell
-npm run build:release
-npm run test:release
+./scripts/setup.ps1   # creates .venv and installs locked dependencies
+npm run dev           # Python service on :8765, Vite on :5173
 ```
 
-The generated files are:
+| Command                 | What it runs                                                                           |
+| ----------------------- | -------------------------------------------------------------------------------------- |
+| `npm run check`         | formatting, lint, type checks and unit tests for TypeScript and Python                 |
+| `npm run test:e2e`      | Playwright user flows and accessibility scan                                           |
+| `npm run build:release` | PyInstaller build into `release\EvoRacer\` plus the ZIP and checksum                   |
+| `npm run test:release`  | acceptance test of the built package with no Node.js or Python on PATH                 |
+| `npm run test:gate`     | all of the above plus a dev smoke test and the deterministic 18-case regression matrix |
+
+## Project layout
 
 ```text
-release\EvoRacer\EvoRacer.exe
-release\EvoRacer-Windows-x64.zip
-release\EvoRacer-Windows-x64.zip.sha256
+src/                  TypeScript UI: views, controllers, rendering, IPC client
+python/src/evo_racer/ Python core: tracks, simulation, evolution, service
+python/tools/         benchmarks and experiment scripts
+contracts/            JSON fixtures shared by both test suites
+tests/, python/tests/ unit tests;  e2e/  Playwright tests
+packaging/            PyInstaller spec and third-party notices
+docs/                 architecture, user guide, experiments
 ```
 
-The complete `release\EvoRacer` folder is the directly runnable local build.
-Keep `_internal` beside `EvoRacer.exe`. The ZIP and checksum are parallel
-distribution artifacts.
+## Limitations
 
-Users extract the ZIP and open `EvoRacer\EvoRacer.exe`. All application data
-continues to live under `%LOCALAPPDATA%\EvoRacerAILab`.
+- Windows x64 only.
+- The physics is arcade-style, not a vehicle dynamics model.
+- Learning results depend on seed, track and budget. The saved benchmarks show that
+  selection beats random search under the tested settings, not that every run
+  improves or that one algorithm is better in general.
+- Release builds are not code-signed, so Windows SmartScreen may warn on first run.
 
-## Hardening and evidence
+## License
 
-Phase 10 keeps deterministic signatures for three seeds across all three
-presets and both algorithms. The matrix is an execution/regression smoke test,
-not a claim that one algorithm learns better. The
-[algorithm comparison](docs/algorithm-comparison.md) separates those smoke
-results from the controlled learning evidence and states the remaining limits.
-The focused `npm run test:e2e` gate exercises the recommended browser flow, and
-`npm run test:thorough` completes the heaviest bundled preset when extended
-acceptance evidence is required.
-
-Architecture decisions, milestone evidence, and public claim boundaries are
-saved in:
-
-- [Architecture](docs/architecture.md)
-- [Phase 10 verification](docs/verification/phase10-hardening.md)
-- [Project state](PROJECT_STATE.md)
-
-## Public binary publication
-
-Phase 11 publishes the Phase 10-verified package as a tagged GitHub Release.
-The source tag, Windows ZIP, separate checksum file, and checked-in release
-notes identify one stable version. Contributors can verify the public assets
-after publication with:
-
-```powershell
-npm run test:phase11
-```
-
-The verifier downloads both release assets into a temporary directory, checks
-their names and sizes against the release metadata, and recomputes the ZIP
-SHA-256 without altering the application or its local-only runtime boundary.
-
-## Repository layout
-
-```text
-contracts/                   Shared versioned TypeScript/Python fixtures
-packaging/                   Third-party notices for the portable runtime
-e2e/                         Focused Playwright offline user-flow tests
-src/                         TypeScript browser UI state, views, and IPC client
-tests/                       TypeScript tests
-python/src/evo_racer/        Authoritative Python application/simulation core
-python/tests/                Python tests
-scripts/                     Windows setup, development, and gate scripts
-docs/architecture.md         Locked architecture decisions
-docs/user-guide.md           Packaged end-user guide
-docs/algorithm-comparison.md Evidence and comparison limits
-docs/media/                  Local demo media
-docs/verification/           Saved milestone verification evidence
-```
-
-Python is authoritative for tracks, simulation, sensors, controller execution,
-episode evaluation, fitness, baselines, evolution, persistence, and the local
-service. TypeScript is intentionally limited to browser UI state, interaction,
-rendering, charts, and the IPC client. The runtimes exchange versioned JSON
-contracts; domain rules are not duplicated in TypeScript.
-
-## Current status
-
-Phase and gate evidence are tracked in [`PROJECT_STATE.md`](PROJECT_STATE.md).
-The durable product rules are in
-[`product-contract.md`](.agents/skills/build-evo-racer/references/product-contract.md).
+[MIT](LICENSE). Bundled runtime components keep their own licenses; see
+[third-party notices](packaging/THIRD-PARTY-NOTICES.txt).

@@ -125,7 +125,7 @@
       ]
     ]
   },
-  "plan": "docs/verification/lap-weight-plan.md",
+  "plan": "docs/experiments/lap-weight-plan.md",
   "rows": [
     {
       "algorithm": "all",

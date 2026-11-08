@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const fixture: unknown = JSON.parse(
-  readFileSync(resolve("contracts/phase10-regression-v2.json"), "utf8"),
+  readFileSync(resolve("contracts/regression-matrix-v2.json"), "utf8"),
 );
 
 function record(value: unknown): Record<string, unknown> {
@@ -13,7 +13,7 @@ function record(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-describe("Phase 10 deterministic regression contract", () => {
+describe("Deterministic regression contract", () => {
   it("covers three seeds, three presets, and both algorithms", () => {
     const matrix = record(fixture);
     const configuration = record(matrix.configuration);

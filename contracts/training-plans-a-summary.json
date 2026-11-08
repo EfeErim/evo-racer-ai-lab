@@ -1,5 +1,5 @@
 {
-  "plan": "docs/verification/training-plan-plan.md",
+  "plan": "docs/experiments/training-plan.md",
   "rows": [
     {
       "algorithm": "fixed-ga",

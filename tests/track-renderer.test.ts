@@ -16,13 +16,13 @@ interface GeometryFixture {
 }
 
 const fixturePath = fileURLToPath(
-  new URL("../contracts/phase2-easy-oval-geometry.json", import.meta.url),
+  new URL("../contracts/easy-oval-geometry.json", import.meta.url),
 );
 const fixture = JSON.parse(
   readFileSync(fixturePath, "utf8"),
 ) as GeometryFixture;
 
-describe("Phase 2 Python geometry renderer", () => {
+describe("Python geometry renderer", () => {
   it("accepts the shared versioned geometry fixture", () => {
     const response = parsePresetTracksResponse({
       contractVersion: 1,

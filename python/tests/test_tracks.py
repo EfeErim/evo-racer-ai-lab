@@ -65,7 +65,7 @@ def test_compilation_is_deterministic_and_does_not_persist_geometry() -> None:
 
 def test_invalid_fixtures_return_stable_error_codes() -> None:
     fixtures: list[dict[str, Any]] = json.loads(
-        (CONTRACTS_DIR / "phase2-invalid-tracks.json").read_text(encoding="utf-8")
+        (CONTRACTS_DIR / "invalid-tracks.json").read_text(encoding="utf-8")
     )
 
     for fixture in fixtures:
@@ -77,7 +77,7 @@ def test_invalid_fixtures_return_stable_error_codes() -> None:
 
 def test_shared_geometry_fixture_matches_python_compiler() -> None:
     fixture: dict[str, Any] = json.loads(
-        (CONTRACTS_DIR / "phase2-easy-oval-geometry.json").read_text(encoding="utf-8")
+        (CONTRACTS_DIR / "easy-oval-geometry.json").read_text(encoding="utf-8")
     )
 
     assert compile_track_payload(fixture["track"]) == fixture["compiled"]

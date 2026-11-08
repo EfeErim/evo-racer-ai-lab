@@ -27,7 +27,7 @@ from evo_racer.simulation import (
 )
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "phase4-telemetry.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "telemetry.json"
 
 
 def _unfiltered_sensor_distances(geometry: TrackGeometry, state: VehicleState) -> tuple[float, ...]:

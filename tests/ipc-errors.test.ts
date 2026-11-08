@@ -21,7 +21,7 @@ import type { TrackV1 } from "../src/track-renderer";
 const trackFixture = JSON.parse(
   readFileSync(
     fileURLToPath(
-      new URL("../contracts/phase2-easy-oval-geometry.json", import.meta.url),
+      new URL("../contracts/easy-oval-geometry.json", import.meta.url),
     ),
     "utf8",
   ),

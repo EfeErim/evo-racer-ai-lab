@@ -498,7 +498,7 @@ def make_episode_evaluator(
     *,
     max_seconds: float,
 ) -> FitnessEvaluator:
-    """Create the production Fixed GA evaluator over Phase 4 physics."""
+    """Create the production Fixed GA evaluator over physics."""
     if not math.isfinite(max_seconds) or max_seconds <= 0.0:
         raise ValueError("max_seconds must be finite and positive.")
 
@@ -536,7 +536,7 @@ def evaluate_candidate(
 
 
 def controller_features(observation: Observation) -> tuple[float, ...]:
-    """Normalize the shared Phase 4 observation for every learned controller."""
+    """Normalize the shared observation for every learned controller."""
     return (
         _clamp(observation.state.forward_speed / 40.0, 0.0, 1.0),
         _clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
