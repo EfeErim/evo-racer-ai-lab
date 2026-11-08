@@ -371,8 +371,6 @@ def test_misnamed_valid_track_record_is_isolated(tmp_path: Path) -> None:
 
 
 def test_shared_phase_three_track_document_uses_the_python_compiler() -> None:
-    track: object = json.loads(
-        (CONTRACTS_DIR / "track-document.json").read_text(encoding="utf-8")
-    )
+    track: object = json.loads((CONTRACTS_DIR / "track-document.json").read_text(encoding="utf-8"))
     compiled = compile_track_payload(track)
     assert compiled["track"] == track
