@@ -72,8 +72,8 @@ Her adımın bir çıkış ölçütü var. Ölçüt sağlanmadan sonraki adıma 
 Bu makine Windows 11 Pro ve donanım sanallaştırması açık, yani temiz Windows için ayrı bir bilgisayar gerekmiyor. [Windows Sandbox](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file) her açılışta sıfır bir Windows başlatıyor ve `<Networking>Disable</Networking>` ile ağı tamamen kapatıyor.
 
 - [ ] 🧑 Yönetici PowerShell'de bir kez çalıştır ve bilgisayarı yeniden başlat: `Enable-WindowsOptionalFeature -Online -FeatureName Containers-DisposableClientVM`
-- [ ] `release\EvoRacer` klasörünü salt okunur bağlayan, ağı kapalı bir `.wsb` dosyası ve kabul betiği ekle.
-- [ ] Sandbox içinde Review → Start → Training → Results → kapat → aç → Results akışını tamamla; Python ve Node.js olmadığını, yalnızca loopback dinlendiğini kaydet.
+- [x] `npm run test:sandbox`, `release\EvoRacer` klasörünü salt okunur bağlayan, ağı kapalı bir `.wsb` dosyası üretip açıyor. Sandbox içindeki betik makine ve ağ kanıtını kendi topluyor; arayüz adımlarını sana yazdırıyor. Betik host'ta self-test ile 11/11 geçti. [Ayrıntı](verification/offline-sandbox.md)
+- [ ] 🧑 Sandbox içinde Review → Start → Training → Results → kapat → aç → Results akışını tamamla; Python ve Node.js olmadığını, yalnızca loopback dinlendiğini kaydet.
 
 **Çıkış:** Başarı tanımının 3. maddesi; M9 ve M10 gate'lerindeki temiz makine şartı kapanır.
 

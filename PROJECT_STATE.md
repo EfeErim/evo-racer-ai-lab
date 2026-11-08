@@ -263,8 +263,11 @@ The plan descriptions now state those outcomes. Step 3's automated part is close
 [`docs/verification/accessibility.md`](docs/verification/accessibility.md): axe reports
 no WCAG A/AA violations on nine surfaces in both color schemes, every surface reflows at
 `320` and `640` px, and the keyboard journey passes at `1280` and `320` px. The NVDA
-checklist in that file is the remaining manual item. Step 4, offline Windows Sandbox
-acceptance, needs the user to enable Windows Sandbox first.
+checklist in that file is the remaining manual item. Step 4 is prepared in
+[`docs/verification/offline-sandbox.md`](docs/verification/offline-sandbox.md):
+`npm run test:sandbox` opens the package in a network-less Windows Sandbox and records
+evidence. Its in-sandbox script passed a host self-test, but the sandbox itself has not
+run because Windows Sandbox is not enabled on this machine yet.
 Work directly on `main`. Any
 further physics, fitness, or settings change must be measured on new seeds and tracks,
 because the held-out matrix is now development evidence. Remaining open checks are human
