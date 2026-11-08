@@ -7,32 +7,20 @@ import {
 import type { FocusSnapshot } from "./render-state";
 import type { RunCommand } from "./run-presentation";
 import type {
+  GenerationRaceV1,
   ObservationSnapshotV1,
-  ReplayFrameV1,
   RunLibraryResponseV1,
 } from "./simulation";
 import {
   createTrackWorkspaceState,
   type TrackWorkspaceState,
 } from "./track-builder";
-import type { RaceBufferState } from "./race-buffer";
-import type { CompiledTrackV1, TrackMarker } from "./track-renderer";
-
-export interface LiveMarkerMotion {
-  candidateId: string;
-  from: TrackMarker;
-  to: TrackMarker;
-  startedAt: number;
-  durationMs: number;
-  targetReceivedAt: number;
-}
-
-export interface ChampionReplayMotion {
-  key: string;
-  frames: ReplayFrameV1[];
-  startedAt: number;
-  rate: number;
-}
+import type {
+  ChampionReplayMotion,
+  RaceSpeed,
+  ShowingRace,
+} from "./controllers/race-playback";
+import type { CompiledTrackV1 } from "./track-renderer";
 
 export type PresetGeometryState =
   | { status: "loading" }
@@ -78,10 +66,10 @@ export interface AppStore {
   simulation: SimulationState;
   observationTimer: number | undefined;
   observationPending: boolean;
-  liveMarkerFrame: number | undefined;
-  liveMarkerMotion: LiveMarkerMotion | undefined;
   championReplayMotion: ChampionReplayMotion | undefined;
-  raceBuffer: RaceBufferState | undefined;
+  latestRace: { runId: string; race: GenerationRaceV1 } | undefined;
+  showingRace: ShowingRace | undefined;
+  raceSpeed: RaceSpeed;
   generationTrails: GenerationTrail[];
   replayFrameIndex: number;
   replayPaused: boolean;
@@ -127,10 +115,10 @@ export function createAppStore(): AppStore {
     simulation: { status: "idle" },
     observationTimer: undefined,
     observationPending: false,
-    liveMarkerFrame: undefined,
-    liveMarkerMotion: undefined,
     championReplayMotion: undefined,
-    raceBuffer: undefined,
+    latestRace: undefined,
+    showingRace: undefined,
+    raceSpeed: 2,
     generationTrails: [],
     replayFrameIndex: 0,
     replayPaused: false,

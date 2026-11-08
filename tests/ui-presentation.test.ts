@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { loopingReplayFrameIndex } from "../src/live-motion";
 import {
   createInitialState,
   startFailurePresentation,
@@ -294,24 +293,5 @@ describe("fitness chart", () => {
 
   it("uses no inline styles, which the local service's CSP would block", () => {
     expect(renderFitnessChart(history)).not.toContain("style=");
-  });
-});
-
-describe("replay position", () => {
-  const frames = [
-    { x: 0, y: 0, heading: 0, simulatedSeconds: 0 },
-    { x: 1, y: 0, heading: 0, simulatedSeconds: 1 },
-    { x: 2, y: 0, heading: 0, simulatedSeconds: 2 },
-  ];
-
-  it("finds the recorded frame at an elapsed time", () => {
-    expect(loopingReplayFrameIndex(frames, 0)).toBe(0);
-    expect(loopingReplayFrameIndex(frames, 1.5)).toBe(1);
-  });
-
-  it("wraps with the loop and clamps bad input", () => {
-    expect(loopingReplayFrameIndex(frames, 2.5)).toBe(0);
-    expect(loopingReplayFrameIndex(frames, Number.NaN)).toBe(0);
-    expect(loopingReplayFrameIndex([], 1)).toBe(0);
   });
 });

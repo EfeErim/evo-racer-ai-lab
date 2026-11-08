@@ -1,5 +1,4 @@
 import { escapeHtml } from "./html";
-import { trackMarkerTransform } from "./live-motion";
 
 export type TrackPoint = readonly [number, number];
 
@@ -79,6 +78,10 @@ export function parseCompiledTrack(
     throw new Error(`${label} returned an invalid response.`);
   }
   return payload as CompiledTrackV1;
+}
+
+export function trackMarkerTransform(marker: TrackMarker): string {
+  return `translate(${formatNumber(marker.x)} ${formatNumber(marker.y)}) rotate(${formatNumber((marker.heading * 180) / Math.PI)})`;
 }
 
 export function renderTrackSvg(

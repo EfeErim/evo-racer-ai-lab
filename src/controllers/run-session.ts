@@ -1,11 +1,6 @@
-import {
-  type AppContext,
-  motionIsReduced,
-  type RunLibraryNotice,
-} from "../app-store";
+import { type AppContext, type RunLibraryNotice } from "../app-store";
 import { updateGenerationTrails } from "../generation-trails";
-import { loopingReplayFrameIndex } from "../live-motion";
-import type { ReplayFrameV1 } from "../simulation";
+import type { createRacePlayback } from "./race-playback";
 import {
   commandRun,
   observeRun,
@@ -19,12 +14,6 @@ import {
 } from "../observer-refresh";
 import { canRequestReview, canStartSession } from "../onboarding";
 import {
-  acceptRaceClip,
-  bufferedObservationDelay,
-  raceBufferForRun,
-  raceClipRequestDelay,
-} from "../race-buffer";
-import {
   replayFrameIndexAfterAction,
   type RunCommand,
 } from "../run-presentation";
@@ -32,22 +21,12 @@ import {
 export function createRunSession(
   context: AppContext,
   refreshRuns: (notice?: RunLibraryNotice) => Promise<void>,
+  playback: Pick<
+    ReturnType<typeof createRacePlayback>,
+    "displayedChampionFrame" | "resetRacePlayback" | "resumeChampionFrom"
+  >,
 ) {
-  const { store, render, dispatch, reducedMotionQuery } = context;
-
-  const raceBufferActive = (): boolean =>
-    document.visibilityState === "visible" &&
-    !motionIsReduced(store, reducedMotionQuery);
-
-  const nextObservationDelay = (runId: string): number => {
-    const pollDelay = observationPollDelay(document.visibilityState);
-    if (!raceBufferActive()) {
-      return pollDelay;
-    }
-    const now = window.performance.now();
-    store.raceBuffer = raceBufferForRun(store.raceBuffer, runId, now);
-    return bufferedObservationDelay(pollDelay, store.raceBuffer, now);
-  };
+  const { store, render, dispatch } = context;
 
   const review = async (): Promise<void> => {
     if (!canRequestReview(store.state)) {
@@ -94,7 +73,7 @@ export function createRunSession(
     }
     store.observationTimer = window.setTimeout(() => {
       void observeSession();
-    }, nextObservationDelay(store.simulation.snapshot.runId));
+    }, observationPollDelay(document.visibilityState));
   };
 
   const isCurrentRun = (runId: string): boolean =>
@@ -127,10 +106,11 @@ export function createRunSession(
         store.simulation.status === "ready"
           ? store.simulation.snapshot
           : undefined;
-      const snapshot = mergeObservationSnapshot(
-        previousSnapshot,
-        response.snapshot,
-      );
+      const { generationRace, ...incoming } = response.snapshot;
+      if (generationRace !== undefined) {
+        store.latestRace = { runId: incoming.runId, race: generationRace };
+      }
+      const snapshot = mergeObservationSnapshot(previousSnapshot, incoming);
       store.generationTrails = updateGenerationTrails(
         store.generationTrails,
         snapshot,
@@ -161,30 +141,18 @@ export function createRunSession(
     const requestVersion = ++store.runRequestVersion;
     const knownReplayCandidateId =
       store.simulation.snapshot.generationReplay?.candidateId;
-    const raceBuffer = raceBufferForRun(
-      store.raceBuffer,
-      runId,
-      window.performance.now(),
-    );
-    store.raceBuffer = raceBuffer;
-    const includeRaceClip =
-      raceBufferActive() &&
-      raceClipRequestDelay(raceBuffer, window.performance.now()) === 0;
+    const knownRace =
+      store.latestRace?.runId === runId
+        ? store.latestRace.race.generation
+        : undefined;
     try {
       const response = await observeRun(
         runId,
         knownReplayCandidateId,
-        includeRaceClip,
+        knownRace,
       );
       if (!isLatestRunRequest(runId, requestVersion)) {
         return;
-      }
-      if (includeRaceClip && response.valid) {
-        store.raceBuffer = acceptRaceClip(
-          raceBuffer,
-          response.snapshot.raceClip,
-          window.performance.now(),
-        );
       }
       applyRunResponse(response);
     } catch (error) {
@@ -257,21 +225,6 @@ export function createRunSession(
     }
   };
 
-  /** The recorded frame on screen right now, whichever mode shows it. */
-  const displayedReplayFrame = (frames: readonly ReplayFrameV1[]): number => {
-    if (store.replayPaused) {
-      return store.replayFrameIndex;
-    }
-    const motion = store.championReplayMotion;
-    if (motion === undefined) {
-      return Math.max(0, frames.length - 1);
-    }
-    return loopingReplayFrameIndex(
-      frames,
-      ((window.performance.now() - motion.startedAt) / 1000) * motion.rate,
-    );
-  };
-
   const moveReplay = (action: "previous" | "next" | "restart"): void => {
     if (
       store.simulation.status !== "ready" ||
@@ -281,16 +234,32 @@ export function createRunSession(
     }
     const frames = store.simulation.snapshot.result.replay.frames;
     store.replayFrameIndex = replayFrameIndexAfterAction(
-      displayedReplayFrame(frames),
+      playback.displayedChampionFrame(frames),
       frames.length,
       action,
     );
-    if (action === "restart") {
+    if (action === "restart" && !store.replayPaused) {
       // Restarting a playing replay keeps it playing from the first frame.
-      store.championReplayMotion = undefined;
+      playback.resumeChampionFrom(frames[0]?.simulatedSeconds ?? 0);
     } else {
       store.replayPaused = true;
     }
+    render();
+  };
+
+  const seekReplay = (frameIndex: number): void => {
+    if (
+      store.simulation.status !== "ready" ||
+      store.simulation.snapshot.result === null
+    ) {
+      return;
+    }
+    const frames = store.simulation.snapshot.result.replay.frames;
+    store.replayFrameIndex = Math.min(
+      Math.max(0, Math.round(frameIndex)),
+      Math.max(0, frames.length - 1),
+    );
+    store.replayPaused = true;
     render();
   };
 
@@ -301,15 +270,16 @@ export function createRunSession(
     ) {
       return;
     }
+    const frames = store.simulation.snapshot.result.replay.frames;
     if (store.replayPaused) {
       store.replayPaused = false;
-    } else {
-      store.replayFrameIndex = displayedReplayFrame(
-        store.simulation.snapshot.result.replay.frames,
+      playback.resumeChampionFrom(
+        frames[store.replayFrameIndex]?.simulatedSeconds ?? 0,
       );
+    } else {
+      store.replayFrameIndex = playback.displayedChampionFrame(frames);
       store.replayPaused = true;
     }
-    store.championReplayMotion = undefined;
     render();
   };
 
@@ -321,7 +291,7 @@ export function createRunSession(
     const requestVersion = ++store.runRequestVersion;
     store.simulation = { status: "loading" };
     store.generationTrails = [];
-    store.raceBuffer = undefined;
+    playback.resetRacePlayback();
     store.replayFrameIndex = 0;
     dispatch({ type: "start-session" });
     try {
@@ -362,6 +332,7 @@ export function createRunSession(
     controlSession,
     handleVisibilityChange,
     moveReplay,
+    seekReplay,
     toggleReplay,
     review,
     scheduleObservation,

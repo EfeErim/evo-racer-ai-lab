@@ -19,6 +19,8 @@ export interface ActionHandlers {
   controlSession: (command: "pause" | "resume" | "stop") => Promise<void>;
   moveReplay: (action: "previous" | "next" | "restart") => void;
   toggleReplay: () => void;
+  seekReplay: (frameIndex: number) => void;
+  setRaceSpeed: (speed: number) => void;
   reviewRecommended: () => void;
   reviseSetup: () => void;
   handleRunAction: (
@@ -52,6 +54,8 @@ export function bindActions(
     controlSession,
     moveReplay,
     toggleReplay,
+    seekReplay,
+    setRaceSpeed,
     reviewRecommended,
     reviseSetup,
     handleRunAction,
@@ -127,6 +131,9 @@ export function bindActions(
         case "toggle-motion":
           toggleReducedMotion();
           break;
+        case "race-speed":
+          setRaceSpeed(Number(element.dataset.speed));
+          break;
         case "retry-preset-tracks":
           retryPresetTracks();
           break;
@@ -136,6 +143,12 @@ export function bindActions(
       }
     });
   });
+
+  root
+    .querySelector<HTMLInputElement>("[data-replay-scrub]")
+    ?.addEventListener("input", (event) => {
+      seekReplay((event.currentTarget as HTMLInputElement).valueAsNumber);
+    });
 
   root
     .querySelectorAll<HTMLInputElement>('input[name="trackPreset"]')

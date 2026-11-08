@@ -1,28 +1,17 @@
 import type { SimulationState } from "../app-store";
 import {
-  type GenerationTrail,
-  priorGenerationTrails,
-  replayTrackTrail,
-} from "../generation-trails";
+  RACE_SPEEDS,
+  type TrainingStageInfo,
+} from "../controllers/race-playback";
 import { escapeHtml } from "../html";
-import {
-  CHAMPION_REPLAY_RATE,
-  liveTrackMarker,
-  shouldAnimateReplay,
-} from "../live-motion";
 import type { AppState } from "../onboarding";
-import {
-  type PlayingRaceClip,
-  RACE_BUFFER_MS,
-  type RaceStage,
-} from "../race-buffer";
 import { runCompletion, runControls, runProgress } from "../run-presentation";
 import type {
   GenerationReplayV1,
   ObservationSnapshotV1,
   SelectedCarTelemetryV1,
 } from "../simulation";
-import { type CompiledTrackV1, renderTrackSvg } from "../track-renderer";
+import type { CompiledTrackV1 } from "../track-renderer";
 
 const RUN_STATUS_LABELS: Record<string, string> = {
   running: "Running",
@@ -51,9 +40,9 @@ export function renderTraining(
   state: AppState,
   simulation: SimulationState,
   activeTrack: CompiledTrackV1 | undefined,
-  generationTrails: readonly GenerationTrail[],
   reducedMotion: boolean,
-  raceStage: RaceStage,
+  stageInfo: TrainingStageInfo,
+  raceSpeed: number,
 ): string {
   const header = (status?: string): string => {
     const statusGlyph =
@@ -110,50 +99,22 @@ export function renderTraining(
     snapshot.generationInProgress === true &&
     activeCandidate !== null &&
     activeCandidate !== undefined;
-  const replay = snapshot.result?.replay ?? snapshot.generationReplay;
-  const playingClip = raceStage.mode === "clip" ? raceStage.playing : undefined;
-  const priorTrails = priorGenerationTrails(
-    generationTrails,
-    playingClip?.clip.candidateId ??
-      (raceStage.mode === "buffering" ? undefined : replay?.candidateId),
+  const race = renderRaceStage(
+    stageInfo,
+    activeTrack,
+    snapshot,
+    reducedMotion,
+    raceSpeed,
   );
-  const backgroundEvaluation = showsBackgroundEvaluation(live, replay);
-  const buffered = raceStage.mode !== "none";
-  const race = buffered
-    ? renderBufferedRace(playingClip, activeTrack, priorTrails)
-    : snapshot.selectedCar === null
-      ? `
-        <div class="training-stage" role="status" aria-live="polite">
-          <h2>${snapshot.generationInProgress === true ? "Starting" : "Preparing"} generation ${String(snapshot.generation + 1)}</h2>
-          <p>The first car appears here when it reaches the track.</p>
-        </div>
-      `
-      : renderLiveRace(
-          snapshot.selectedCar,
-          activeCandidate,
-          activeTrack,
-          live,
-          replay,
-          priorTrails,
-          reducedMotion,
-        );
   const telemetry =
     snapshot.selectedCar === null
       ? ""
       : renderSelectedCarTelemetry(
           snapshot.selectedCar,
-          buffered
-            ? "Car racing now, ahead of the replay"
-            : backgroundEvaluation
-              ? "Car being evaluated now, not the replay"
-              : live
-                ? "Car being evaluated now"
-                : "Latest generation champion",
-          buffered || backgroundEvaluation
-            ? "Live now"
-            : live
-              ? "Live"
-              : (RUN_STATUS_LABELS[snapshot.status] ?? snapshot.status),
+          live ? "Car being evaluated now" : "Latest generation champion",
+          live
+            ? "Live"
+            : (RUN_STATUS_LABELS[snapshot.status] ?? snapshot.status),
         );
 
   return `
@@ -191,132 +152,81 @@ function renderRunRecoveryNotice(message: string | undefined): string {
   `;
 }
 
-function renderBufferedRace(
-  playing: PlayingRaceClip | undefined,
-  activeTrack: CompiledTrackV1 | undefined,
-  priorTrails: readonly GenerationTrail[],
-): string {
-  const bufferSeconds = String(RACE_BUFFER_MS / 1000);
-  const clip = playing?.clip;
-  const firstFrame = clip?.frames[0];
-  const lastFrame = clip?.frames.at(-1);
-  const currentTrail = clip === undefined ? undefined : replayTrackTrail(clip);
-  const marker =
-    firstFrame === undefined
-      ? undefined
-      : { x: firstFrame.x, y: firstFrame.y, heading: firstFrame.heading };
-  return `
-    <section class="live-race-panel" aria-labelledby="live-race-title">
-      <div class="race-heading">
-        <h2 id="live-race-title">${clip === undefined ? "Filling the race buffer" : `Generation ${String(clip.generation)}, car ${String(clip.candidateIndex)} of ${String(clip.populationSize)}`}</h2>
-        <span class="chip is-info">${clip === undefined ? `Buffering ${bufferSeconds} s` : "Replay"}</span>
-      </div>
-      <div
-        class="live-race-stage"
-        role="img"
-        aria-label="${clip === undefined ? "Track while the first buffered car is recorded" : "Recorded run of a car from the previous 2 seconds, with its complete path"}${priorTrails.length === 0 ? "" : ` and ${String(priorTrails.length)} earlier generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
-      >
-        ${
-          activeTrack === undefined
-            ? '<p class="track-preview-status">Track preview is not available.</p>'
-            : renderTrackSvg(activeTrack, marker, priorTrails, currentTrail)
-        }
-      </div>
-      <div class="race-footer">
-        ${renderGenerationTrailSummary(currentTrail !== undefined, priorTrails.length, "Displayed car")}
-        <p>${clip === undefined ? "Replay presentation only: the first car appears once the buffer fills." : `Raced in the previous ${bufferSeconds} seconds. Replay presentation only: training does not wait for it.`}</p>
-        <p class="race-readout">${playing === undefined || lastFrame === undefined ? "Training is running" : `${lastFrame.simulatedSeconds.toFixed(1)} simulated s at ${playing.rate.toFixed(1)}× · ${(lastFrame.progress * 100).toFixed(1)}% of the lap`}${clip === undefined ? "" : ` · <span class="data-id">${escapeHtml(clip.candidateId)}</span>`}</p>
-      </div>
-    </section>
-  `;
-}
-
-function renderLiveRace(
-  telemetry: SelectedCarTelemetryV1,
-  activeCandidate: ObservationSnapshotV1["activeCandidate"],
-  activeTrack: CompiledTrackV1 | undefined,
-  live: boolean,
-  replay: GenerationReplayV1 | undefined | null,
-  priorTrails: readonly GenerationTrail[],
-  reducedMotion: boolean,
-): string {
-  const staticReplayFrame =
-    reducedMotion && replay !== null && replay !== undefined
-      ? replay.frames.at(-1)
-      : replay?.frames[0];
-  const marker =
-    staticReplayFrame === undefined
-      ? liveTrackMarker(telemetry)
-      : {
-          x: staticReplayFrame.x,
-          y: staticReplayFrame.y,
-          heading: staticReplayFrame.heading,
-        };
-  const replaying = replay !== null && replay !== undefined;
-  const currentTrail = replaying ? replayTrackTrail(replay) : undefined;
-  const animatedReplay =
-    replaying && shouldAnimateReplay(reducedMotion, replay.frames.length);
-  const stageChip = replaying
-    ? animatedReplay
-      ? `Replay at ${String(CHAMPION_REPLAY_RATE)}×`
-      : reducedMotion
-        ? "Replay, motion reduced"
-        : "Replay, single frame"
-    : live
-      ? "Live"
-      : "Latest";
-  const title = replaying
-    ? "Latest generation champion"
-    : live && activeCandidate !== null && activeCandidate !== undefined
-      ? `Car ${String(activeCandidate.index)} of ${String(activeCandidate.total)}`
-      : "Latest generation champion";
-  const displayId = replaying ? replay.candidateId : telemetry.selectedCarId;
-  return `
-    <section class="live-race-panel" aria-labelledby="live-race-title">
-      <div class="race-heading">
-        <h2 id="live-race-title">${title}</h2>
-        <span class="chip ${live && !replaying ? "is-success" : "is-info"}">${stageChip}</span>
-      </div>
-      <div
-        class="live-race-stage"
-        role="img"
-        aria-label="${animatedReplay ? "Smooth champion replay" : replaying ? "Static champion replay" : live ? "Live" : "Latest"} car position${currentTrail === undefined ? "" : " with its complete recorded path"}${priorTrails.length === 0 ? "" : ` and ${String(priorTrails.length)} earlier generation champion path${priorTrails.length === 1 ? "" : "s"}`}"
-      >
-        ${
-          activeTrack === undefined
-            ? '<p class="track-preview-status">Track preview is not available.</p>'
-            : marker !== undefined
-              ? renderTrackSvg(activeTrack, marker, priorTrails, currentTrail)
-              : renderTrackSvg(
-                  activeTrack,
-                  undefined,
-                  priorTrails,
-                  currentTrail,
-                )
-        }
-      </div>
-      <div class="race-footer">
-        ${renderGenerationTrailSummary(currentTrail !== undefined, priorTrails.length)}
-        <p>${replaying ? (reducedMotion ? "Replay presentation only: the final recorded frame is held because motion is reduced." : "Replay presentation only: training does not wait for it.") : live ? "Evaluation runs faster than real time, so this view shows samples." : "Waiting at the end of a generation."}</p>
-        <p class="race-readout">${replaying ? `${String(replay.frames.length)} recorded frames` : `${telemetry.simulatedSeconds.toFixed(2)} simulated s · ${(telemetry.progress * 100).toFixed(1)}% of the lap`} · <span class="data-id">${escapeHtml(displayId)}</span></p>
-      </div>
-    </section>
-  `;
-}
-
-function renderGenerationTrailSummary(
-  hasCurrentPath: boolean,
-  priorCount: number,
-  currentLabel = "Displayed champion",
-): string {
-  if (!hasCurrentPath && priorCount === 0) {
-    return "";
+export function raceCaption(
+  info: TrainingStageInfo,
+  snapshot: ObservationSnapshotV1,
+): { title: string; detail: string } {
+  if (info.mode === "race") {
+    const ahead =
+      snapshot.status === "running" && snapshot.generation > info.generation
+        ? ` Training is already on generation ${String(Math.min(snapshot.totalGenerations, snapshot.generation + 1))}.`
+        : "";
+    return {
+      title: `Generation ${String(info.generation)} race`,
+      detail: `The best ${String(info.carCount)} of ${String(info.populationSize)} cars of generation ${String(info.generation)}, racing together. The bright car scored best (${info.leaderFitness.toFixed(1)}).${ahead}`,
+    };
   }
+  if (info.mode === "champion") {
+    return {
+      title: "Champion lap",
+      detail: "The best car found so far, replayed on loop.",
+    };
+  }
+  return {
+    title: `Generation ${String(Math.min(snapshot.totalGenerations, snapshot.generation + 1))} is racing`,
+    detail:
+      snapshot.status === "running"
+        ? "The cars appear here as soon as the first generation finishes."
+        : "No race was recorded for this run.",
+  };
+}
+
+function renderRaceStage(
+  info: TrainingStageInfo,
+  activeTrack: CompiledTrackV1 | undefined,
+  snapshot: ObservationSnapshotV1,
+  reducedMotion: boolean,
+  raceSpeed: number,
+): string {
+  const caption = raceCaption(info, snapshot);
+  const speedControl =
+    info.mode === "race" && !reducedMotion
+      ? `
+        <div class="speed-toggle" role="group" aria-label="Race speed">
+          ${RACE_SPEEDS.map(
+            (speed) =>
+              `<button type="button" class="speed-option" data-action="race-speed" data-speed="${String(speed)}" aria-pressed="${String(speed === raceSpeed)}">${String(speed)}×</button>`,
+          ).join("")}
+        </div>
+      `
+      : `<span class="chip is-info">${reducedMotion ? "Motion reduced" : info.mode === "champion" ? "Replay" : "Waiting"}</span>`;
+  const legend =
+    info.mode === "race"
+      ? `
+        <div class="line-legend">
+          <span><i class="car-key is-leader" aria-hidden="true"></i>Best car</span>
+          <span><i class="car-key is-pack" aria-hidden="true"></i>Other cars</span>
+          <span><i class="car-key is-crashed" aria-hidden="true"></i>Crashed</span>
+          <span><i class="line-key is-prior" aria-hidden="true"></i>Earlier best paths</span>
+        </div>
+      `
+      : "";
+  const stage =
+    activeTrack === undefined
+      ? '<div class="live-race-stage"><p class="track-preview-status">Track preview is not available.</p></div>'
+      : `<div class="live-race-stage" data-race-host="training" data-race-label="${escapeHtml(`${caption.title}. ${caption.detail}`)}">${info.mode === "waiting" ? `<p class="race-overlay" role="status">${escapeHtml(caption.detail)}</p>` : ""}</div>`;
   return `
-    <div class="line-legend">
-      ${hasCurrentPath ? `<span><i class="line-key is-current" aria-hidden="true"></i>${currentLabel}</span>` : ""}
-      ${priorCount === 0 ? "" : `<span><i class="line-key is-prior" aria-hidden="true"></i>${String(priorCount)} earlier champion${priorCount === 1 ? "" : "s"}</span>`}
-    </div>
+    <section class="live-race-panel" aria-labelledby="live-race-title">
+      <div class="race-heading">
+        <h2 id="live-race-title">${escapeHtml(caption.title)}</h2>
+        ${speedControl}
+      </div>
+      ${stage}
+      <div class="race-footer">
+        ${legend}
+        <p>${escapeHtml(info.mode === "waiting" ? "Replay presentation only: training never waits for it." : caption.detail)}</p>
+      </div>
+    </section>
   `;
 }
 

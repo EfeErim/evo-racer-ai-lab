@@ -6,7 +6,8 @@ import {
   type RunLibraryNotice,
 } from "./app-store";
 import { bindActions } from "./bind-actions";
-import { createMarkerMotion } from "./controllers/marker-motion";
+import { createRacePlayback } from "./controllers/race-playback";
+import { attachRaceCanvases } from "./race-canvas";
 import { createRunLibraryController } from "./controllers/run-library";
 import { createRunSession } from "./controllers/run-session";
 import {
@@ -17,7 +18,6 @@ import {
 } from "./controllers/track-commands";
 import { shutdownApplication } from "./ipc";
 import { type AppAction, type AppState, transition } from "./onboarding";
-import { raceStage } from "./race-buffer";
 import { syncSelectedTrack } from "./track-builder";
 import {
   captureRenderState,
@@ -48,8 +48,9 @@ export function mountApp(root: HTMLElement): AppController {
       dispatch(action);
     },
   };
-  const { resetLiveMarkerMotion, syncLiveMarkerMotion } =
-    createMarkerMotion(context);
+  const racePlayback = createRacePlayback(context);
+  const { resetRacePlayback, syncRacePlayback, trainingStageInfo } =
+    racePlayback;
   const {
     dropEditorPiece,
     handleTrackAction,
@@ -64,11 +65,12 @@ export function mountApp(root: HTMLElement): AppController {
     controlSession,
     handleVisibilityChange,
     moveReplay,
+    seekReplay,
     toggleReplay,
     review,
     scheduleObservation,
     startSession,
-  } = createRunSession(context, (notice) => refreshRuns(notice));
+  } = createRunSession(context, (notice) => refreshRuns(notice), racePlayback);
   const { handleRunAction, refreshRuns, retryRunLibrary } =
     createRunLibraryController(context, applyRunResponse);
 
@@ -82,6 +84,7 @@ export function mountApp(root: HTMLElement): AppController {
     store.generationTrails = [];
     store.replayFrameIndex = 0;
     store.replayPaused = false;
+    resetRacePlayback();
     store.trackWorkspace = { ...store.trackWorkspace, toolsOpen: false };
   };
 
@@ -246,7 +249,7 @@ export function mountApp(root: HTMLElement): AppController {
       window.clearTimeout(store.observationTimer);
       store.observationTimer = undefined;
     }
-    resetLiveMarkerMotion();
+    resetRacePlayback();
     showShutdownScreen("shutting-down");
 
     try {
@@ -309,19 +312,13 @@ export function mountApp(root: HTMLElement): AppController {
         frameIndex: store.replayFrameIndex,
         paused: store.replayPaused,
       },
-      store.generationTrails,
       motionIsReduced(store, reducedMotionQuery),
       reducedMotionQuery.matches,
-      store.simulation.status === "ready"
-        ? raceStage(
-            store.raceBuffer,
-            store.simulation.snapshot,
-            motionIsReduced(store, reducedMotionQuery),
-            window.performance.now(),
-          )
-        : { mode: "none" },
+      trainingStageInfo(),
+      store.raceSpeed,
     );
-    syncLiveMarkerMotion();
+    attachRaceCanvases(root);
+    syncRacePlayback();
     bindActions(root, store.state, {
       dispatch,
       review,
@@ -329,6 +326,24 @@ export function mountApp(root: HTMLElement): AppController {
       controlSession,
       moveReplay,
       toggleReplay,
+      seekReplay,
+      setRaceSpeed: (speed) => {
+        if (speed === 1 || speed === 2 || speed === 4) {
+          const now = window.performance.now();
+          const showing = store.showingRace;
+          if (showing !== undefined) {
+            // Keep the cars where they are while the clock changes speed.
+            const elapsed =
+              ((now - showing.startedAt) / 1000) * store.raceSpeed;
+            store.showingRace = {
+              ...showing,
+              startedAt: now - (elapsed / speed) * 1000,
+            };
+          }
+          store.raceSpeed = speed;
+          render();
+        }
+      },
       reviewRecommended: () => {
         dispatch({ type: "use-recommended" });
         void review();
