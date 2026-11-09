@@ -5,16 +5,13 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import tempfile
-import time
 from pathlib import Path
 from typing import Final
 
+from evo_racer.local_files import read_text_with_retries, write_text_atomically
 from evo_racer.tracks import TrackValidationError, compile_track_payload
 
 LIBRARY_CONTRACT_VERSION: Final = 1
-ATOMIC_REPLACE_ATTEMPTS: Final = 5
-ATOMIC_REPLACE_RETRY_SECONDS: Final = 0.01
 
 
 class TrackRecordError(ValueError):
@@ -55,24 +52,7 @@ def save_track_payload(payload: object, data_root: Path | None = None) -> dict[s
     destination = tracks_dir / f"{_record_key(track_id)}.json"
     serialized = json.dumps(track, indent=2, sort_keys=True) + "\n"
 
-    temporary_name: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=tracks_dir,
-            prefix=".track-",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary:
-            temporary.write(serialized)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_name = temporary.name
-        _replace_transiently_locked_file(Path(temporary_name), destination)
-    finally:
-        if temporary_name is not None:
-            Path(temporary_name).unlink(missing_ok=True)
+    write_text_atomically(destination, serialized, ".track-")
 
     return {
         "contractVersion": LIBRARY_CONTRACT_VERSION,
@@ -91,7 +71,7 @@ def library_payload(data_root: Path | None = None) -> dict[str, object]:
 
     for record in sorted(tracks_dir.glob("*.json")):
         try:
-            payload: object = json.loads(_read_text_with_retries(record))
+            payload: object = json.loads(read_text_with_retries(record))
             compiled = compile_track_payload(payload)
             track = compiled["track"]
             assert isinstance(track, dict)
@@ -120,30 +100,6 @@ def library_payload(data_root: Path | None = None) -> dict[str, object]:
         "tracks": tracks,
         "isolated": isolated,
     }
-
-
-def _replace_transiently_locked_file(source: Path, destination: Path) -> None:
-    """Retry a bounded Windows sharing violation without weakening atomic replace."""
-    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
-        try:
-            os.replace(source, destination)
-            return
-        except PermissionError:
-            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
-                raise
-            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
-
-
-def _read_text_with_retries(record: Path) -> str:
-    """Retry a bounded transient read lock before declaring a track corrupt."""
-    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
-        try:
-            return record.read_text(encoding="utf-8")
-        except (FileNotFoundError, PermissionError):
-            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
-                raise
-            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
-    raise AssertionError("Track record read retry loop ended unexpectedly.")
 
 
 def delete_track(track_id: str, data_root: Path | None = None) -> dict[str, object]:

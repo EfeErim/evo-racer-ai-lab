@@ -6,6 +6,8 @@ import math
 from dataclasses import dataclass
 from typing import Final, Literal
 
+from evo_racer.numeric import rounded
+
 TRACK_SCHEMA_VERSION: Final = 1
 GEOMETRY_CONTRACT_VERSION: Final = 1
 MINIMUM_ROAD_WIDTH: Final = 8.0
@@ -277,9 +279,9 @@ def compile_track(track: TrackV1) -> dict[str, object]:
     assert start_pose is not None
     spawn_distance = 5.0
     spawn_pose = {
-        "x": _rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
-        "y": _rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
-        "heading": _rounded(_normalize_heading(start_pose.heading)),
+        "x": rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
+        "y": rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
+        "heading": rounded(_normalize_heading(start_pose.heading)),
     }
 
     return {
@@ -314,9 +316,9 @@ def preview_track(track: TrackV1) -> dict[str, object]:
     assert start_pose is not None
     spawn_distance = 5.0
     spawn_pose = {
-        "x": _rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
-        "y": _rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
-        "heading": _rounded(_normalize_heading(start_pose.heading)),
+        "x": rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
+        "y": rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
+        "heading": rounded(_normalize_heading(start_pose.heading)),
     }
     return {
         "contractVersion": GEOMETRY_CONTRACT_VERSION,
@@ -500,7 +502,7 @@ def _segments_intersect(a: Point, b: Point, c: Point, d: Point) -> bool:
 
 
 def _normalize_closed_loop(points: list[Point]) -> list[Point]:
-    normalized = [(_rounded(x), _rounded(y)) for x, y in points[:-1]]
+    normalized = [(rounded(x), rounded(y)) for x, y in points[:-1]]
     normalized.append(normalized[0])
     return normalized
 
@@ -519,12 +521,12 @@ def _derive_boundaries(points: list[Point], road_width: float) -> tuple[list[Poi
         normal_x = -tangent_y / magnitude
         normal_y = tangent_x / magnitude
         left.append(
-            (_rounded(point[0] + normal_x * half_width), _rounded(point[1] + normal_y * half_width))
+            (rounded(point[0] + normal_x * half_width), rounded(point[1] + normal_y * half_width))
         )
         right.append(
             (
-                _rounded(point[0] - normal_x * half_width),
-                _rounded(point[1] - normal_y * half_width),
+                rounded(point[0] - normal_x * half_width),
+                rounded(point[1] - normal_y * half_width),
             )
         )
     left.append(left[0])
@@ -554,10 +556,10 @@ def _derive_open_boundaries(
         normal_x = -tangent_y / magnitude
         normal_y = tangent_x / magnitude
         left.append(
-            (_rounded(point[0] + normal_x * half_width), _rounded(point[1] + normal_y * half_width))
+            (rounded(point[0] + normal_x * half_width), rounded(point[1] + normal_y * half_width))
         )
         right.append(
-            (_rounded(point[0] - normal_x * half_width), _rounded(point[1] - normal_y * half_width))
+            (rounded(point[0] - normal_x * half_width), rounded(point[1] - normal_y * half_width))
         )
     return left, right
 
@@ -571,23 +573,18 @@ def _checkpoint_payload(
     return {
         "index": index,
         "left": [
-            _rounded(checkpoint.x + normal_x * half_width),
-            _rounded(checkpoint.y + normal_y * half_width),
+            rounded(checkpoint.x + normal_x * half_width),
+            rounded(checkpoint.y + normal_y * half_width),
         ],
         "right": [
-            _rounded(checkpoint.x - normal_x * half_width),
-            _rounded(checkpoint.y - normal_y * half_width),
+            rounded(checkpoint.x - normal_x * half_width),
+            rounded(checkpoint.y - normal_y * half_width),
         ],
     }
 
 
 def _point_payload(point: Point) -> list[float]:
-    return [_rounded(point[0]), _rounded(point[1])]
-
-
-def _rounded(value: float) -> float:
-    rounded = round(value, 6)
-    return 0.0 if rounded == 0.0 else rounded
+    return [rounded(point[0]), rounded(point[1])]
 
 
 def _normalize_heading(heading: float) -> float:

@@ -23,6 +23,7 @@ from evo_racer.evolution import (
     VehicleGenome,
     controller_features,
 )
+from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
 from evo_racer.simulation import Controls, Observation, TrackGeometry, VehicleSetup
 
 NEAT_CONFIG_RESOURCE: Final = "config/neat-feed-forward.ini"
@@ -74,7 +75,7 @@ class EvoRacerGenome(neat.DefaultGenome):  # type: ignore[misc]
         for output_key in typed_config.output_keys:
             self.nodes[output_key].activation = "identity"
         self.vehicle_genome = VehicleGenome(
-            performance_logits=tuple(_clamp(random.gauss(0.0, 1.0), -5.0, 5.0) for _ in range(5)),
+            performance_logits=tuple(clamp(random.gauss(0.0, 1.0), -5.0, 5.0) for _ in range(5)),
             front_brake_bias=random.random(),
             front_drive_bias=random.random(),
         )
@@ -283,7 +284,7 @@ class CompiledNEATNetwork:
                 links.append(
                     RuntimeLink(
                         source=_integer(link_payload.get("source"), "link source"),
-                        weight=_finite_number(link_payload.get("weight"), "link weight"),
+                        weight=finite_number(link_payload.get("weight"), "link weight"),
                     )
                 )
             nodes.append(
@@ -291,8 +292,8 @@ class CompiledNEATNetwork:
                     key=_integer(node_payload.get("key"), "node key"),
                     activation=_string(node_payload.get("activation"), "node activation"),
                     aggregation=_string(node_payload.get("aggregation"), "node aggregation"),
-                    bias=_finite_number(node_payload.get("bias"), "node bias"),
-                    response=_finite_number(node_payload.get("response"), "node response"),
+                    bias=finite_number(node_payload.get("bias"), "node bias"),
+                    response=finite_number(node_payload.get("response"), "node response"),
                     links=tuple(links),
                 )
             )
@@ -319,8 +320,8 @@ class NEATController:
         outputs = self._network.activate(controller_features(observation))
         return Controls(
             steering=math.tanh(outputs[0]),
-            throttle=_sigmoid(outputs[1]),
-            brake=_sigmoid(outputs[2]),
+            throttle=sigmoid(outputs[1]),
+            brake=sigmoid(outputs[2]),
         )
 
 
@@ -368,17 +369,10 @@ class NEATGenerationReport:
             "algorithm": "neat",
             "generation": self.generation,
             "championId": self.champion_id,
-            "bestFitness": _rounded(self.best_fitness),
-            "medianFitness": _rounded(self.median_fitness),
+            "bestFitness": rounded(self.best_fitness),
+            "medianFitness": rounded(self.median_fitness),
             "results": [
-                {
-                    "candidateId": scored.candidate.candidate_id,
-                    "fitness": _rounded(scored.evaluation.fitness),
-                    "progress": _rounded(scored.evaluation.progress_fraction),
-                    "finished": scored.evaluation.finished,
-                    "collisionCount": scored.evaluation.collision_count,
-                    "steps": scored.evaluation.steps,
-                }
+                scored.evaluation.result_payload(scored.candidate.candidate_id)
                 for scored in self.results
             ],
         }
@@ -500,7 +494,7 @@ def score_neat_generation(
 def _mutate_value(value: float, power: float, minimum: float, maximum: float) -> float:
     if random.random() >= VEHICLE_MUTATION_RATE:
         return value
-    return _clamp(value + random.gauss(0.0, power), minimum, maximum)
+    return clamp(value + random.gauss(0.0, power), minimum, maximum)
 
 
 def _integer_array(value: object, field: str) -> tuple[int, ...]:
@@ -515,33 +509,7 @@ def _integer(value: object, field: str) -> int:
     return value
 
 
-def _finite_number(value: object, field: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(float(value))
-    ):
-        raise ValueError(f"{field} must be a finite number.")
-    return float(value)
-
-
 def _string(value: object, field: str) -> str:
     if not isinstance(value, str):
         raise ValueError(f"{field} must be a string.")
     return value
-
-
-def _sigmoid(value: float) -> float:
-    if value >= 0.0:
-        return 1.0 / (1.0 + math.exp(-value))
-    exponent = math.exp(value)
-    return exponent / (1.0 + exponent)
-
-
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def _rounded(value: float) -> float:
-    rounded = round(value, 6)
-    return 0.0 if rounded == 0.0 else rounded

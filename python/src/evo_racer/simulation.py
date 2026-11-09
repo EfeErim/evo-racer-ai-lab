@@ -8,14 +8,27 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Protocol
 
+from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 # Physics revision recorded on saved results. Version 2 lowered drag and added the corner limit.
 SIMULATION_CONTRACT_VERSION: Final = 2
-FIXED_TIME_STEP: Final = 1.0 / 60.0
-DRAG_COEFFICIENT: Final = 0.004
-CORNER_GRIP_BASE: Final = 6.0
-CORNER_GRIP_PER_RECOVERY: Final = 1.0
+FIXED_TIME_STEP: Final = 1.0 / 60.0  # s
+DRAG_COEFFICIENT: Final = 0.004  # per metre; drag deceleration is this times speed²
+CORNER_GRIP_BASE: Final = 6.0  # m/s²
+CORNER_GRIP_PER_RECOVERY: Final = 1.0  # m/s² per unit of grip recovery
+
+# Hand-tuned arcade coefficients, not derived from a vehicle model. Each one changes every
+# saved result, which python/tests/test_regression_matrix.py catches. Steering, throttle
+# and brake are unitless in [0, 1] (steering in [-1, 1]).
+STEERING_SLEW_PER_SECOND: Final = 5.0  # 0.2 s from straight ahead to full lock
+FRONT_DRIVE_UNDERSTEER: Final = 0.18  # full front drive cuts the turn rate by 18 %
+FRONT_BRAKE_UNDERSTEER: Final = 0.16  # full front braking cuts the turn rate by 16 %
+REAR_DRIVE_SLIP: Final = 0.55  # full rear drive adds 55 % to the sideways push
+REAR_BRAKE_SLIP: Final = 0.7  # full rear braking adds 70 % to the sideways push
+LATERAL_SLIP_GAIN: Final = 0.75  # sideways push per unit of steering and forward speed
+TURN_RATE_AT_REST: Final = 0.2  # share of the turn rate available near standstill
+TURN_RATE_PER_SPEED: Final = 1.3  # extra turn rate gained by reaching top speed
 VEHICLE_RADIUS: Final = 0.8
 SENSOR_RANGE: Final = 36.0
 SENSOR_ANGLES: Final[tuple[float, ...]] = tuple(
@@ -82,9 +95,9 @@ class Controls:
     def clamped(self) -> Controls:
         """Clamp untrusted controller output to the product ranges."""
         return Controls(
-            steering=_clamp(self.steering, -1.0, 1.0),
-            throttle=_clamp(self.throttle, 0.0, 1.0),
-            brake=_clamp(self.brake, 0.0, 1.0),
+            steering=clamp(self.steering, -1.0, 1.0),
+            throttle=clamp(self.throttle, 0.0, 1.0),
+            brake=clamp(self.brake, 0.0, 1.0),
         )
 
 
@@ -181,17 +194,17 @@ class TelemetrySnapshot:
         """Serialize telemetry for the TypeScript observer UI."""
         return {
             "selectedCarId": self.selected_car_id,
-            "simulatedSeconds": _rounded(self.simulated_seconds),
-            "x": _rounded(self.state.x),
-            "y": _rounded(self.state.y),
-            "heading": _rounded(self.state.heading),
-            "speed": _rounded(self.state.forward_speed),
-            "lateralSpeed": _rounded(self.state.lateral_speed),
-            "steering": _rounded(self.controls.steering),
-            "throttle": _rounded(self.controls.throttle),
-            "brake": _rounded(self.controls.brake),
-            "progress": _rounded(self.progress_fraction),
-            "sensorDistances": [_rounded(distance) for distance in self.sensor_distances],
+            "simulatedSeconds": rounded(self.simulated_seconds),
+            "x": rounded(self.state.x),
+            "y": rounded(self.state.y),
+            "heading": rounded(self.state.heading),
+            "speed": rounded(self.state.forward_speed),
+            "lateralSpeed": rounded(self.state.lateral_speed),
+            "steering": rounded(self.controls.steering),
+            "throttle": rounded(self.controls.throttle),
+            "brake": rounded(self.controls.brake),
+            "progress": rounded(self.progress_fraction),
+            "sensorDistances": [rounded(distance) for distance in self.sensor_distances],
         }
 
 
@@ -219,8 +232,8 @@ class EpisodeResult:
             "termination": self.termination,
             "finished": self.finished,
             "steps": self.steps,
-            "simulatedSeconds": _rounded(self.simulated_seconds),
-            "progress": _rounded(self.progress_fraction),
+            "simulatedSeconds": rounded(self.simulated_seconds),
+            "progress": rounded(self.progress_fraction),
             "collisionCount": self.collision_count,
             "vehicleSetup": self.setup.to_payload(),
             "selectedCar": selected.to_payload(),
@@ -327,9 +340,9 @@ class TrackGeometry:
         centerline = tuple(_parse_point(point) for point in centerline_value)
         left_boundary = tuple(_parse_point(point) for point in left_boundary_value)
         right_boundary = tuple(_parse_point(point) for point in right_boundary_value)
-        x = _finite_number(spawn_value.get("x"), "spawnPose.x")
-        y = _finite_number(spawn_value.get("y"), "spawnPose.y")
-        heading = _finite_number(spawn_value.get("heading"), "spawnPose.heading")
+        x = finite_number(spawn_value.get("x"), "spawnPose.x")
+        y = finite_number(spawn_value.get("y"), "spawnPose.y")
+        heading = finite_number(spawn_value.get("heading"), "spawnPose.heading")
         return cls(
             centerline=centerline,
             left_boundary=left_boundary,
@@ -357,7 +370,7 @@ class TrackGeometry:
                 continue
             offset_x = point[0] - start_x
             offset_y = point[1] - start_y
-            along = _clamp(
+            along = clamp(
                 (offset_x * segment_x + offset_y * segment_y) / length_squared,
                 0.0,
                 1.0,
@@ -510,12 +523,12 @@ class PurePursuitBaseline:
             target[0] - observation.state.x,
         )
         heading_error = _signed_heading_delta(target_heading, observation.state.heading)
-        steering = _clamp(heading_error * 1.8, -1.0, 1.0)
+        steering = clamp(heading_error * 1.8, -1.0, 1.0)
         corner = abs(steering)
         target_speed = 10.0 + 18.0 * (1.0 - corner) ** 2
         speed_error = target_speed - observation.state.forward_speed
-        throttle = _clamp(speed_error / 6.0, 0.0, 1.0)
-        brake = _clamp(-speed_error / 8.0, 0.0, 1.0)
+        throttle = clamp(speed_error / 6.0, 0.0, 1.0)
+        brake = clamp(-speed_error / 8.0, 0.0, 1.0)
         return Controls(steering=steering, throttle=throttle, brake=brake)
 
 
@@ -552,7 +565,7 @@ class SetupAwarePurePursuit(PurePursuitBaseline):
             math.atan2(target[1] - observation.state.y, target[0] - observation.state.x),
             observation.state.heading,
         )
-        steering = _clamp(heading_error * 1.8, -1.0, 1.0)
+        steering = clamp(heading_error * 1.8, -1.0, 1.0)
 
         braking = max(1.0, self._setup.brake_strength * 0.6)
         horizon = speed * speed / (2.0 * braking) + 6.0
@@ -576,8 +589,8 @@ class SetupAwarePurePursuit(PurePursuitBaseline):
         speed_error = target_speed - speed
         return Controls(
             steering=steering,
-            throttle=_clamp(speed_error / 4.0, 0.0, 1.0),
-            brake=_clamp(-speed_error / 4.0, 0.0, 1.0),
+            throttle=clamp(speed_error / 4.0, 0.0, 1.0),
+            brake=clamp(-speed_error / 4.0, 0.0, 1.0),
         )
 
 
@@ -615,8 +628,8 @@ class RandomNetworkBaseline:
             outputs.append(total)
         return Controls(
             steering=math.tanh(outputs[0]),
-            throttle=_sigmoid(outputs[1]),
-            brake=_sigmoid(outputs[2]),
+            throttle=sigmoid(outputs[1]),
+            brake=sigmoid(outputs[2]),
         )
 
 
@@ -638,39 +651,39 @@ def step_physics(
     if dt != FIXED_TIME_STEP:
         raise ValueError("Physics accepts only the fixed 1/60 s step.")
     controls = controls.clamped()
-    steering = _move_toward(state.steering, controls.steering, 5.0 * dt)
+    steering = _move_toward(state.steering, controls.steering, STEERING_SLEW_PER_SECOND * dt)
 
     front_drive = controls.throttle * setup.front_drive_bias
     rear_drive = controls.throttle * (1.0 - setup.front_drive_bias)
     front_brake = controls.brake * setup.front_brake_bias
     rear_brake = controls.brake * (1.0 - setup.front_brake_bias)
 
-    drive_understeer = 1.0 - 0.18 * front_drive
-    brake_understeer = 1.0 - 0.16 * front_brake
-    rear_slip = 1.0 + 0.55 * rear_drive + 0.7 * rear_brake
+    drive_understeer = 1.0 - FRONT_DRIVE_UNDERSTEER * front_drive
+    brake_understeer = 1.0 - FRONT_BRAKE_UNDERSTEER * front_brake
+    rear_slip = 1.0 + REAR_DRIVE_SLIP * rear_drive + REAR_BRAKE_SLIP * rear_brake
 
-    speed_ratio = _clamp(state.forward_speed / setup.max_speed, 0.0, 1.0)
+    speed_ratio = clamp(state.forward_speed / setup.max_speed, 0.0, 1.0)
     drive_force = setup.acceleration * controls.throttle * (1.0 - speed_ratio)
     braking_force = setup.brake_strength * controls.brake
     drag_force = DRAG_COEFFICIENT * state.forward_speed * state.forward_speed
-    forward_speed = _clamp(
+    forward_speed = clamp(
         state.forward_speed + (drive_force - braking_force - drag_force) * dt,
         0.0,
         setup.max_speed,
     )
 
-    lateral_force = -steering * forward_speed * 0.75 * rear_slip
+    lateral_force = -steering * forward_speed * LATERAL_SLIP_GAIN * rear_slip
     lateral_speed = (state.lateral_speed + lateral_force * dt) * math.exp(-setup.grip_recovery * dt)
     heading_rate = (
         steering
         * setup.steering_agility
-        * (0.2 + 1.3 * speed_ratio)
+        * (TURN_RATE_AT_REST + TURN_RATE_PER_SPEED * speed_ratio)
         * drive_understeer
         * brake_understeer
     )
     if forward_speed > 1e-6:
         turn_limit = corner_grip(setup) / forward_speed
-        heading_rate = _clamp(heading_rate, -turn_limit, turn_limit)
+        heading_rate = clamp(heading_rate, -turn_limit, turn_limit)
     heading = (state.heading + heading_rate * dt) % (2.0 * math.pi)
 
     velocity_x = math.cos(heading) * forward_speed - math.sin(heading) * lateral_speed
@@ -763,7 +776,7 @@ def evaluate_episode(
         observation = Observation(
             state=state,
             progress_distance=projection.path_distance,
-            progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+            progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
             heading_error=_signed_heading_delta(projection.tangent_heading, state.heading),
             sensor_distances=sensors,
         )
@@ -807,7 +820,7 @@ def evaluate_episode(
                 simulated_seconds=steps * FIXED_TIME_STEP,
                 state=state,
                 controls=controls,
-                progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+                progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
                 sensor_distances=geometry.sensor_distances(state),
             )
             telemetry.append(snapshot)
@@ -828,7 +841,7 @@ def evaluate_episode(
             simulated_seconds=steps * FIXED_TIME_STEP,
             state=state,
             controls=controls,
-            progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+            progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
             sensor_distances=geometry.sensor_distances(state),
         )
         telemetry.append(snapshot)
@@ -841,7 +854,7 @@ def evaluate_episode(
         finished=termination == "lap_complete",
         steps=steps,
         simulated_seconds=steps * FIXED_TIME_STEP,
-        progress_fraction=_clamp(best_progress / geometry.length, 0.0, 1.0),
+        progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
         collision_count=collision_count,
         setup=fixed_setup,
         controller_parameters=fixed_parameters,
@@ -861,17 +874,7 @@ def preset_geometry(track_id: str) -> TrackGeometry:
 def _parse_point(value: object) -> Point:
     if not isinstance(value, list) or len(value) != 2:
         raise ValueError("Geometry point must contain two numbers.")
-    return (_finite_number(value[0], "point.x"), _finite_number(value[1], "point.y"))
-
-
-def _finite_number(value: object, field: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(float(value))
-    ):
-        raise ValueError(f"{field} must be a finite number.")
-    return float(value)
+    return (finite_number(value[0], "point.x"), finite_number(value[1], "point.y"))
 
 
 def _move_toward(value: float, target: float, maximum_delta: float) -> float:
@@ -882,19 +885,3 @@ def _move_toward(value: float, target: float, maximum_delta: float) -> float:
 
 def _signed_heading_delta(heading: float, target: float) -> float:
     return (heading - target + math.pi) % (2.0 * math.pi) - math.pi
-
-
-def _sigmoid(value: float) -> float:
-    if value >= 0.0:
-        return 1.0 / (1.0 + math.exp(-value))
-    exponent = math.exp(value)
-    return exponent / (1.0 + exponent)
-
-
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def _rounded(value: float) -> float:
-    rounded = round(value, 6)
-    return 0.0 if rounded == 0.0 else rounded

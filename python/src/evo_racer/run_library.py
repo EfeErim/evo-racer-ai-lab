@@ -5,12 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
-import tempfile
-import time
 from pathlib import Path
 from typing import Final, cast
 
+from evo_racer.local_files import read_text_with_retries, write_text_atomically
 from evo_racer.simulation import SIMULATION_CONTRACT_VERSION
 from evo_racer.track_library import default_data_root
 from evo_racer.tracks import TRACK_SCHEMA_VERSION, TrackValidationError, compile_track_payload
@@ -19,8 +17,6 @@ RUN_LIBRARY_CONTRACT_VERSION: Final = 1
 RUN_SCHEMA_VERSION: Final = 1
 RUN_DOCUMENT_KIND: Final = "evo-racer-run"
 RUN_FILE_NAME: Final = "run.json"
-ATOMIC_REPLACE_ATTEMPTS: Final = 5
-ATOMIC_REPLACE_RETRY_SECONDS: Final = 0.01
 
 
 class RunRecordError(ValueError):
@@ -58,62 +54,21 @@ def save_run_document(document: object, data_root: Path | None = None) -> dict[s
     destination = run_dir / RUN_FILE_NAME
     serialized = json.dumps(validated, allow_nan=False, indent=2, sort_keys=True) + "\n"
 
-    temporary_name: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w",
-            encoding="utf-8",
-            dir=run_dir,
-            prefix=".run-",
-            suffix=".tmp",
-            delete=False,
-        ) as temporary:
-            temporary.write(serialized)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_name = temporary.name
-        _replace_transiently_locked_file(Path(temporary_name), destination)
-    finally:
-        if temporary_name is not None:
-            Path(temporary_name).unlink(missing_ok=True)
+    write_text_atomically(destination, serialized, ".run-")
 
     return validated
-
-
-def _replace_transiently_locked_file(source: Path, destination: Path) -> None:
-    """Retry a bounded Windows sharing violation without weakening atomic replace."""
-    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
-        try:
-            os.replace(source, destination)
-            return
-        except PermissionError:
-            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
-                raise
-            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
 
 
 def read_run_document(run_id: str, data_root: Path | None = None) -> dict[str, object]:
     """Read and validate exactly one local run document."""
     destination = _run_directory(run_id, data_root) / RUN_FILE_NAME
     try:
-        payload: object = json.loads(_read_text_with_retries(destination))
+        payload: object = json.loads(read_text_with_retries(destination))
     except FileNotFoundError as error:
         raise FileNotFoundError(run_id) from error
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RunRecordError("The local run record is not readable JSON.") from error
     return validate_run_document(payload)
-
-
-def _read_text_with_retries(record: Path) -> str:
-    """Retry the brief Windows read gap around an atomic file replacement."""
-    for attempt in range(ATOMIC_REPLACE_ATTEMPTS):
-        try:
-            return record.read_text(encoding="utf-8")
-        except (FileNotFoundError, PermissionError):
-            if attempt + 1 >= ATOMIC_REPLACE_ATTEMPTS:
-                raise
-            time.sleep(ATOMIC_REPLACE_RETRY_SECONDS * (attempt + 1))
-    raise AssertionError("Run record read retry loop ended unexpectedly.")
 
 
 def run_library_payload(data_root: Path | None = None) -> dict[str, object]:
@@ -128,7 +83,7 @@ def run_library_payload(data_root: Path | None = None) -> dict[str, object]:
         try:
             if not record.is_file():
                 raise RunRecordError("The run directory has no run.json record.")
-            payload: object = json.loads(_read_text_with_retries(record))
+            payload: object = json.loads(read_text_with_retries(record))
             document = validate_run_document(payload)
             if document["runId"] != run_dir.name:
                 raise RunRecordError("Run directory name does not match its run id.")
@@ -186,10 +141,9 @@ def delete_run(run_id: str, data_root: Path | None = None) -> dict[str, object]:
     record.unlink(missing_ok=True)
     for temporary in run_dir.glob(".run-*.tmp"):
         temporary.unlink(missing_ok=True)
-    try:
+    # Leave the directory if anything unexpected is still in it rather than delete it.
+    if run_dir.is_dir() and not any(run_dir.iterdir()):
         run_dir.rmdir()
-    except OSError:
-        pass
     return {
         "contractVersion": RUN_LIBRARY_CONTRACT_VERSION,
         "deleted": deleted,

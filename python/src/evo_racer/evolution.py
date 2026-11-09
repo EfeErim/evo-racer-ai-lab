@@ -9,6 +9,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
+from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
 from evo_racer.simulation import (
     SENSOR_ANGLES,
     SENSOR_RANGE,
@@ -87,8 +88,8 @@ class FeedForwardNetwork:
 
         return Controls(
             steering=math.tanh(outputs[0]),
-            throttle=_sigmoid(outputs[1]),
-            brake=_sigmoid(outputs[2]),
+            throttle=sigmoid(outputs[1]),
+            brake=sigmoid(outputs[2]),
         )
 
     def to_payload(self) -> dict[str, object]:
@@ -132,7 +133,7 @@ class FeedForwardNetwork:
         values = payload.get("parameters")
         if not isinstance(values, list):
             raise ValueError("Network parameters must be an array.")
-        return cls(tuple(_finite_number(value, "network parameter") for value in values))
+        return cls(tuple(finite_number(value, "network parameter") for value in values))
 
 
 class FeedForwardController:
@@ -251,6 +252,17 @@ class CandidateEvaluation:
     collision_count: int
     steps: int
 
+    def result_payload(self, candidate_id: str) -> dict[str, object]:
+        """One row of a generation report's ``results`` list."""
+        return {
+            "candidateId": candidate_id,
+            "fitness": rounded(self.fitness),
+            "progress": rounded(self.progress_fraction),
+            "finished": self.finished,
+            "collisionCount": self.collision_count,
+            "steps": self.steps,
+        }
+
     def __post_init__(self) -> None:
         if not math.isfinite(self.fitness):
             raise ValueError("fitness must be finite.")
@@ -285,20 +297,13 @@ class GenerationReport:
             "algorithm": "fixed-ga",
             "generation": self.generation,
             "championId": self.champion_id,
-            "bestFitness": _rounded(self.best_fitness),
-            "medianFitness": _rounded(self.median_fitness),
-            "meanFitness": _rounded(self.mean_fitness),
-            "worstFitness": _rounded(self.worst_fitness),
+            "bestFitness": rounded(self.best_fitness),
+            "medianFitness": rounded(self.median_fitness),
+            "meanFitness": rounded(self.mean_fitness),
+            "worstFitness": rounded(self.worst_fitness),
             "finishedCount": self.finished_count,
             "results": [
-                {
-                    "candidateId": scored.candidate.candidate_id,
-                    "fitness": _rounded(scored.evaluation.fitness),
-                    "progress": _rounded(scored.evaluation.progress_fraction),
-                    "finished": scored.evaluation.finished,
-                    "collisionCount": scored.evaluation.collision_count,
-                    "steps": scored.evaluation.steps,
-                }
+                scored.evaluation.result_payload(scored.candidate.candidate_id)
                 for scored in self.results
             ],
         }
@@ -427,11 +432,11 @@ def episode_fitness(result: EpisodeResult, max_steps: int) -> CandidateEvaluatio
     """
     if max_steps <= 0:
         raise ValueError("max_steps must be positive.")
-    progress = _clamp(result.progress_fraction, 0.0, 1.0)
+    progress = clamp(result.progress_fraction, 0.0, 1.0)
     progress_score = 1200.0 * progress
     finish_bonus = 1000.0 if result.finished else 0.0
     efficiency_bonus = (
-        300.0 * _clamp(1.0 - result.steps / max_steps, 0.0, 1.0) if result.finished else 0.0
+        300.0 * clamp(1.0 - result.steps / max_steps, 0.0, 1.0) if result.finished else 0.0
     )
     collision_penalty = 75.0 * result.collision_count
     return CandidateEvaluation(
@@ -446,10 +451,10 @@ def episode_fitness(result: EpisodeResult, max_steps: int) -> CandidateEvaluatio
 def controller_features(observation: Observation) -> tuple[float, ...]:
     """Normalize the shared observation for every learned controller."""
     return (
-        _clamp(observation.state.forward_speed / 40.0, 0.0, 1.0),
-        _clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
-        _clamp(observation.heading_error / math.pi, -1.0, 1.0),
-        *(_clamp(distance / SENSOR_RANGE, 0.0, 1.0) for distance in observation.sensor_distances),
+        clamp(observation.state.forward_speed / 40.0, 0.0, 1.0),
+        clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
+        clamp(observation.heading_error / math.pi, -1.0, 1.0),
+        *(clamp(distance / SENSOR_RANGE, 0.0, 1.0) for distance in observation.sensor_distances),
     )
 
 
@@ -513,7 +518,7 @@ def _mutate(
     generator: random.Random,
 ) -> FixedGenome:
     network = tuple(
-        _clamp(
+        clamp(
             value + generator.gauss(0.0, config.network_mutation_scale),
             -MAX_NETWORK_WEIGHT,
             MAX_NETWORK_WEIGHT,
@@ -523,7 +528,7 @@ def _mutate(
         for value in genome.network.parameters
     )
     logits = tuple(
-        _clamp(
+        clamp(
             value + generator.gauss(0.0, config.performance_mutation_scale),
             -MAX_PERFORMANCE_LOGIT,
             MAX_PERFORMANCE_LOGIT,
@@ -536,7 +541,7 @@ def _mutate(
     def mutate_bias(value: float) -> float:
         if generator.random() >= config.mutation_rate:
             return value
-        return _clamp(value + generator.gauss(0.0, config.bias_mutation_scale), 0.0, 1.0)
+        return clamp(value + generator.gauss(0.0, config.bias_mutation_scale), 0.0, 1.0)
 
     return FixedGenome(
         network=FeedForwardNetwork(network),
@@ -557,29 +562,3 @@ def _ranked(scored: Sequence[ScoredCandidate]) -> list[ScoredCandidate]:
 
 def _candidate_id(generation: int, index: int) -> str:
     return f"g{generation:04d}-c{index:04d}"
-
-
-def _finite_number(value: object, field: str) -> float:
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(float(value))
-    ):
-        raise ValueError(f"{field} must be a finite number.")
-    return float(value)
-
-
-def _sigmoid(value: float) -> float:
-    if value >= 0.0:
-        return 1.0 / (1.0 + math.exp(-value))
-    exponent = math.exp(value)
-    return exponent / (1.0 + exponent)
-
-
-def _clamp(value: float, minimum: float, maximum: float) -> float:
-    return max(minimum, min(maximum, value))
-
-
-def _rounded(value: float) -> float:
-    rounded = round(value, 6)
-    return 0.0 if rounded == 0.0 else rounded
