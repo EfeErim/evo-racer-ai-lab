@@ -10,12 +10,8 @@ $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
 if ($Port -gt 0) {
     $env:EVORACER_E2E_PORT = [string] $Port
 }
-if (-not [string]::IsNullOrWhiteSpace($env:EVORACER_E2E_PORT)) {
-    $parsedPort = 0
-    if (-not [int]::TryParse($env:EVORACER_E2E_PORT, [ref] $parsedPort) -or $parsedPort -lt 1 -or $parsedPort -gt 65535) {
-        throw "EVORACER_E2E_PORT must be an integer from 1 through 65535."
-    }
-    $env:VITE_EVORACER_SERVICE_ORIGIN = "http://127.0.0.1:$parsedPort"
+if ($env:EVORACER_E2E_PORT) {
+    $env:VITE_EVORACER_SERVICE_ORIGIN = "http://127.0.0.1:$([int] $env:EVORACER_E2E_PORT)"
 }
 Push-Location -LiteralPath $repoRoot
 try {

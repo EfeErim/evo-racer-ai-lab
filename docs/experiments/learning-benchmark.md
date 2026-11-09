@@ -39,10 +39,10 @@ the original fixed-speed controller, and `SetupAwarePurePursuit` at caution leve
 `1.5`, `1.0`, `0.6`, and `0.35`. All five use the same steering law, physics, and fitness.
 Ties keep the earlier controller, so the choice is deterministic.
 
-- `PurePursuitBaseline()` is unchanged, so the telemetry fixture and preview are too.
+- `PurePursuitBaseline()` is unchanged, so the telemetry fixture is too.
 - The reference gets up to five attempts and the champion's replay gets one. This
   favors the reference, which is the safe direction for a bar to beat.
-- `contracts/regression-matrix-v1.json` was regenerated. Across its `18` cases, only
+- The physics v1 regression fixture was regenerated. Across its `18` cases, only
   `pursuitFitness`, `pursuitProgress`, and `resultSha256` changed, in `15` cases.
   Champion and random-network values are identical.
 - Results saved before this change keep the reference values they were saved with.

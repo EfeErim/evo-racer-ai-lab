@@ -16,7 +16,6 @@ from urllib.parse import unquote, urlsplit
 
 from evo_racer.observer import RunManager
 from evo_racer.onboarding import validate_setup
-from evo_racer.simulation import simulate_preview_payload
 from evo_racer.track_generation import assist_track_closure_payload, generate_track_payload
 from evo_racer.track_library import delete_track, library_payload, save_track_payload
 from evo_racer.tracks import compiled_presets_payload, validate_track_payload
@@ -40,7 +39,6 @@ POST_PATHS: Final = frozenset(
         "/v1/runs/observe",
         "/v1/runs/resume",
         "/v1/runs/start",
-        "/v1/simulation/preview",
         "/v1/tracks/compile",
         "/v1/tracks/generate",
         "/v1/tracks/assist-closure",
@@ -165,8 +163,6 @@ class HealthHandler(BaseHTTPRequestHandler):
             response = self._run_manager().resume(payload)
         elif path == "/v1/runs/command":
             response = self._run_manager().command(payload)
-        elif path == "/v1/simulation/preview":
-            response = simulate_preview_payload(payload)
         elif path == "/v1/tracks/compile":
             response = self._compile_request(payload)
         elif path == "/v1/tracks/generate":

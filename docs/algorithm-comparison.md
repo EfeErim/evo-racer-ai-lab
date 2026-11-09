@@ -59,6 +59,3 @@ algorithms.
 
 The reviewed raw regression values are in
 [`contracts/regression-matrix-v2.json`](../contracts/regression-matrix-v2.json).
-The physics v1 values remain in
-[`contracts/regression-matrix-v1.json`](../contracts/regression-matrix-v1.json) as a
-historical record.

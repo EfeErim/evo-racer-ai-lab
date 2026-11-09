@@ -4,11 +4,9 @@ import {
   parseRunResponse,
   parseRunDocument,
   parseRunLibraryResponse,
-  parseSimulationPreviewResponse,
   type RunDocumentV1,
   type RunLibraryResponseV1,
   type RunResponseV1,
-  type SimulationPreviewResponse,
 } from "./simulation";
 import {
   parseTrackCommandResponse,
@@ -18,7 +16,6 @@ import {
 } from "./track-workbench";
 import {
   parsePresetTracksResponse,
-  type CompiledTrackV1,
   type PresetTracksResponse,
   type TrackV1,
 } from "./track-renderer";
@@ -53,23 +50,6 @@ export async function validateSetup(
     valid: response.valid,
     errors,
   };
-}
-
-export async function loadSimulationPreview(
-  draft: SetupDraft,
-): Promise<SimulationPreviewResponse> {
-  const response = await postJson<unknown>(
-    "/v1/simulation/preview",
-    {
-      contractVersion: 1,
-      trackPreset: draft.trackPreset,
-      track: draft.track,
-      controller: "pure-pursuit",
-      durationSeconds: 8,
-    },
-    "Simulation preview",
-  );
-  return parseSimulationPreviewResponse(response);
 }
 
 export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
@@ -412,12 +392,6 @@ function parseLocalErrors(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
-}
-
-export function selectCompiledTrack(
-  response: TrackCommandResponse,
-): CompiledTrackV1 | undefined {
-  return response.valid ? response.compiled : undefined;
 }
 
 export function serviceUnavailableResponse(

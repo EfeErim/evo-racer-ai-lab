@@ -1,37 +1,17 @@
-# Physics v2 verification
+# Physics v2 experiments
 
-Work started on 2026-11-06 from `dd65b400a6a60c826ce122ada420bffa00cdc10f`.
-Results below describe an uncommitted working tree, not a published release.
+Physics v2 lowered drag and added a corner speed limit. These experiments ask what that
+changed: whether braking became useful, whether evolution still beats random search on
+held-out seeds and tracks, whether evolved drivers actually brake for corners, and what
+each shipped training plan achieves. Nothing below was tuned against its own results.
 
-## Persistence
-
-The run envelope remains version 1. New checkpoint snapshots carry
-`simulationContractVersion: 2`; old snapshots infer the revision from terminal
-metadata, or default to v1 when interrupted. Unknown revisions and conflicting
-checkpoint/result revisions are rejected. Python decides resumability and
-comparison eligibility. Track digest, requested/completed budget and physics
-revision must all match for earlier-run comparisons.
-
-Completed v1 records retain their recorded replay, results and export. Interrupted
-v1 records remain exportable but cannot resume under v2. Their library row explains
-the incompatibility before offering any resume action and directs the user to the
-existing new-experiment action on Welcome. No legacy file is migrated or deleted.
-
-Evidence so far:
-
-- `scripts/run-python.ps1 -m pytest python/tests/test_run_library.py -q
---basetemp=.runtime_tmp/pytest-persistence-v2d`: **20 passed**.
-- `npm run test -- --reporter=dot`: **141 passed** with `TEMP` and `TMP` redirected
-  to `.runtime_tmp` because the sandbox temporary directory denied file renames.
-- `contracts/physics-v1-completed-run.json` was produced using the simulation
-  source from `git show HEAD:python/src/evo_racer/simulation.py` at the commit above,
-  seed 819, four Fixed GA candidates, one generation and a 0.2-second episode.
-  It is a historical-physics fixture, not a relabelled v2 result.
+The study scripts and per-run files were removed to keep the repository small. The
+summary JSON files linked from each section hold the recorded numbers; the scripts and
+raw runs remain in git history.
 
 ## Brake factorial experiment
 
-Command: `scripts/run-python.ps1 python/tools/braking_study.py`.
-Raw evidence: [48 cells](../../contracts/braking-study-v2.json).
+Recorded cells: [48 cells](../../contracts/braking-study-v2.json).
 Every cell was executed twice and complete episode objects compared equal.
 The experiment uses the same default vehicle, spawn and fixed-speed Pure Pursuit
 parameters in every cell. It varies drag (0.018 / 0.004), corner cap (off / on),
@@ -78,12 +58,12 @@ not evidence of evolved brake use or general algorithm superiority.
 
 ## Held-out matrix
 
-Design: [held-out plan](heldout-v2-plan.md), fixed before the matrix ran. Command:
-`scripts/run-python.ps1 python/tools/heldout_benchmark.py`. Raw evidence:
-[96 paired runs](../../contracts/heldout-v2/) and their
-[32-cell summary](../../contracts/heldout-v2-summary.json). Nothing was tuned against
-these results. Each paired difference in the summary was recomputed from the raw files
-and matched.
+The design was fixed before the matrix ran: evolution seeds `31013`, `51031` and
+`71053`; the three presets plus generator v5 seed `91009` (short, technical); Quick check
+(`16 × 10 × 30 s`) and Balanced (`24 × 20 × 30 s`); Fixed GA and NEAT, each paired with a
+single random generation of the same candidate count and seed. Each run was repeated
+with the vehicle genes fixed at a balanced setup. Summary:
+[32 cells](../../contracts/heldout-v2-summary.json).
 
 Outcome columns read finished / collided / timed out, counted over `3` seeds.
 **Difference** is evolved minus same-candidate control champion fitness; the interval is
@@ -165,8 +145,7 @@ intervals cannot support population claims.
 ## Do evolved champions actually brake?
 
 This analysis is exploratory. It was added after the held-out matrix ran and is not one
-of the plan's reported cells. Command: `scripts/run-python.ps1
-python/tools/champion_brake_study.py`. Raw evidence:
+of its planned cells. Recorded results:
 [96 replayed champions](../../contracts/heldout-v2-brake-use.json).
 
 Each saved champion was rebuilt from its genome and driven three ways with its steering
@@ -203,8 +182,8 @@ this matrix is now development evidence.
 
 ## Why a constant brake is enough
 
-Also exploratory. Command: `scripts/run-python.ps1 python/tools/brake_value_study.py`.
-Raw evidence: [brake value study](../../contracts/brake-value-v2.json). It asks how much
+Also exploratory. Recorded results: [brake value study](../../contracts/brake-value-v2.json).
+It asks how much
 lap time varying the brake can buy at all, separately from what evolution finds.
 
 Every driver uses the same Pure Pursuit steering law. **Hold** reaches one target speed
@@ -237,13 +216,66 @@ within `60 s`. The grids are coarse, so the gaps are lower bounds.
   brakes, and on the generated track a constant speed was fastest.
 
 These results first suggested that the reward keeps evolved drivers at a constant brake.
-The [lap-time weight experiment](lap-weight-plan.md#result-2026-11-07) refuted that.
+The [lap-time weight experiment](#lap-time-weight) refuted that.
 Raising the lap-time weight five- or tenfold left every champion unchanged, because
 selection already ranks any two finishers by lap time. Varied braking is worth up to
 `4.4 s` a lap, but evolution does not find it within these budgets.
 
-## Outstanding verification
+## Lap-time weight
 
-The user confirmed that neither a clean Windows environment nor first-time test
-participants are currently available. Those two required checks remain open;
-local package automation cannot substitute for either.
+Fitness is `1200 × progress + 1000 × finished + W × (1 − steps / maxSteps) − 75 ×
+collisions`, with the time term paid only on a finish and `W = 300`. The question was
+whether a larger `W` makes evolved drivers brake for corners. The decision rule was
+fixed beforehand: adopt the smallest `W` that at least triples the finishers that need a
+varying brake (and has at least `4`), loses at most `2` finishes, and does not slow the
+median paired lap.
+
+Balanced budget, Fixed GA and NEAT, seeds `6007`, `8009`, `9011`, the three presets and
+generator v5 seed `52021`: `72` runs. Summary:
+[lap-weight-dev-summary.json](../../contracts/lap-weight-dev-summary.json).
+
+| `W`  | Finished | Need brakes | Need varied brake | Median lap, paired finishes |
+| ---- | -------: | ----------: | ----------------: | --------------------------: |
+| 300  |  15 / 24 |           9 |                 2 |                     21.03 s |
+| 1500 |  15 / 24 |           9 |                 2 |                     21.03 s |
+| 3000 |  15 / 24 |           9 |                 2 |                     21.03 s |
+
+No weight met the rule, so `W = 300` stays. In all `24` combinations the three weights
+produced the same champion with the same lap; only its fitness value changed. A finisher
+always scores at least `2200` and a non-finisher at most `1200`, and among finishers
+fitness falls with lap time whatever `W` is, so any positive `W` gives the same order.
+Fixed GA selects only by order, and NEAT produced the same champions too. A constant brake
+is not the result of lap time being underpaid; varied braking is simply not found within
+these budgets.
+
+## Training plans
+
+What does each shipped plan achieve under physics v2? Quick check (`16 × 10 × 30 s`),
+Balanced (`24 × 20 × 30 s`) and Thorough (`48 × 40 × 60 s`), each with both algorithms,
+on the three presets with seeds `20011`, `22013`, `24019`, each paired with a
+same-candidate random control. A plan **works** on a preset when at least `2 / 3` evolved
+runs finish a lap and at least `2 / 3` beat their control. Summary:
+[training-plans-a-summary.json](../../contracts/training-plans-a-summary.json).
+
+Each cell shows finished laps and wins over the control, out of three seeds. **Bold**
+marks the algorithm each plan ships with. Wall clock was measured four runs at a time.
+
+| Plan     | Algorithm    | Easy Oval | Technical Circuit | Chicane Challenge | Median wall clock |
+| -------- | ------------ | --------- | ----------------- | ----------------- | ----------------- |
+| Quick    | Fixed GA     | 2, 3      | 1, 1              | 0, 3              | 0.5–0.6 min       |
+| Quick    | **NEAT**     | 3, 2      | 3, 3              | 0, 3              | 0.4–0.5 min       |
+| Balanced | **Fixed GA** | 3, 3      | 3, 3              | 0, 3              | 1.2–1.5 min       |
+| Balanced | NEAT         | 3, 3      | 3, 3              | 1, 3              | 1.0–1.3 min       |
+| Thorough | Fixed GA     | 3, 3      | 3, 3              | 2, 3              | 6.3–11.1 min      |
+| Thorough | **NEAT**     | 3, 3      | 3, 3              | 3, 3              | 4.6–8.2 min       |
+
+- Every preset has a shipped plan that works with its shipped algorithm. Chicane
+  Challenge works only with Thorough. The plan descriptions in `src/onboarding.ts` state
+  exactly this.
+- With Thorough, the `1,920`-candidate random control also finishes Easy Oval and
+  Technical Circuit in all `12` cases. Evolution still beats it each time, with laps of
+  `17.8`–`19.8 s` against `21.6`–`40.8 s`.
+- Longer budgets did not uncover varied braking: of `39` evolved finishers, `4` failed
+  with the brake held at its mean, and only `1` of the `17` Thorough finishers did.
+- The application's default seed is `42`, not one of the measured seeds, which is why
+  the copy says "usually".

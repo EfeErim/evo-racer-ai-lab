@@ -25,18 +25,6 @@ export interface VehicleSetupV1 {
   frontDriveBias: number;
 }
 
-export interface SimulationEpisodeV1 {
-  controller: "pure-pursuit" | "random-network";
-  termination: string;
-  finished: boolean;
-  steps: number;
-  simulatedSeconds: number;
-  progress: number;
-  collisionCount: number;
-  vehicleSetup: VehicleSetupV1;
-  selectedCar: SelectedCarTelemetryV1;
-}
-
 export type RunStatusV1 = "running" | "paused" | "stopped" | "completed";
 
 export interface FitnessPointV1 {
@@ -267,19 +255,6 @@ export type RunResponseV1 =
       errors: { code: string; field: string; message: string }[];
     };
 
-export type SimulationPreviewResponse =
-  | {
-      contractVersion: 1;
-      valid: true;
-      errors: [];
-      episode: SimulationEpisodeV1;
-    }
-  | {
-      contractVersion: 1;
-      valid: false;
-      errors: { code: string; field: string; message: string }[];
-    };
-
 export function parseSelectedCarTelemetry(
   value: unknown,
 ): SelectedCarTelemetryV1 {
@@ -323,70 +298,6 @@ export function parseSelectedCarTelemetry(
         SELECTED_CAR_SENSOR_RANGE_METERS,
       ),
     ) as SelectedCarTelemetryV1["sensorDistances"],
-  };
-}
-
-export function parseSimulationPreviewResponse(
-  value: unknown,
-): SimulationPreviewResponse {
-  const response = asRecord(value, "Simulation response");
-  if (response.contractVersion !== 1 || typeof response.valid !== "boolean") {
-    throw new Error("Simulation response is not contract version 1.");
-  }
-  const errors = parseErrors(response.errors);
-  assertValidityConsistency(response.valid, errors, "Simulation response");
-  if (!response.valid) {
-    return { contractVersion: 1, valid: false, errors };
-  }
-
-  const episode = asRecord(response.episode, "Simulation episode");
-  const controller = episode.controller;
-  if (controller !== "pure-pursuit" && controller !== "random-network") {
-    throw new Error("Simulation episode has an unknown controller.");
-  }
-  const setup = asRecord(episode.vehicleSetup, "Vehicle setup");
-  return {
-    contractVersion: 1,
-    valid: true,
-    errors: [],
-    episode: {
-      controller,
-      termination: requiredString(episode.termination, "termination"),
-      finished: requiredBoolean(episode.finished, "finished"),
-      steps: nonNegativeInteger(episode.steps, "steps"),
-      simulatedSeconds: nonNegativeNumber(
-        episode.simulatedSeconds,
-        "simulatedSeconds",
-      ),
-      progress: boundedNumber(episode.progress, "progress", 0, 1),
-      collisionCount: nonNegativeInteger(
-        episode.collisionCount,
-        "collisionCount",
-      ),
-      vehicleSetup: {
-        maxSpeed: positiveNumber(setup.maxSpeed, "maxSpeed"),
-        acceleration: positiveNumber(setup.acceleration, "acceleration"),
-        brakeStrength: positiveNumber(setup.brakeStrength, "brakeStrength"),
-        steeringAgility: positiveNumber(
-          setup.steeringAgility,
-          "steeringAgility",
-        ),
-        gripRecovery: positiveNumber(setup.gripRecovery, "gripRecovery"),
-        frontBrakeBias: boundedNumber(
-          setup.frontBrakeBias,
-          "frontBrakeBias",
-          0,
-          1,
-        ),
-        frontDriveBias: boundedNumber(
-          setup.frontDriveBias,
-          "frontDriveBias",
-          0,
-          1,
-        ),
-      },
-      selectedCar: parseSelectedCarTelemetry(episode.selectedCar),
-    },
   };
 }
 

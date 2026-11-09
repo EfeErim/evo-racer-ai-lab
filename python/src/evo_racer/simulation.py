@@ -8,11 +8,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Protocol
 
-from evo_racer.tracks import PRESET_TRACKS, TrackValidationError, compile_track_payload
+from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 # Physics revision recorded on saved results. Version 2 lowered drag and added the corner limit.
 SIMULATION_CONTRACT_VERSION: Final = 2
-PREVIEW_CONTRACT_VERSION: Final = 1
 FIXED_TIME_STEP: Final = 1.0 / 60.0
 DRAG_COEFFICIENT: Final = 0.004
 CORNER_GRIP_BASE: Final = 6.0
@@ -851,69 +850,6 @@ def evaluate_episode(
     )
 
 
-def simulate_preview_payload(payload: object) -> dict[str, object]:
-    """Validate and execute one bounded selected-car baseline preview."""
-    if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
-        return _simulation_error(
-            "UNSUPPORTED_SIMULATION_VERSION",
-            "contractVersion",
-            "Simulation contractVersion must be 1.",
-        )
-    try:
-        compiled = _resolve_compiled_track(payload)
-    except (TrackValidationError, ValueError):
-        return _simulation_error(
-            "INVALID_SIMULATION_TRACK",
-            "track",
-            "Simulation requires a Python-valid TrackV1 or bundled preset.",
-        )
-
-    controller_name = payload.get("controller", "pure-pursuit")
-    if controller_name == "pure-pursuit":
-        controller: Controller = PurePursuitBaseline()
-    elif controller_name == "random-network":
-        seed = payload.get("seed", 0)
-        if not isinstance(seed, int) or isinstance(seed, bool):
-            return _simulation_error(
-                "INVALID_BASELINE_SEED",
-                "seed",
-                "Random baseline seed must be an integer.",
-            )
-        controller = RandomNetworkBaseline(seed)
-    else:
-        return _simulation_error(
-            "UNKNOWN_BASELINE_CONTROLLER",
-            "controller",
-            "Choose pure-pursuit or random-network.",
-        )
-
-    duration_value = payload.get("durationSeconds", 8.0)
-    if (
-        not isinstance(duration_value, (int, float))
-        or isinstance(duration_value, bool)
-        or not math.isfinite(float(duration_value))
-        or not 0.5 <= float(duration_value) <= 30.0
-    ):
-        return _simulation_error(
-            "INVALID_PREVIEW_DURATION",
-            "durationSeconds",
-            "Preview duration must be from 0.5 to 30 seconds.",
-        )
-
-    result = evaluate_episode(
-        TrackGeometry.from_compiled(compiled),
-        controller,
-        max_seconds=float(duration_value),
-        selected_car_id="selected-baseline",
-    )
-    return {
-        "contractVersion": PREVIEW_CONTRACT_VERSION,
-        "valid": True,
-        "errors": [],
-        "episode": result.to_payload(),
-    }
-
-
 def parse_telemetry_payload(payload: object) -> TelemetrySnapshot:
     """Parse the shared TypeScript/Python selected-car telemetry fixture."""
     if not isinstance(payload, dict):
@@ -953,52 +889,10 @@ def preset_geometry(track_id: str) -> TrackGeometry:
     return TrackGeometry.from_compiled(compile_track_payload(track.to_payload()))
 
 
-def _resolve_compiled_track(payload: dict[object, object]) -> dict[str, object]:
-    track_value = payload.get("track")
-    if track_value is not None:
-        return compile_track_payload(track_value)
-    preset_value = payload.get("trackPreset")
-    if not isinstance(preset_value, str):
-        raise ValueError("Missing simulation track.")
-    track = next(
-        (candidate for candidate in PRESET_TRACKS if candidate.track_id == preset_value),
-        None,
-    )
-    if track is None:
-        raise ValueError("Unknown preset.")
-    return compile_track_payload(track.to_payload())
-
-
-def _simulation_error(code: str, field: str, message: str) -> dict[str, object]:
-    return {
-        "contractVersion": PREVIEW_CONTRACT_VERSION,
-        "valid": False,
-        "errors": [{"code": code, "field": field, "message": message}],
-    }
-
-
 def _parse_point(value: object) -> Point:
     if not isinstance(value, list) or len(value) != 2:
         raise ValueError("Geometry point must contain two numbers.")
     return (_finite_number(value[0], "point.x"), _finite_number(value[1], "point.y"))
-
-
-def _ray_segment_distance(
-    origin: Point,
-    direction: Point,
-    start: Point,
-    end: Point,
-) -> float | None:
-    segment = (end[0] - start[0], end[1] - start[1])
-    denominator = _cross(direction, segment)
-    if abs(denominator) < 1e-12:
-        return None
-    offset = (start[0] - origin[0], start[1] - origin[1])
-    ray_distance = _cross(offset, segment) / denominator
-    segment_amount = _cross(offset, direction) / denominator
-    if 0.0 <= ray_distance <= SENSOR_RANGE and 0.0 <= segment_amount <= 1.0:
-        return ray_distance
-    return None
 
 
 def _cross(first: Point, second: Point) -> float:

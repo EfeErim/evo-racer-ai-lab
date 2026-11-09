@@ -4,7 +4,6 @@ import { safeFileName } from "../src/downloads";
 import {
   renderFitnessChart,
   renderTrainingCompletion,
-  showsBackgroundEvaluation,
 } from "../src/views/training";
 import {
   clampReplayFrameIndex,
@@ -47,29 +46,6 @@ describe("training progress presentation", () => {
     expect(safeFileName("CON")).toBe("con-export");
     expect(safeFileName("LPT9")).toBe("lpt9-export");
     expect(safeFileName("***")).toBe("local-export");
-  });
-
-  it("keeps live telemetry distinct from a single-frame champion replay", () => {
-    expect(
-      showsBackgroundEvaluation(true, {
-        candidateId: "champion",
-        frames: [
-          {
-            simulatedSeconds: 0.1,
-            x: 1,
-            y: 2,
-            heading: 0,
-            speed: 0,
-            lateralSpeed: 0,
-            steering: 0,
-            throttle: 0,
-            brake: 0,
-            progress: 0,
-          },
-        ],
-      }),
-    ).toBe(true);
-    expect(showsBackgroundEvaluation(true, null)).toBe(false);
   });
 
   it("renders visible markers for a single completed generation", () => {

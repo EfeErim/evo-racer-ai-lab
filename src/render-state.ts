@@ -5,14 +5,8 @@ export interface FocusSnapshot {
   selectionEnd?: number;
 }
 
-interface DisclosureSnapshot {
-  identity: string;
-  open: boolean;
-}
-
 interface RenderStateSnapshot {
   focus?: FocusSnapshot;
-  disclosures: DisclosureSnapshot[];
 }
 
 const FOCUSABLE_SELECTOR =
@@ -101,32 +95,7 @@ function findElementByIdentity(
 export function captureRenderState(root: HTMLElement): RenderStateSnapshot {
   return {
     focus: captureFocus(root),
-    disclosures: [...root.querySelectorAll<HTMLDetailsElement>("details")]
-      .map((details) => {
-        const identity = stableElementIdentity(details);
-        return identity === undefined
-          ? undefined
-          : { identity, open: details.open };
-      })
-      .filter(
-        (snapshot): snapshot is DisclosureSnapshot => snapshot !== undefined,
-      ),
   };
-}
-
-export function restoreDisclosures(
-  root: HTMLElement,
-  disclosures: readonly DisclosureSnapshot[],
-): void {
-  const details = [...root.querySelectorAll<HTMLDetailsElement>("details")];
-  disclosures.forEach((snapshot) => {
-    const match = details.find(
-      (candidate) => stableElementIdentity(candidate) === snapshot.identity,
-    );
-    if (match !== undefined && match.dataset.forceOpen === undefined) {
-      match.open = snapshot.open;
-    }
-  });
 }
 
 export function restoreFocus(

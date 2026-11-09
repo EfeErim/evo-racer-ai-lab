@@ -9,7 +9,6 @@ import {
   parseRunLibraryResponse,
   parseRunResponse,
   parseSelectedCarTelemetry,
-  parseSimulationPreviewResponse,
 } from "../src/simulation";
 
 const fixturePath = fileURLToPath(
@@ -74,67 +73,6 @@ describe("Selected-car telemetry contract", () => {
         selectedCarId: "   ",
       }),
     ).toThrow("non-empty string");
-  });
-});
-
-describe("Preview result contract", () => {
-  const preview = {
-    contractVersion: 1,
-    valid: true,
-    errors: [],
-    episode: {
-      controller: "pure-pursuit",
-      termination: "timeout",
-      finished: false,
-      steps: 30,
-      simulatedSeconds: 0.5,
-      progress: 0.01,
-      collisionCount: 0,
-      vehicleSetup: {
-        maxSpeed: 34,
-        acceleration: 8,
-        brakeStrength: 12,
-        steeringAgility: 1.35,
-        gripRecovery: 5,
-        frontBrakeBias: 0.58,
-        frontDriveBias: 0.5,
-      },
-      selectedCar: fixture,
-    },
-  };
-
-  it("requires non-negative integer counters and time", () => {
-    expect(parseSimulationPreviewResponse(preview)).toMatchObject({
-      valid: true,
-    });
-    for (const invalidEpisode of [
-      { steps: 1.5 },
-      { steps: -1 },
-      { simulatedSeconds: -0.01 },
-      { collisionCount: 0.5 },
-      { collisionCount: -1 },
-    ]) {
-      expect(() =>
-        parseSimulationPreviewResponse({
-          ...preview,
-          episode: { ...preview.episode, ...invalidEpisode },
-        }),
-      ).toThrow();
-    }
-  });
-
-  it("rejects contradictory preview validity and errors", () => {
-    const issue = { code: "FAILED", field: "track", message: "Invalid." };
-    expect(() =>
-      parseSimulationPreviewResponse({ ...preview, errors: [issue] }),
-    ).toThrow("inconsistent validity and errors");
-    expect(() =>
-      parseSimulationPreviewResponse({
-        contractVersion: 1,
-        valid: false,
-        errors: [],
-      }),
-    ).toThrow("inconsistent validity and errors");
   });
 });
 

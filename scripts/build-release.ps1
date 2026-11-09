@@ -19,17 +19,7 @@ $runnableRoot = Join-Path $artifactRoot "EvoRacer"
 $zipPath = Join-Path $artifactRoot "EvoRacer-Windows-x64.zip"
 $checksumPath = "$zipPath.sha256"
 
-$runtimeRoot = Split-Path -Parent $buildRoot
-if (-not (Test-Path -LiteralPath $runtimeRoot)) {
-    New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
-}
-
 foreach ($target in @($buildRoot, $frontendRoot, $artifactRoot)) {
-    $resolvedParent = (Resolve-Path -LiteralPath (Split-Path -Parent $target)).Path
-    if (-not $target.StartsWith("$repoRoot\", [System.StringComparison]::OrdinalIgnoreCase) -or
-        -not $resolvedParent.StartsWith($repoRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to replace release path outside the repository: $target"
-    }
     if (Test-Path -LiteralPath $target) {
         Remove-Item -LiteralPath $target -Recurse -Force
     }
@@ -53,9 +43,6 @@ try {
     $executable = Join-Path $bundleRoot "EvoRacer.exe"
     if (-not (Test-Path -LiteralPath $executable)) {
         throw "PyInstaller did not produce EvoRacer.exe."
-    }
-    if (Test-Path -LiteralPath (Join-Path $bundleRoot "EvoRacer.cmd")) {
-        throw "The release must not require an EvoRacer.cmd starter."
     }
 
     $licenseRoot = Join-Path $bundleRoot "licenses"

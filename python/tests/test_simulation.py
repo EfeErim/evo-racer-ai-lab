@@ -22,7 +22,6 @@ from evo_racer.simulation import (
     evaluate_episode,
     parse_telemetry_payload,
     preset_geometry,
-    simulate_preview_payload,
     step_physics,
 )
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
@@ -410,24 +409,6 @@ def test_episode_rejects_invalid_telemetry_interval(invalid: object) -> None:
             max_seconds=0.5,
             telemetry_interval_steps=invalid,  # type: ignore[arg-type]
         )
-
-
-def test_preview_contract_uses_python_track_compiler() -> None:
-    response = simulate_preview_payload(
-        {
-            "contractVersion": 1,
-            "track": PRESET_TRACKS[0].to_payload(),
-            "controller": "pure-pursuit",
-            "durationSeconds": 0.5,
-        }
-    )
-
-    assert response["valid"] is True
-    assert compile_track_payload(PRESET_TRACKS[0].to_payload())
-    episode = response["episode"]
-    assert isinstance(episode, dict)
-    assert episode["controller"] == "pure-pursuit"
-    assert episode["selectedCar"]
 
 
 def test_physics_rejects_variable_time_steps() -> None:

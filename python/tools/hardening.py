@@ -1,17 +1,17 @@
-"""Deterministic regression and performance smoke matrix."""
+"""Deterministic regression matrix: 18 small runs whose result hashes are pinned.
+
+`python/tests/test_regression_matrix.py` compares a fresh run with
+`contracts/regression-matrix-v2.json`. After an intended simulation change, regenerate
+that fixture with `--print-fixture`.
+"""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-import platform
-import statistics
 import sys
-import time
-from datetime import UTC, datetime
-from pathlib import Path
-from typing import Final, Literal, TypedDict, cast
+from typing import Final, Literal, cast
 
 from evo_racer.observer import RunSession, RunSettings
 from evo_racer.onboarding import validate_setup
@@ -24,194 +24,38 @@ SMOKE_ALGORITHMS: Final = ("fixed-ga", "neat")
 SMOKE_POPULATION_SIZE: Final = 10
 SMOKE_GENERATIONS: Final = 1
 SMOKE_EPISODE_SECONDS: Final = 15.0
-THOROUGH_POPULATION_SIZE: Final = 48
-THOROUGH_GENERATIONS: Final = 40
-THOROUGH_EPISODE_SECONDS: Final = 60.0
-THOROUGH_SEED: Final = 42
-
-
-class _TimingEntry(TypedDict):
-    presetId: str
-    algorithm: str
-    seed: int
-    elapsedSeconds: float
 
 
 def build_regression_matrix() -> dict[str, object]:
     """Run the complete deterministic matrix and return its stable signatures."""
-    matrix, _ = _run_matrix()
-    return matrix
-
-
-def build_performance_report() -> dict[str, object]:
-    """Run the matrix once and retain wall-clock timings outside the fixture."""
-    started = time.perf_counter()
-    matrix, timings = _run_matrix(measure=True)
-    total_seconds = time.perf_counter() - started
-    return _performance_report(matrix, timings, total_seconds)
-
-
-def _performance_report(
-    matrix: dict[str, object],
-    timings: list[_TimingEntry],
-    total_seconds: float,
-) -> dict[str, object]:
-    return {
-        "contractVersion": PHASE10_CONTRACT_VERSION,
-        "generatedAtUtc": datetime.now(UTC).isoformat(),
-        "environment": {
-            "platform": platform.platform(),
-            "python": platform.python_version(),
-            "processor": platform.processor() or "unknown",
-        },
-        "configuration": matrix["configuration"],
-        "caseCount": len(timings),
-        "totalSeconds": round(total_seconds, 6),
-        "medianCaseSeconds": round(
-            statistics.median(timing["elapsedSeconds"] for timing in timings),
-            6,
-        ),
-        "cases": timings,
-        "regressionSha256": _canonical_sha256(matrix),
-    }
-
-
-def verify_fixture(fixture_path: Path) -> dict[str, object]:
-    """Fail closed when a deterministic result differs from the reviewed fixture."""
-    actual = build_regression_matrix()
-    _assert_fixture(actual, fixture_path)
-    return actual
-
-
-def build_thorough_acceptance_report() -> dict[str, object]:
-    """Complete the heaviest bundled preset once and retain bounded evidence."""
-    setup = {
-        "contractVersion": 1,
-        "trackPreset": "easy-oval",
-        "settings": {
-            "algorithm": "neat",
-            "populationSize": THOROUGH_POPULATION_SIZE,
-            "generations": THOROUGH_GENERATIONS,
-            "episodeSeconds": int(THOROUGH_EPISODE_SECONDS),
-            "seed": THOROUGH_SEED,
-        },
-    }
-    if validate_setup(setup)["valid"] is not True:
-        raise RuntimeError("The Thorough preset is outside the product setup contract.")
-    session = RunSession(
-        run_id="thorough-acceptance",
-        compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
-        settings=RunSettings(
-            algorithm="neat",
-            population_size=THOROUGH_POPULATION_SIZE,
-            generations=THOROUGH_GENERATIONS,
-            episode_seconds=THOROUGH_EPISODE_SECONDS,
-            seed=THOROUGH_SEED,
-        ),
-    )
-    generation_seconds: list[float] = []
-    started = time.perf_counter()
-    for _ in range(THOROUGH_GENERATIONS):
-        generation_started = time.perf_counter()
-        session.advance()
-        generation_seconds.append(time.perf_counter() - generation_started)
-    elapsed_seconds = time.perf_counter() - started
-    snapshot = session.snapshot()
-    if snapshot["status"] != "completed" or snapshot["generation"] != THOROUGH_GENERATIONS:
-        raise RuntimeError("The Thorough preset did not complete every generation.")
-    trails = cast(list[object], snapshot["generationTrails"])
-    if len(trails) != 8:
-        raise RuntimeError("The Thorough preset did not retain its bounded evolution trail.")
-    result = cast(dict[str, object], snapshot["result"])
-    champion = cast(dict[str, object], result["champion"])
-    document_bytes = len(
-        json.dumps(
-            session.to_run_document(),
-            allow_nan=False,
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
-    )
-    return {
-        "contractVersion": 1,
-        "kind": "thorough-preset-acceptance",
-        "generatedAtUtc": datetime.now(UTC).isoformat(),
-        "environment": {
-            "platform": platform.platform(),
-            "python": platform.python_version(),
-            "processor": platform.processor() or "unknown",
-        },
-        "configuration": setup,
-        "completedGenerations": snapshot["generation"],
-        "retainedGenerationTrails": len(trails),
-        "checkpointBytes": document_bytes,
-        "elapsedSeconds": round(elapsed_seconds, 6),
-        "medianGenerationSeconds": round(statistics.median(generation_seconds), 6),
-        "slowestGenerationSeconds": round(max(generation_seconds), 6),
-        "championFitness": champion["fitness"],
-        "championProgress": champion["progress"],
-        "resultSha256": _canonical_sha256(result),
-    }
-
-
-def _assert_fixture(actual: dict[str, object], fixture_path: Path) -> None:
-    expected: object = json.loads(fixture_path.read_text(encoding="utf-8"))
-    if actual != expected:
-        raise RuntimeError(
-            f"Deterministic regression matrix drifted from {fixture_path.as_posix()}."
-        )
-
-
-def _run_matrix(
-    *,
-    measure: bool = False,
-) -> tuple[dict[str, object], list[_TimingEntry]]:
     cases: list[dict[str, object]] = []
-    timings: list[_TimingEntry] = []
     for preset in PRESET_TRACKS:
         compiled = compile_track_payload(preset.to_payload())
-        for algorithm_value in SMOKE_ALGORITHMS:
-            algorithm = algorithm_value
-            if algorithm not in {"fixed-ga", "neat"}:
-                raise AssertionError("The regression matrix contains an unsupported algorithm.")
+        for algorithm in SMOKE_ALGORITHMS:
             for seed in SMOKE_SEEDS:
-                case_started = time.perf_counter()
-                case = _run_case(
-                    compiled_track=compiled,
-                    preset_id=preset.track_id,
-                    algorithm=algorithm,
-                    seed=seed,
-                )
-                elapsed_seconds = time.perf_counter() - case_started
-                cases.append(case)
-                if measure:
-                    timings.append(
-                        {
-                            "presetId": preset.track_id,
-                            "algorithm": algorithm,
-                            "seed": seed,
-                            "elapsedSeconds": round(elapsed_seconds, 6),
-                        }
+                cases.append(
+                    _run_case(
+                        compiled_track=compiled,
+                        preset_id=preset.track_id,
+                        algorithm=algorithm,
+                        seed=seed,
                     )
-    return (
-        {
-            "contractVersion": PHASE10_CONTRACT_VERSION,
-            "kind": "phase10-deterministic-regression",
-            "configuration": {
-                "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
-                "seeds": list(SMOKE_SEEDS),
-                "presets": [preset.track_id for preset in PRESET_TRACKS],
-                "algorithms": list(SMOKE_ALGORITHMS),
-                "populationSize": SMOKE_POPULATION_SIZE,
-                "generations": SMOKE_GENERATIONS,
-                "episodeSeconds": SMOKE_EPISODE_SECONDS,
-                "fixedTimeStep": 1.0 / 60.0,
-            },
-            "cases": cases,
+                )
+    return {
+        "contractVersion": PHASE10_CONTRACT_VERSION,
+        "kind": "phase10-deterministic-regression",
+        "configuration": {
+            "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
+            "seeds": list(SMOKE_SEEDS),
+            "presets": [preset.track_id for preset in PRESET_TRACKS],
+            "algorithms": list(SMOKE_ALGORITHMS),
+            "populationSize": SMOKE_POPULATION_SIZE,
+            "generations": SMOKE_GENERATIONS,
+            "episodeSeconds": SMOKE_EPISODE_SECONDS,
+            "fixedTimeStep": 1.0 / 60.0,
         },
-        timings,
-    )
+        "cases": cases,
+    }
 
 
 def _run_case(
@@ -221,8 +65,6 @@ def _run_case(
     algorithm: str,
     seed: int,
 ) -> dict[str, object]:
-    if algorithm not in {"fixed-ga", "neat"}:
-        raise ValueError("Smoke algorithm must be fixed-ga or neat.")
     validation = validate_setup(
         {
             "contractVersion": 1,
@@ -290,67 +132,17 @@ def _canonical_sha256(value: object) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _parser() -> argparse.ArgumentParser:
+def main() -> int:
+    """Print the current deterministic fixture JSON."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fixture", type=Path, help="Reviewed deterministic fixture to verify.")
-    parser.add_argument("--report", type=Path, help="Write a measured JSON performance report.")
-    parser.add_argument(
-        "--thorough-report",
-        type=Path,
-        help="Complete the heaviest bundled preset and write its acceptance report.",
-    )
     parser.add_argument(
         "--print-fixture",
         action="store_true",
+        required=True,
         help="Print the current deterministic fixture JSON.",
     )
-    return parser
-
-
-def main() -> int:
-    """Run fixture verification and/or measured reporting from the command line."""
-    args = _parser().parse_args()
-    if not args.fixture and not args.report and not args.thorough_report and not args.print_fixture:
-        raise SystemExit("Choose --fixture, --report, --thorough-report, or --print-fixture.")
-    matrix: dict[str, object] | None = None
-    timings: list[_TimingEntry] = []
-    total_seconds = 0.0
-    if args.report:
-        started = time.perf_counter()
-        matrix, timings = _run_matrix(measure=True)
-        total_seconds = time.perf_counter() - started
-    elif args.fixture or args.print_fixture:
-        matrix = build_regression_matrix()
-    if args.fixture:
-        assert matrix is not None
-        _assert_fixture(matrix, args.fixture)
-        print(f"Verified {len(cast(list[object], matrix['cases']))} deterministic cases.")
-    if args.print_fixture:
-        matrix = matrix or build_regression_matrix()
-        print(json.dumps(matrix, ensure_ascii=False, indent=2, sort_keys=True))
-    if args.report:
-        assert matrix is not None
-        report = _performance_report(matrix, timings, total_seconds)
-        args.report.parent.mkdir(parents=True, exist_ok=True)
-        args.report.write_text(
-            json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        print(
-            f"Measured {report['caseCount']} cases in "
-            f"{report['totalSeconds']} seconds: {args.report}"
-        )
-    if args.thorough_report:
-        thorough_report = build_thorough_acceptance_report()
-        args.thorough_report.parent.mkdir(parents=True, exist_ok=True)
-        args.thorough_report.write_text(
-            json.dumps(thorough_report, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        print(
-            f"Completed Thorough preset in {thorough_report['elapsedSeconds']} seconds: "
-            f"{args.thorough_report}"
-        )
+    parser.parse_args()
+    print(json.dumps(build_regression_matrix(), ensure_ascii=False, indent=2, sort_keys=True))
     return 0
 
 

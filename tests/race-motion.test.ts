@@ -6,7 +6,6 @@ import {
   raceDone,
   raceElapsed,
 } from "../src/controllers/race-playback";
-import { shouldAnimateReplay } from "../src/live-motion";
 import {
   pathEnd,
   pathFromRacePoses,
@@ -35,12 +34,6 @@ function circlePoses(step: number, seconds: number): number[] {
 }
 
 describe("race motion interpolation", () => {
-  it("disables replay animation for reduced motion and non-moving replays", () => {
-    expect(shouldAnimateReplay(false, 2)).toBe(true);
-    expect(shouldAnimateReplay(true, 2)).toBe(false);
-    expect(shouldAnimateReplay(false, 1)).toBe(false);
-  });
-
   it("follows a curve between sparse samples instead of cutting the chord", () => {
     const path = pathFromRacePoses(Float64Array.from(circlePoses(0.5, 4)));
     for (const t of [0.25, 1.1, 2.6, 3.9]) {

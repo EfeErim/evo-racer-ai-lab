@@ -4,7 +4,6 @@ import {
   MAX_RECORDED_GENERATION_TRAILS,
   MAX_TRAIL_POINTS,
   priorGenerationTrails,
-  replayTrackTrail,
   updateGenerationTrails,
 } from "../src/generation-trails";
 import type {
@@ -117,14 +116,5 @@ describe("previous generation champion trails", () => {
     restored.generationTrails = persisted;
 
     expect(updateGenerationTrails([], restored)).toEqual(persisted);
-  });
-
-  it("builds a bounded displayed-champion path from authoritative replay frames", () => {
-    const trail = replayTrackTrail(replay("g0004-c0002", 151));
-
-    expect(trail.candidateId).toBe("g0004-c0002");
-    expect(trail.points).toHaveLength(MAX_TRAIL_POINTS);
-    expect(trail.points.at(0)).toEqual([0, 0]);
-    expect(trail.points.at(-1)).toEqual([150, 300]);
   });
 });

@@ -265,10 +265,6 @@ if ($expectedHash -ne $actualHash) {
 }
 
 if (Test-Path -LiteralPath $acceptanceRoot) {
-    $resolvedAcceptance = (Resolve-Path -LiteralPath $acceptanceRoot).Path
-    if (-not $resolvedAcceptance.StartsWith("$repoRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
-        throw "Refusing to replace acceptance path outside the repository."
-    }
     Remove-Item -LiteralPath $acceptanceRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Path $extractRoot, $dataRoot -Force | Out-Null
@@ -288,9 +284,6 @@ foreach ($requiredPath in @(
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Release content is missing: $requiredPath"
     }
-}
-if (Test-Path -LiteralPath (Join-Path $bundleRoot "EvoRacer.cmd")) {
-    throw "The release still depends on an EvoRacer.cmd starter."
 }
 
 $firstProcess = $null

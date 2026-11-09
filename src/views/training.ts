@@ -7,7 +7,6 @@ import { escapeHtml } from "../html";
 import type { AppState } from "../onboarding";
 import { runCompletion, runControls, runProgress } from "../run-presentation";
 import type {
-  GenerationReplayV1,
   ObservationSnapshotV1,
   SelectedCarTelemetryV1,
 } from "../simulation";
@@ -26,15 +25,6 @@ const RUN_STATUS_GLYPHS: Record<string, { glyph: string; tone: string }> = {
   stopped: { glyph: "■", tone: "warning" },
   completed: { glyph: "✓", tone: "success" },
 };
-
-export function showsBackgroundEvaluation(
-  live: boolean,
-  replay: GenerationReplayV1 | null | undefined,
-): boolean {
-  return (
-    live && replay !== null && replay !== undefined && replay.frames.length > 0
-  );
-}
 
 export function renderTraining(
   state: AppState,

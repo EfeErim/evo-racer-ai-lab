@@ -50,11 +50,9 @@ The shell uses Vite, TypeScript, HTML, and CSS without a UI framework.
 TypeScript stays deliberately thin: it renders local data, captures UI-only
 input, and calls the Python core. This keeps the initial dependency surface
 small while preserving typed browser modules and production bundling.
-Rendering, charting, and routing libraries are deferred until the phase that
-proves they are needed.
 
 Vite development and preview hosts are explicitly loopback-only. The release
-build will be static local assets served by the packaged launcher.
+serves the built static assets from the packaged launcher.
 
 ## Onboarding boundary
 
@@ -151,23 +149,12 @@ centerline, and seven sensors intersect rays with the left/right boundaries
 already derived by the canonical track compiler. No duplicate track geometry is
 persisted or constructed in TypeScript.
 
-The sweep retains the centerline projection of the exact safe point it returns.
-The episode evaluator reuses that projection for progress and the next
-observation instead of projecting the same post-step position a second time.
-This is internal calculation reuse; it does not change collision, progress,
-physics-step, or telemetry contracts.
-
 The seeded random-network and Pure Pursuit baselines implement the same
 controller protocol and run through the same evaluator. Pure Pursuit follows
 the lookahead-point approach documented in R. Craig Coulter's
 [CMU technical report](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm);
 its speed-scaled lookahead and corner-speed policy are local arcade tuning, not
 a simulation-grade vehicle model.
-
-`POST /v1/simulation/preview` runs a bounded baseline preview after the explicit
-Start action and returns version 1 selected-car telemetry. TypeScript validates
-and renders that snapshot only. Telemetry sampling frequency is an observer
-concern and cannot alter fixed physics results.
 
 ## Fixed GA boundary
 
@@ -449,22 +436,15 @@ versioned, atomic run files described above.
 ## Verification boundary
 
 Verification never adds a second simulation path.
-`python/tools/hardening.py` creates a bounded matrix through the public
-`RunSession`, bundled preset compiler, Fixed GA, NEAT, canonical evaluator, and
-terminal result builder. It records stable case metadata and SHA-256 signatures
-in `contracts/regression-matrix-v2.json`; timing stays outside that deterministic
-fixture. `contracts/regression-matrix-v1.json` keeps the physics v1 values.
+`python/tools/hardening.py` runs a bounded matrix (three seeds, three presets, both
+algorithms) through the public `RunSession`, bundled preset compiler, Fixed GA, NEAT,
+canonical evaluator, and terminal result builder. It records stable case metadata and
+SHA-256 signatures in `contracts/regression-matrix-v2.json`.
 
-Both Python and TypeScript test the version 1 fixture. Python reruns all 18
-cases and requires exact equality. TypeScript checks that the same file covers
-three seeds, all three presets, both algorithms, complete replay values, and
-valid hashes without reimplementing any domain rule.
+Python reruns all 18 cases in `python/tests/test_regression_matrix.py` and requires
+exact equality. TypeScript checks that the same file covers every seed, preset, and
+algorithm with complete replay values and valid hashes, without reimplementing any
+domain rule.
 
-`scripts/release-gate.ps1` composes the full automated checks, development
-loopback smoke, measured matrix, Windows release build, and clean-runtime
-acceptance. The measured JSON report is written under ignored
-`.runtime_tmp/release-gate`.
-
-Architecture, user, algorithm-comparison, and demo documents contain no runtime
-assets or calls. The user guide is copied into the release as `USER-GUIDE.md`
-and is required by clean-runtime acceptance.
+`npm run test:release` checks the packaged application as described above. The user
+guide is copied into the release as `USER-GUIDE.md` and is required by that check.

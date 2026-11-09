@@ -66,13 +66,12 @@ Requires Windows, Node.js 24 (see `.nvmrc`), npm 11 and Python 3.13.
 npm run dev           # Python service on :8765, Vite on :5173
 ```
 
-| Command                 | What it runs                                                                           |
-| ----------------------- | -------------------------------------------------------------------------------------- |
-| `npm run check`         | formatting, lint, type checks and unit tests for TypeScript and Python                 |
-| `npm run test:e2e`      | Playwright user flows and accessibility scan                                           |
-| `npm run build:release` | PyInstaller build into `release\EvoRacer\` plus the ZIP and checksum                   |
-| `npm run test:release`  | acceptance test of the built package with no Node.js or Python on PATH                 |
-| `npm run test:gate`     | all of the above plus a dev smoke test and the deterministic 18-case regression matrix |
+| Command                 | What it runs                                                           |
+| ----------------------- | ---------------------------------------------------------------------- |
+| `npm run check`         | formatting, lint, type checks and unit tests for TypeScript and Python |
+| `npm run test:e2e`      | Playwright user flows and accessibility scan                           |
+| `npm run build:release` | PyInstaller build into `release\EvoRacer\` plus the ZIP and checksum   |
+| `npm run test:release`  | acceptance test of the built package with no Node.js or Python on PATH |
 
 ## Project layout
 
