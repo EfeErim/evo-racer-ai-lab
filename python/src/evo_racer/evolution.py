@@ -12,14 +12,11 @@ from typing import Final
 from evo_racer.simulation import (
     SENSOR_ANGLES,
     SENSOR_RANGE,
-    Controller,
     Controls,
     EpisodeResult,
     Observation,
-    RandomNetworkBaseline,
     TrackGeometry,
     VehicleSetup,
-    evaluate_episode,
 )
 
 EVOLUTION_CONTRACT_VERSION: Final = 1
@@ -343,28 +340,6 @@ class FixedGAConfig:
 FitnessEvaluator = Callable[[FixedCandidate], CandidateEvaluation]
 
 
-@dataclass(frozen=True, slots=True)
-class FixedGARunResult:
-    """Completed deterministic run with the best candidate seen."""
-
-    seed: int
-    reports: tuple[GenerationReport, ...]
-    champion: ScoredCandidate
-
-    def to_payload(self) -> dict[str, object]:
-        return {
-            "contractVersion": EVOLUTION_CONTRACT_VERSION,
-            "algorithm": "fixed-ga",
-            "seed": self.seed,
-            "reports": [report.to_payload() for report in self.reports],
-            "champion": {
-                "candidateId": self.champion.candidate.candidate_id,
-                "fitness": _rounded(self.champion.evaluation.fitness),
-                "genome": self.champion.candidate.genome.to_payload(),
-            },
-        }
-
-
 class FixedGA:
     """Stateful deterministic population lifecycle using an isolated PRNG."""
 
@@ -443,31 +418,6 @@ class FixedGA:
         return _ranked(competitors)[0]
 
 
-def run_fixed_ga(
-    config: FixedGAConfig,
-    seed: int,
-    generations: int,
-    evaluator: FitnessEvaluator,
-) -> FixedGARunResult:
-    """Run a bounded number of complete generations."""
-    if generations <= 0:
-        raise ValueError("generations must be positive.")
-    ga = FixedGA(config, seed)
-    reports: list[GenerationReport] = []
-    best: ScoredCandidate | None = None
-    for generation_index in range(generations):
-        report = ga.evaluate(evaluator)
-        reports.append(report)
-        champion = _ranked(report.results)[0]
-        if best is None or _ranked((champion, best))[0] is champion:
-            best = champion
-        if generation_index + 1 < generations:
-            ga.advance(report)
-    if best is None:
-        raise RuntimeError("Fixed GA produced no evaluated candidate.")
-    return FixedGARunResult(seed=seed, reports=tuple(reports), champion=best)
-
-
 def episode_fitness(result: EpisodeResult, max_steps: int) -> CandidateEvaluation:
     """Reward only net forward progress plus verified lap completion.
 
@@ -493,48 +443,6 @@ def episode_fitness(result: EpisodeResult, max_steps: int) -> CandidateEvaluatio
     )
 
 
-def make_episode_evaluator(
-    geometry: TrackGeometry,
-    *,
-    max_seconds: float,
-) -> FitnessEvaluator:
-    """Create the production Fixed GA evaluator over physics."""
-    if not math.isfinite(max_seconds) or max_seconds <= 0.0:
-        raise ValueError("max_seconds must be finite and positive.")
-
-    def evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
-        return evaluate_candidate(
-            geometry,
-            candidate.controller,
-            candidate.setup,
-            max_seconds=max_seconds,
-            selected_car_id=candidate.candidate_id,
-        )
-
-    return evaluator
-
-
-def evaluate_candidate(
-    geometry: TrackGeometry,
-    controller: Controller,
-    setup: VehicleSetup,
-    *,
-    max_seconds: float,
-    selected_car_id: str,
-) -> CandidateEvaluation:
-    """Evaluate any algorithm candidate through the canonical physics and fitness path."""
-    if not math.isfinite(max_seconds) or max_seconds <= 0.0:
-        raise ValueError("max_seconds must be finite and positive.")
-    result = evaluate_episode(
-        geometry,
-        controller,
-        setup,
-        max_seconds=max_seconds,
-        selected_car_id=selected_car_id,
-    )
-    return episode_fitness(result, round(max_seconds * 60.0))
-
-
 def controller_features(observation: Observation) -> tuple[float, ...]:
     """Normalize the shared observation for every learned controller."""
     return (
@@ -542,23 +450,6 @@ def controller_features(observation: Observation) -> tuple[float, ...]:
         _clamp(observation.state.lateral_speed / 10.0, -1.0, 1.0),
         _clamp(observation.heading_error / math.pi, -1.0, 1.0),
         *(_clamp(distance / SENSOR_RANGE, 0.0, 1.0) for distance in observation.sensor_distances),
-    )
-
-
-def evaluate_random_network_with_vehicle(
-    geometry: TrackGeometry,
-    vehicle: VehicleGenome,
-    *,
-    seed: int,
-    max_seconds: float,
-) -> CandidateEvaluation:
-    """Evaluate the random-network baseline with identical vehicle genes."""
-    return evaluate_candidate(
-        geometry,
-        RandomNetworkBaseline(seed),
-        vehicle.to_setup(),
-        max_seconds=max_seconds,
-        selected_car_id=f"random-network-{seed}",
     )
 
 

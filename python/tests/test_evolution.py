@@ -12,20 +12,37 @@ from evo_racer.evolution import (
     CandidateEvaluation,
     FeedForwardController,
     FeedForwardNetwork,
+    FitnessEvaluator,
     FixedCandidate,
     FixedGA,
     FixedGAConfig,
     FixedGenome,
+    GenerationReport,
     ScoredCandidate,
     VehicleGenome,
     episode_fitness,
-    evaluate_random_network_with_vehicle,
-    make_episode_evaluator,
-    run_fixed_ga,
 )
-from evo_racer.simulation import RandomNetworkBaseline, evaluate_episode, preset_geometry
+from evo_racer.simulation import (
+    Controller,
+    RandomNetworkBaseline,
+    TrackGeometry,
+    VehicleSetup,
+    episode_step_limit,
+    evaluate_episode,
+    preset_geometry,
+)
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "fixed-ga.json"
+
+
+def _drive(
+    geometry: TrackGeometry, controller: Controller, setup: VehicleSetup, max_seconds: float
+) -> CandidateEvaluation:
+    """Score one drive the way RunSession does: physics episode, then fitness."""
+    episode = evaluate_episode(
+        geometry, controller, setup, max_seconds=max_seconds, selected_car_id="test-car"
+    )
+    return episode_fitness(episode, episode_step_limit(max_seconds))
 
 
 def _landscape_evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
@@ -42,6 +59,17 @@ def _landscape_evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
         collision_count=0,
         steps=1,
     )
+
+
+def _run(
+    config: FixedGAConfig, seed: int, generations: int, evaluator: FitnessEvaluator
+) -> list[GenerationReport]:
+    ga = FixedGA(config, seed)
+    reports = [ga.evaluate(evaluator)]
+    for _ in range(generations - 1):
+        ga.advance(reports[-1])
+        reports.append(ga.evaluate(evaluator))
+    return reports
 
 
 def test_feed_forward_network_round_trips_and_has_bounded_controls() -> None:
@@ -93,10 +121,12 @@ def test_fixed_seed_reproduces_population_and_result_sequence() -> None:
 
     assert first.population == second.population
 
-    first_run = run_fixed_ga(config, 20260729, 5, _landscape_evaluator)
-    second_run = run_fixed_ga(config, 20260729, 5, _landscape_evaluator)
+    first_run = _run(config, 20260729, 5, _landscape_evaluator)
+    second_run = _run(config, 20260729, 5, _landscape_evaluator)
 
-    assert first_run.to_payload() == second_run.to_payload()
+    assert [report.to_payload() for report in first_run] == [
+        report.to_payload() for report in second_run
+    ]
 
 
 def test_elites_remain_byte_for_byte_unchanged() -> None:
@@ -152,7 +182,7 @@ def test_fitness_does_not_reward_survival_speed_or_collision() -> None:
 def test_controlled_training_improves_median_and_beats_random_same_vehicle() -> None:
     geometry = preset_geometry("easy-oval")
     max_seconds = 6.0
-    result = run_fixed_ga(
+    reports = _run(
         FixedGAConfig(
             population_size=12,
             elite_count=2,
@@ -162,17 +192,19 @@ def test_controlled_training_improves_median_and_beats_random_same_vehicle() -> 
         ),
         seed=91,
         generations=7,
-        evaluator=make_episode_evaluator(geometry, max_seconds=max_seconds),
+        evaluator=lambda candidate: _drive(
+            geometry, candidate.controller, candidate.setup, max_seconds
+        ),
     )
-    champion = result.champion
-    random_result = evaluate_random_network_with_vehicle(
-        geometry,
-        champion.candidate.genome.vehicle,
-        seed=0,
-        max_seconds=max_seconds,
+    champion = min(
+        (scored for report in reports for scored in report.results),
+        key=lambda scored: (-scored.evaluation.fitness, scored.candidate.candidate_id),
+    )
+    random_result = _drive(
+        geometry, RandomNetworkBaseline(0), champion.candidate.setup, max_seconds
     )
 
-    assert result.reports[-1].median_fitness > result.reports[0].median_fitness
+    assert reports[-1].median_fitness > reports[0].median_fitness
     assert champion.evaluation.fitness > random_result.fitness
     assert champion.evaluation.progress_fraction > random_result.progress_fraction
 

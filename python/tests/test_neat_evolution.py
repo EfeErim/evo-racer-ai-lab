@@ -9,20 +9,39 @@ from typing import Any
 import neat  # type: ignore[import-untyped]
 import pytest
 
-from evo_racer.evolution import CandidateEvaluation, VehicleGenome
+from evo_racer.evolution import CandidateEvaluation, VehicleGenome, episode_fitness
 from evo_racer.neat_evolution import (
     CompiledNEATNetwork,
     EvoRacerGenome,
     NEATCandidate,
+    NEATEvaluator,
+    NEATGenerationReport,
+    NEATRandomStream,
     compile_neat_network,
     create_neat_population,
     load_neat_config,
-    make_neat_episode_evaluator,
-    run_neat,
+    score_neat_generation,
 )
-from evo_racer.simulation import preset_geometry
+from evo_racer.simulation import (
+    Controller,
+    TrackGeometry,
+    VehicleSetup,
+    episode_step_limit,
+    evaluate_episode,
+    preset_geometry,
+)
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "neat.json"
+
+
+def _drive(
+    geometry: TrackGeometry, controller: Controller, setup: VehicleSetup, max_seconds: float
+) -> CandidateEvaluation:
+    """Score one drive the way RunSession does: physics episode, then fitness."""
+    episode = evaluate_episode(
+        geometry, controller, setup, max_seconds=max_seconds, selected_car_id="test-car"
+    )
+    return episode_fitness(episode, episode_step_limit(max_seconds))
 
 
 def _synthetic_evaluator(candidate: NEATCandidate) -> CandidateEvaluation:
@@ -35,6 +54,23 @@ def _synthetic_evaluator(candidate: NEATCandidate) -> CandidateEvaluation:
         collision_count=0,
         steps=1,
     )
+
+
+def _run(
+    population_size: int, seed: int, generations: int, evaluator: NEATEvaluator
+) -> list[NEATGenerationReport]:
+    reports: list[NEATGenerationReport] = []
+    stream = NEATRandomStream(seed)
+    with stream.active():
+        population, _ = create_neat_population(population_size=population_size, seed=seed)
+
+        def evaluate_genomes(genomes: list[tuple[int, object]], config: object) -> None:
+            reports.append(
+                score_neat_generation(int(population.generation), genomes, config, evaluator)
+            )
+
+        population.run(evaluate_genomes, generations)
+    return reports
 
 
 def test_pinned_feed_forward_config_and_runtime_compiler_match_neat_python() -> None:
@@ -92,20 +128,18 @@ def test_runtime_network_rejects_ambiguous_input_and_output_keys() -> None:
 
 
 def test_multi_generation_neat_run_uses_shared_episode_evaluator() -> None:
-    result = run_neat(
-        population_size=6,
-        seed=73,
-        generations=3,
-        evaluator=make_neat_episode_evaluator(
-            preset_geometry("easy-oval"),
-            max_seconds=0.5,
-        ),
+    geometry = preset_geometry("easy-oval")
+    reports = _run(
+        6,
+        73,
+        3,
+        lambda candidate: _drive(geometry, candidate.controller, candidate.setup, 0.5),
     )
 
-    assert [report.generation for report in result.reports] == [0, 1, 2]
-    assert all(len(report.results) == 6 for report in result.reports)
-    assert result.champion.candidate.controller.name.startswith("neat:")
-    assert math.isfinite(result.champion.evaluation.fitness)
+    assert [report.generation for report in reports] == [0, 1, 2]
+    assert all(len(report.results) == 6 for report in reports)
+    assert reports[-1].results[0].candidate.controller.name.startswith("neat:")
+    assert all(math.isfinite(report.best_fitness) for report in reports)
 
 
 def test_vehicle_genes_stay_frozen_during_evaluation_and_change_between_generations() -> None:
@@ -118,14 +152,9 @@ def test_vehicle_genes_stay_frozen_during_evaluation_and_change_between_generati
         assert candidate.vehicle == before
         return evaluation
 
-    result = run_neat(
-        population_size=8,
-        seed=19,
-        generations=2,
-        evaluator=evaluator,
-    )
+    reports = _run(8, 19, 2, evaluator)
 
-    assert len(result.reports) == 2
+    assert len(reports) == 2
     assert len(observed[0]) == 8
     assert len(observed[1]) == 8
     assert set(observed[0]) != set(observed[1])
@@ -161,36 +190,11 @@ def test_vehicle_genes_cross_over_and_mutate_without_changing_parents(
     assert (first.vehicle_genome, second.vehicle_genome) == parent_snapshots
 
 
-def test_checkpoint_restore_reproduces_uninterrupted_next_generations(tmp_path: Path) -> None:
-    uninterrupted = run_neat(
-        population_size=8,
-        seed=411,
-        generations=3,
-        evaluator=_synthetic_evaluator,
-    )
-    checkpoint_prefix = tmp_path / "neat-checkpoint-"
-    first_leg = run_neat(
-        population_size=8,
-        seed=411,
-        generations=1,
-        evaluator=_synthetic_evaluator,
-        checkpoint_prefix=checkpoint_prefix,
-    )
-    checkpoint = tmp_path / "neat-checkpoint-1"
+def test_same_seed_reproduces_every_generation() -> None:
+    first = _run(8, 411, 3, _synthetic_evaluator)
+    second = _run(8, 411, 3, _synthetic_evaluator)
 
-    resumed = run_neat(
-        population_size=8,
-        seed=411,
-        generations=2,
-        evaluator=_synthetic_evaluator,
-        restore_checkpoint=checkpoint,
-    )
-
-    assert checkpoint.is_file()
-    assert first_leg.reports[0].to_payload() == uninterrupted.reports[0].to_payload()
-    assert [report.to_payload() for report in resumed.reports] == [
-        report.to_payload() for report in uninterrupted.reports[1:]
-    ]
+    assert [report.to_payload() for report in first] == [report.to_payload() for report in second]
 
 
 def test_shared_neat_fixture_round_trips_in_python() -> None:

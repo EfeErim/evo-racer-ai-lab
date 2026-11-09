@@ -124,9 +124,17 @@ describe("Run library contract", () => {
 
 describe("Observation and results contract", () => {
   it("parses the shared Python observation fixture without simulation rules", () => {
-    expect(parseObservationSnapshot(observationFixture)).toEqual(
-      observationFixture,
-    );
+    const parsed = parseObservationSnapshot(observationFixture);
+    expect({
+      ...parsed,
+      generationRace: parsed.generationRace && {
+        ...parsed.generationRace,
+        cars: parsed.generationRace.cars.map((car) => ({
+          ...car,
+          poses: Array.from(car.poses),
+        })),
+      },
+    }).toEqual(observationFixture);
   });
 
   it("fails closed on invalid status and replay controls", () => {
@@ -294,9 +302,9 @@ describe("Observation and results contract", () => {
       total: 10,
     });
     expect(parsed.selectedCar).toMatchObject({
-      x: 18.25,
-      y: 7.5,
-      heading: 0.75,
+      x: 5.024937,
+      y: 0.000135,
+      heading: 6.279074,
     });
     expect(parsed.generationReplay?.candidateId).toBe("g0000-c0003");
   });
@@ -308,7 +316,7 @@ describe("Observation and results contract", () => {
     >;
     value.generationTrails = [
       {
-        runId: "run-phase7-fixture",
+        runId: "run-observation-fixture",
         candidateId: "g0000-c0002",
         generation: 0,
         points: [

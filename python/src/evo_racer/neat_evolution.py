@@ -9,7 +9,6 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
-from pathlib import Path
 from threading import RLock
 from typing import Any, Final, cast
 
@@ -23,7 +22,6 @@ from evo_racer.evolution import (
     CandidateEvaluation,
     VehicleGenome,
     controller_features,
-    evaluate_candidate,
 )
 from evo_racer.simulation import Controls, Observation, TrackGeometry, VehicleSetup
 
@@ -386,50 +384,6 @@ class NEATGenerationReport:
         }
 
 
-@dataclass(frozen=True, slots=True)
-class NEATRunResult:
-    seed: int
-    reports: tuple[NEATGenerationReport, ...]
-    champion: NEATScoredCandidate
-
-    def to_payload(self) -> dict[str, object]:
-        return {
-            "contractVersion": EVOLUTION_CONTRACT_VERSION,
-            "algorithm": "neat",
-            "seed": self.seed,
-            "reports": [report.to_payload() for report in self.reports],
-            "champion": {
-                "candidateId": self.champion.candidate.candidate_id,
-                "fitness": _rounded(self.champion.evaluation.fitness),
-                "genome": self.champion.candidate.to_payload(),
-            },
-        }
-
-
-NEATFitnessEvaluator = Callable[[NEATCandidate], CandidateEvaluation]
-
-
-def make_neat_episode_evaluator(
-    geometry: TrackGeometry,
-    *,
-    max_seconds: float,
-) -> NEATFitnessEvaluator:
-    """Create the NEAT adapter over the shared physics and fitness."""
-    if not math.isfinite(max_seconds) or max_seconds <= 0.0:
-        raise ValueError("max_seconds must be finite and positive.")
-
-    def evaluator(candidate: NEATCandidate) -> CandidateEvaluation:
-        return evaluate_candidate(
-            geometry,
-            candidate.controller,
-            candidate.setup,
-            max_seconds=max_seconds,
-            selected_car_id=candidate.candidate_id,
-        )
-
-    return evaluator
-
-
 def load_neat_config(population_size: int = 24) -> Any:
     """Load the bundled, explicit feed-forward neat-python configuration."""
     if population_size < 4:
@@ -500,112 +454,53 @@ def create_neat_population(
     return neat.Population(config, seed=seed), config
 
 
-def restore_neat_population(
-    checkpoint_path: Path,
-    *,
-    population_size: int,
-) -> tuple[Any, Any]:
-    """Restore a deterministic population using the pinned current configuration."""
-    if not checkpoint_path.is_file():
-        raise FileNotFoundError(checkpoint_path)
-    config = load_neat_config(population_size)
-    population = neat.Checkpointer.restore_checkpoint(str(checkpoint_path), new_config=config)
-    return population, config
+NEATEvaluator = Callable[[NEATCandidate], CandidateEvaluation]
 
 
-def run_neat(
-    *,
-    population_size: int,
-    seed: int,
-    generations: int,
-    evaluator: NEATFitnessEvaluator,
-    checkpoint_prefix: Path | None = None,
-    restore_checkpoint: Path | None = None,
-) -> NEATRunResult:
-    """Run or resume a bounded deterministic feed-forward NEAT experiment."""
-    if generations <= 0:
-        raise ValueError("generations must be positive.")
-    stream = NEATRandomStream(seed)
-    with stream.active():
-        if restore_checkpoint is None:
-            population, config = create_neat_population(population_size=population_size, seed=seed)
-        else:
-            population, config = restore_neat_population(
-                restore_checkpoint,
-                population_size=population_size,
-            )
-    if checkpoint_prefix is not None:
-        checkpoint_prefix.parent.mkdir(parents=True, exist_ok=True)
-        population.add_reporter(
-            neat.Checkpointer(
-                generation_interval=1,
-                time_interval_seconds=None,
-                filename_prefix=str(checkpoint_prefix),
-            )
-        )
+def score_neat_generation(
+    generation: int,
+    genomes: list[tuple[int, object]],
+    config: object,
+    evaluate: NEATEvaluator,
+) -> NEATGenerationReport:
+    """Evaluate one neat-python generation in genome-key order and set each fitness.
 
-    reports: list[NEATGenerationReport] = []
-    best: NEATScoredCandidate | None = None
-
-    def evaluate_genomes(genomes: list[tuple[int, object]], active_config: object) -> None:
-        nonlocal best
-        generation = int(population.generation)
-        scored: list[NEATScoredCandidate] = []
-        for genome_key, raw_genome in sorted(genomes):
-            if not isinstance(raw_genome, EvoRacerGenome):
-                raise TypeError("NEAT population contains an unsupported genome.")
-            candidate = NEATCandidate(
-                candidate_id=_neat_candidate_id(generation, genome_key),
-                generation=generation,
-                network=compile_neat_network(raw_genome, active_config),
-                vehicle=raw_genome.vehicle_genome,
-            )
-            before_vehicle = raw_genome.vehicle_genome
-            evaluation = evaluator(candidate)
-            if raw_genome.vehicle_genome != before_vehicle:
-                raise RuntimeError("Vehicle genes changed during active evaluation.")
-            raw_genome.fitness = evaluation.fitness
-            scored.append(NEATScoredCandidate(candidate, evaluation))
-        ranked = sorted(
-            scored,
-            key=lambda item: (-item.evaluation.fitness, item.candidate.candidate_id),
-        )
-        if not ranked:
-            raise RuntimeError("NEAT evaluated an empty population.")
-        values = [item.evaluation.fitness for item in scored]
-        report = NEATGenerationReport(
+    neat-python reads ``genome.fitness`` back to select parents, so this is the only
+    place fitness enters the population. Vehicle genes must not change while a
+    candidate is being driven.
+    """
+    scored: list[NEATScoredCandidate] = []
+    for genome_key, raw_genome in sorted(genomes):
+        if not isinstance(raw_genome, EvoRacerGenome):
+            raise TypeError("NEAT population contains an unsupported genome.")
+        candidate = NEATCandidate(
+            candidate_id=f"neat-g{generation:04d}-k{genome_key:06d}",
             generation=generation,
-            champion_id=ranked[0].candidate.candidate_id,
-            best_fitness=ranked[0].evaluation.fitness,
-            median_fitness=statistics.median(values),
-            results=tuple(scored),
+            network=compile_neat_network(raw_genome, config),
+            vehicle=raw_genome.vehicle_genome,
         )
-        reports.append(report)
-        if (
-            best is None
-            or ranked[0].evaluation.fitness > best.evaluation.fitness
-            or (
-                ranked[0].evaluation.fitness == best.evaluation.fitness
-                and ranked[0].candidate.candidate_id < best.candidate.candidate_id
-            )
-        ):
-            best = ranked[0]
-
-    with stream.active():
-        population.run(evaluate_genomes, generations)
-    if best is None:
-        raise RuntimeError("NEAT produced no evaluated candidate.")
-    return NEATRunResult(seed=seed, reports=tuple(reports), champion=best)
+        before_vehicle = raw_genome.vehicle_genome
+        evaluation = evaluate(candidate)
+        if raw_genome.vehicle_genome != before_vehicle:
+            raise RuntimeError("Vehicle genes changed during active evaluation.")
+        raw_genome.fitness = evaluation.fitness
+        scored.append(NEATScoredCandidate(candidate, evaluation))
+    if not scored:
+        raise RuntimeError("NEAT evaluated an empty population.")
+    champion = min(scored, key=lambda item: (-item.evaluation.fitness, item.candidate.candidate_id))
+    return NEATGenerationReport(
+        generation=generation,
+        champion_id=champion.candidate.candidate_id,
+        best_fitness=champion.evaluation.fitness,
+        median_fitness=statistics.median(item.evaluation.fitness for item in scored),
+        results=tuple(scored),
+    )
 
 
 def _mutate_value(value: float, power: float, minimum: float, maximum: float) -> float:
     if random.random() >= VEHICLE_MUTATION_RATE:
         return value
     return _clamp(value + random.gauss(0.0, power), minimum, maximum)
-
-
-def _neat_candidate_id(generation: int, genome_key: int) -> str:
-    return f"neat-g{generation:04d}-k{genome_key:06d}"
 
 
 def _integer_array(value: object, field: str) -> tuple[int, ...]:

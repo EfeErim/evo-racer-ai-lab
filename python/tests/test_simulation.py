@@ -20,7 +20,6 @@ from evo_racer.simulation import (
     VehicleSetup,
     VehicleState,
     evaluate_episode,
-    parse_telemetry_payload,
     preset_geometry,
     step_physics,
 )
@@ -356,38 +355,17 @@ def test_episode_publishes_real_position_telemetry_without_changing_result() -> 
     assert payload["heading"] == pytest.approx(published[-1].state.heading)
 
 
-def test_shared_telemetry_fixture_round_trips_in_python() -> None:
-    fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    telemetry = parse_telemetry_payload(fixture)
+def test_telemetry_fixture_is_exactly_what_python_sends() -> None:
+    """The TypeScript tests parse this fixture, so it must be real producer output."""
+    fixture = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    result = evaluate_episode(
+        preset_geometry("easy-oval"),
+        PurePursuitBaseline(),
+        max_seconds=2.0,
+        selected_car_id="telemetry-fixture",
+    )
 
-    assert telemetry.to_payload() == fixture
-
-
-@pytest.mark.parametrize(
-    ("field", "invalid"),
-    [
-        ("selectedCarId", "   "),
-        ("simulatedSeconds", -0.01),
-        ("speed", -0.01),
-        ("steering", 1.01),
-        ("throttle", -0.01),
-        ("brake", 1.01),
-        ("progress", -0.01),
-        ("progress", 1.01),
-        ("sensorDistances", [-0.01, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]),
-        ("sensorDistances", [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, SENSOR_RANGE + 0.01]),
-    ],
-)
-def test_shared_telemetry_parser_rejects_impossible_values(
-    field: str,
-    invalid: object,
-) -> None:
-    fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    assert isinstance(fixture, dict)
-    fixture[field] = invalid
-
-    with pytest.raises(ValueError):
-        parse_telemetry_payload(fixture)
+    assert result.telemetry[-1].to_payload() == fixture
 
 
 @pytest.mark.parametrize("invalid", [float("nan"), float("inf"), -1.0])

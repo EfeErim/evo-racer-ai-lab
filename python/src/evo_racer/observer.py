@@ -6,7 +6,6 @@ import hashlib
 import json
 import logging
 import math
-import statistics
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -25,13 +24,12 @@ from evo_racer.evolution import (
     episode_fitness,
 )
 from evo_racer.neat_evolution import (
-    EvoRacerGenome,
     NEATCandidate,
     NEATGenerationReport,
     NEATRandomStream,
     NEATScoredCandidate,
-    compile_neat_network,
     create_neat_population,
+    score_neat_generation,
 )
 from evo_racer.onboarding import validate_setup
 from evo_racer.racing_line import compare_with_reference, minimum_curvature_reference
@@ -58,6 +56,7 @@ from evo_racer.simulation import (
     TelemetrySnapshot,
     TrackGeometry,
     VehicleSetup,
+    episode_step_limit,
     evaluate_episode,
 )
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
@@ -385,31 +384,29 @@ class RunSession:
         if ga is None:
             raise RuntimeError("Fixed GA session is not initialized.")
         episodes: dict[str, EpisodeResult] = {}
-        candidate_index = 0
-
-        def evaluator(candidate: FixedCandidate) -> CandidateEvaluation:
-            nonlocal candidate_index
-            candidate_index += 1
-            self._begin_live_candidate(candidate.candidate_id, candidate_index)
-            episode = evaluate_episode(
-                self.geometry,
-                candidate.controller,
-                candidate.setup,
-                max_seconds=self.settings.episode_seconds,
-                selected_car_id=candidate.candidate_id,
-                telemetry_callback=self._publish_live_telemetry,
-                trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
-            )
-            episodes[candidate.candidate_id] = episode
-            return episode_fitness(
-                episode,
-                round(self.settings.episode_seconds / FIXED_TIME_STEP),
-            )
-
-        report = ga.evaluate(evaluator)
+        report = ga.evaluate(lambda candidate: self._evaluate_live(candidate, episodes))
         if len(self.reports) + 1 < self.settings.generations:
             ga.advance(report)
         return report, episodes
+
+    def _evaluate_live(
+        self,
+        candidate: FixedCandidate | NEATCandidate,
+        episodes: dict[str, EpisodeResult],
+    ) -> CandidateEvaluation:
+        """Drive one candidate with live telemetry and keep its episode for the race view."""
+        self._begin_live_candidate(candidate.candidate_id, len(episodes) + 1)
+        episode = evaluate_episode(
+            self.geometry,
+            candidate.controller,
+            candidate.setup,
+            max_seconds=self.settings.episode_seconds,
+            selected_car_id=candidate.candidate_id,
+            telemetry_callback=self._publish_live_telemetry,
+            trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
+        )
+        episodes[candidate.candidate_id] = episode
+        return episode_fitness(episode, episode_step_limit(self.settings.episode_seconds))
 
     def _advance_neat(
         self,
@@ -425,49 +422,12 @@ class RunSession:
             genomes: list[tuple[int, object]],
             active_config: object,
         ) -> None:
-            generation = int(population.generation)
-            scored: list[NEATScoredCandidate] = []
-            for candidate_index, (genome_key, raw_value) in enumerate(
-                sorted(genomes),
-                start=1,
-            ):
-                if not isinstance(raw_value, EvoRacerGenome):
-                    raise TypeError("NEAT population contains an unsupported genome.")
-                candidate = NEATCandidate(
-                    candidate_id=f"neat-g{generation:04d}-k{genome_key:06d}",
-                    generation=generation,
-                    network=compile_neat_network(raw_value, active_config),
-                    vehicle=raw_value.vehicle_genome,
-                )
-                self._begin_live_candidate(candidate.candidate_id, candidate_index)
-                before_vehicle = raw_value.vehicle_genome
-                episode = evaluate_episode(
-                    self.geometry,
-                    candidate.controller,
-                    candidate.setup,
-                    max_seconds=self.settings.episode_seconds,
-                    selected_car_id=candidate.candidate_id,
-                    telemetry_callback=self._publish_live_telemetry,
-                    trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
-                )
-                if raw_value.vehicle_genome != before_vehicle:
-                    raise RuntimeError("Vehicle genes changed during active evaluation.")
-                evaluation = episode_fitness(
-                    episode,
-                    round(self.settings.episode_seconds / FIXED_TIME_STEP),
-                )
-                raw_value.fitness = evaluation.fitness
-                episodes[candidate.candidate_id] = episode
-                scored.append(NEATScoredCandidate(candidate, evaluation))
-            ranked = _ranked(tuple(scored))
-            values = [item.evaluation.fitness for item in scored]
             produced.append(
-                NEATGenerationReport(
-                    generation=generation,
-                    champion_id=ranked[0].candidate.candidate_id,
-                    best_fitness=ranked[0].evaluation.fitness,
-                    median_fitness=statistics.median(values),
-                    results=tuple(scored),
+                score_neat_generation(
+                    int(population.generation),
+                    genomes,
+                    active_config,
+                    lambda candidate: self._evaluate_live(candidate, episodes),
                 )
             )
 
@@ -514,7 +474,7 @@ class RunSession:
             else candidate.to_payload()
         )
         self.status = status
-        max_steps = round(self.settings.episode_seconds / FIXED_TIME_STEP)
+        max_steps = episode_step_limit(self.settings.episode_seconds)
         racing_line_reference = minimum_curvature_reference(
             self.geometry.centerline,
             self.geometry.road_width,
@@ -840,85 +800,6 @@ class RunManager:
         return response
 
 
-def parse_observation_snapshot(payload: object) -> dict[str, object]:
-    """Validate the shared observation fixture without adding browser-domain rules."""
-    if not isinstance(payload, dict):
-        raise ValueError("Observation snapshot must be an object.")
-    if payload.get("contractVersion") != OBSERVATION_CONTRACT_VERSION:
-        raise ValueError("Observation snapshot must use contractVersion 1.")
-    if not isinstance(payload.get("runId"), str) or not payload["runId"]:
-        raise ValueError("Observation snapshot requires a runId.")
-    status = payload.get("status")
-    if status not in {"running", "paused", "stopped", "completed"}:
-        raise ValueError("Observation snapshot has an invalid status.")
-    generation = payload.get("generation")
-    total = payload.get("totalGenerations")
-    if (
-        not isinstance(generation, int)
-        or isinstance(generation, bool)
-        or not isinstance(total, int)
-        or isinstance(total, bool)
-        or generation < 0
-        or total < 1
-        or generation > total
-    ):
-        raise ValueError("Observation snapshot has invalid generation counters.")
-    result = payload.get("result")
-    terminal = status in {"stopped", "completed"}
-    if not terminal and result is not None:
-        raise ValueError("Non-terminal observation snapshots cannot contain a result.")
-    if terminal and generation > 0 and result is None:
-        raise ValueError("Terminal observation snapshots require a result after one generation.")
-    if status == "completed" and generation != total:
-        raise ValueError("Completed observation snapshots must include every requested generation.")
-    if result is not None and not isinstance(result, dict):
-        raise ValueError("Observation snapshot result must be an object or null.")
-    if isinstance(result, dict):
-        metadata = result.get("metadata")
-        champion = result.get("champion")
-        replay = result.get("replay")
-        if (
-            not isinstance(metadata, dict)
-            or metadata.get("runId") != payload["runId"]
-            or metadata.get("status") != status
-            or metadata.get("generationsCompleted") != generation
-            or metadata.get("generationsRequested") != total
-        ):
-            raise ValueError("Run result identity does not match its observation snapshot.")
-        if (
-            not isinstance(champion, dict)
-            or not isinstance(replay, dict)
-            or replay.get("candidateId") != champion.get("candidateId")
-        ):
-            raise ValueError("Run replay does not match the result champion.")
-    history = payload.get("fitnessHistory")
-    if not isinstance(history, list):
-        raise ValueError("Observation snapshot requires fitnessHistory.")
-    if len(history) != generation:
-        raise ValueError("Observation snapshot generation history is inconsistent.")
-    for index, point in enumerate(history):
-        if (
-            not isinstance(point, dict)
-            or point.get("generation") != index
-            or any(
-                not isinstance(point.get(field), (int, float))
-                or isinstance(point.get(field), bool)
-                or not math.isfinite(float(cast(float, point[field])))
-                for field in ("bestFitness", "medianFitness")
-            )
-        ):
-            raise ValueError("Observation snapshot generation history is inconsistent.")
-    report = payload.get("generationReport")
-    if generation == 0:
-        if report is not None:
-            raise ValueError("Observation snapshot generation history is inconsistent.")
-    elif not isinstance(report, dict) or report.get("generation") != generation - 1:
-        raise ValueError("Observation snapshot generation history is inconsistent.")
-    if isinstance(result, dict) and result.get("fitnessHistory") != history:
-        raise ValueError("Run result fitness history does not match its observation.")
-    return payload
-
-
 def _resolve_compiled_track(payload: dict[object, object]) -> dict[str, object]:
     track_value = payload.get("track")
     if track_value is not None:
@@ -955,7 +836,7 @@ def best_pure_pursuit_episode(
     one can miss a short time limit, so neither alone is a fair reference. Ties keep
     the earlier controller, which makes the choice deterministic.
     """
-    max_steps = round(max_seconds / FIXED_TIME_STEP)
+    max_steps = episode_step_limit(max_seconds)
     controllers: tuple[Controller, ...] = (
         PurePursuitBaseline(),
         *(SetupAwarePurePursuit(setup, caution) for caution in PURE_PURSUIT_CAUTION_LEVELS),

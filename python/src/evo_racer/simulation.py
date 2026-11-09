@@ -402,11 +402,6 @@ class TrackGeometry:
         """Check the vehicle-disc center against the track corridor."""
         return self.project(point).distance <= self.road_width / 2.0 - VEHICLE_RADIUS
 
-    def sweep(self, start: Point, end: Point) -> tuple[Point, bool]:
-        """Sweep the vehicle center and return the last collision-free point."""
-        position, collided, _ = self._sweep_with_projection(start, end, None)
-        return position, collided
-
     def _sweep_with_projection(
         self,
         start: Point,
@@ -703,6 +698,11 @@ def step_physics(
     )
 
 
+def episode_step_limit(max_seconds: float) -> int:
+    """Number of fixed physics steps in an episode time limit."""
+    return round(max_seconds / FIXED_TIME_STEP)
+
+
 def evaluate_episode(
     geometry: TrackGeometry,
     controller: Controller,
@@ -737,7 +737,7 @@ def evaluate_episode(
         or trace_interval_steps <= 0
     ):
         raise ValueError("trace_interval_steps must be a positive integer.")
-    max_steps = round(max_seconds / FIXED_TIME_STEP)
+    max_steps = episode_step_limit(max_seconds)
     if max_steps <= 0:
         raise ValueError("max_seconds must include at least one fixed step.")
     state = geometry.spawn
@@ -850,37 +850,6 @@ def evaluate_episode(
     )
 
 
-def parse_telemetry_payload(payload: object) -> TelemetrySnapshot:
-    """Parse the shared TypeScript/Python selected-car telemetry fixture."""
-    if not isinstance(payload, dict):
-        raise ValueError("Telemetry must be an object.")
-    sensor_value = payload.get("sensorDistances")
-    if not isinstance(sensor_value, list) or len(sensor_value) != len(SENSOR_ANGLES):
-        raise ValueError("Telemetry must contain seven sensor distances.")
-    return TelemetrySnapshot(
-        selected_car_id=_required_string(payload.get("selectedCarId"), "selectedCarId"),
-        simulated_seconds=_finite_number(payload.get("simulatedSeconds"), "simulatedSeconds"),
-        state=VehicleState(
-            x=_finite_number(payload.get("x"), "x"),
-            y=_finite_number(payload.get("y"), "y"),
-            heading=_finite_number(payload.get("heading"), "heading"),
-            forward_speed=_finite_number(payload.get("speed"), "speed"),
-            lateral_speed=_finite_number(payload.get("lateralSpeed"), "lateralSpeed"),
-            steering=_finite_number(payload.get("steering"), "steering"),
-        ),
-        controls=Controls(
-            steering=_finite_number(payload.get("steering"), "steering"),
-            throttle=_finite_number(payload.get("throttle"), "throttle"),
-            brake=_finite_number(payload.get("brake"), "brake"),
-        ),
-        progress_fraction=_finite_number(payload.get("progress"), "progress"),
-        sensor_distances=tuple(
-            _finite_number(distance, f"sensorDistances[{index}]")
-            for index, distance in enumerate(sensor_value)
-        ),
-    )
-
-
 def preset_geometry(track_id: str) -> TrackGeometry:
     """Compile a bundled preset through the canonical public compiler."""
     track = next((candidate for candidate in PRESET_TRACKS if candidate.track_id == track_id), None)
@@ -895,10 +864,6 @@ def _parse_point(value: object) -> Point:
     return (_finite_number(value[0], "point.x"), _finite_number(value[1], "point.y"))
 
 
-def _cross(first: Point, second: Point) -> float:
-    return first[0] * second[1] - first[1] * second[0]
-
-
 def _finite_number(value: object, field: str) -> float:
     if (
         not isinstance(value, (int, float))
@@ -907,12 +872,6 @@ def _finite_number(value: object, field: str) -> float:
     ):
         raise ValueError(f"{field} must be a finite number.")
     return float(value)
-
-
-def _required_string(value: object, field: str) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(f"{field} must be a non-empty string.")
-    return value
 
 
 def _move_toward(value: float, target: float, maximum_delta: float) -> float:

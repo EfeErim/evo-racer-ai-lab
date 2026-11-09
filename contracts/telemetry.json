@@ -1,14 +1,22 @@
 {
-  "selectedCarId": "phase4-fixture",
-  "simulatedSeconds": 3.5,
-  "x": 12.75,
-  "y": -4.5,
-  "heading": 1.25,
-  "speed": 12.25,
-  "lateralSpeed": -0.75,
-  "steering": 0.3,
-  "throttle": 0.6,
-  "brake": 0.1,
-  "progress": 0.125,
-  "sensorDistances": [4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0]
+  "selectedCarId": "telemetry-fixture",
+  "simulatedSeconds": 2.0,
+  "x": 18.657832,
+  "y": 0.0,
+  "heading": 0.0,
+  "speed": 12.370401,
+  "lateralSpeed": 0.0,
+  "steering": 0.0,
+  "throttle": 1.0,
+  "brake": 0.0,
+  "progress": 0.055677,
+  "sensorDistances": [
+    6.211652,
+    8.485169,
+    15.67817,
+    36.0,
+    15.678168,
+    8.485169,
+    6.211652
+  ]
 }

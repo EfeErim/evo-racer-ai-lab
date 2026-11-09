@@ -105,10 +105,12 @@ declares a feed-forward network with 10 inputs and 3 outputs, following the
 `EvoRacerGenome` subclasses the library genome and carries the same vehicle genes,
 crossed and mutated only in the hooks neat-python calls while creating offspring.
 Enabled topology is compiled into an ordered DAG that `NEATController` runs on the same
-observation features. Checkpoints use the library's generation-boundary
-`Checkpointer`.
+observation features. `score_neat_generation` is the one place fitness is written back
+to neat-python genomes. Saved runs never hold neat-python objects; a resumed run is
+replayed from its seed (see [persistence](#persistence-and-recovery)).
 
-Both algorithms call `evaluate_candidate`, the single physics and fitness path. Genome,
+Both algorithms score candidates through `RunSession._evaluate_live`: one
+`evaluate_episode` call, then `episode_fitness`. Genome,
 network and vehicle values never change during an episode. Fitness rewards net forward
 progress; a completion and lap-time bonus applies only after a full lap, and collisions
 are penalized.

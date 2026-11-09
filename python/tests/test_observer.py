@@ -15,7 +15,6 @@ from evo_racer.observer import (
     RunManager,
     RunSession,
     RunSettings,
-    parse_observation_snapshot,
 )
 from evo_racer.simulation import evaluate_episode as simulation_evaluate_episode
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
@@ -218,54 +217,15 @@ def test_manager_streams_live_candidate_position_while_generation_runs(
         pytest.fail("Background generation did not complete.")
 
 
-def test_shared_observation_fixture_round_trips_in_python() -> None:
-    fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+def test_observation_fixture_is_exactly_what_python_sends() -> None:
+    """The TypeScript tests parse this fixture, so it must be real producer output."""
+    fixture: dict[str, Any] = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+    session = _session(run_id="run-observation-fixture")
+    _complete(session)
+    # previousRuns is filled in by RunManager from the local library, not by the session.
+    snapshot = json.loads(json.dumps(session.snapshot()))
 
-    assert parse_observation_snapshot(fixture) == fixture
-
-
-def test_shared_observation_parser_rejects_inconsistent_generation_history() -> None:
-    missing_history: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    missing_history["fitnessHistory"].pop()
-    with pytest.raises(ValueError, match="generation history is inconsistent"):
-        parse_observation_snapshot(missing_history)
-
-    wrong_report: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    wrong_report["generationReport"]["generation"] = 0
-    with pytest.raises(ValueError, match="generation history is inconsistent"):
-        parse_observation_snapshot(wrong_report)
-
-    mismatched_result: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    mismatched_result["result"]["fitnessHistory"][0]["bestFitness"] += 1
-    with pytest.raises(ValueError, match="fitness history does not match"):
-        parse_observation_snapshot(mismatched_result)
-
-
-def test_shared_observation_parser_rejects_inconsistent_terminal_result() -> None:
-    nonterminal_result: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    nonterminal_result["status"] = "running"
-    with pytest.raises(ValueError, match="Non-terminal observation"):
-        parse_observation_snapshot(nonterminal_result)
-
-    missing_result: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    missing_result["result"] = None
-    with pytest.raises(ValueError, match="require a result"):
-        parse_observation_snapshot(missing_result)
-
-    incomplete_result: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    incomplete_result["totalGenerations"] = 3
-    with pytest.raises(ValueError, match="every requested generation"):
-        parse_observation_snapshot(incomplete_result)
-
-    foreign_result: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    foreign_result["result"]["metadata"]["runId"] = "run-other"
-    with pytest.raises(ValueError, match="identity does not match"):
-        parse_observation_snapshot(foreign_result)
-
-    mismatched_replay: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    mismatched_replay["result"]["replay"]["candidateId"] = "candidate-other"
-    with pytest.raises(ValueError, match="does not match the result champion"):
-        parse_observation_snapshot(mismatched_replay)
+    assert {**snapshot, "previousRuns": fixture["previousRuns"]} == fixture
 
 
 def test_generation_boundary_exposes_transient_champion_replay() -> None:

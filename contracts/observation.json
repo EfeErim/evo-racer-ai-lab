@@ -1,192 +1,880 @@
 {
-  "contractVersion": 1,
-  "runId": "run-phase7-fixture",
-  "status": "completed",
-  "generation": 2,
-  "totalGenerations": 2,
-  "generationInProgress": false,
   "activeCandidate": null,
-  "pendingCommand": null,
-  "generationReport": {
-    "contractVersion": 1,
-    "algorithm": "fixed-ga",
-    "generation": 1,
-    "championId": "g0001-c0002",
-    "bestFitness": 82.5,
-    "medianFitness": 41.25,
-    "meanFitness": 43.75,
-    "worstFitness": 0,
-    "finishedCount": 0,
-    "results": [
+  "contractVersion": 1,
+  "fitnessHistory": [
+    {
+      "bestFitness": 0.12198889,
+      "generation": 0,
+      "medianFitness": 0.03985309
+    },
+    {
+      "bestFitness": 0.12198889,
+      "generation": 1,
+      "medianFitness": 0.05149529
+    }
+  ],
+  "generation": 2,
+  "generationInProgress": false,
+  "generationRace": {
+    "cars": [
+      {
+        "candidateId": "g0001-c0000",
+        "fitness": 0.12198889,
+        "poses": [
+          0.0,
+          5.0,
+          0.0,
+          0.0,
+          0.0,
+          0.05,
+          5.002,
+          0.0,
+          6.2823,
+          0.06,
+          0.1,
+          5.007,
+          0.0,
+          6.2812,
+          0.12,
+          0.15,
+          5.014,
+          0.0,
+          6.2802,
+          0.17,
+          0.2,
+          5.025,
+          0.0,
+          6.2791,
+          0.23
+        ],
+        "progress": 0.00010166,
+        "rank": 1,
+        "termination": "timeout"
+      },
+      {
+        "candidateId": "g0001-c0001",
+        "fitness": 0.07970618,
+        "poses": [
+          0.0,
+          5.0,
+          0.0,
+          0.0,
+          0.0,
+          0.05,
+          5.001,
+          -0.0,
+          0.001,
+          0.04,
+          0.1,
+          5.004,
+          -0.0,
+          0.0022,
+          0.08,
+          0.15,
+          5.009,
+          -0.0,
+          0.0034,
+          0.11,
+          0.2,
+          5.016,
+          -0.0,
+          0.0046,
+          0.15
+        ],
+        "progress": 6.642e-05,
+        "rank": 2,
+        "termination": "timeout"
+      },
       {
         "candidateId": "g0001-c0002",
-        "fitness": 82.5,
-        "progress": 0.06875,
-        "finished": false,
-        "collisionCount": 0,
-        "steps": 900
+        "fitness": 0.02328439,
+        "poses": [
+          0.0,
+          5.0,
+          0.0,
+          0.0,
+          0.0,
+          0.05,
+          5.0,
+          -0.0,
+          0.0012,
+          0.01,
+          0.1,
+          5.001,
+          -0.0,
+          0.0033,
+          0.02,
+          0.15,
+          5.003,
+          -0.0,
+          0.0054,
+          0.03,
+          0.2,
+          5.005,
+          -0.0,
+          0.0076,
+          0.04
+        ],
+        "progress": 1.94e-05,
+        "rank": 3,
+        "termination": "timeout"
+      },
+      {
+        "candidateId": "g0001-c0003",
+        "fitness": 0.0,
+        "poses": [
+          0.0,
+          5.0,
+          0.0,
+          0.0,
+          0.0,
+          0.05,
+          5.0,
+          0.0,
+          6.2822,
+          0.0,
+          0.1,
+          5.0,
+          0.0,
+          6.28,
+          0.0,
+          0.15,
+          5.0,
+          0.0,
+          6.2779,
+          0.0,
+          0.2,
+          5.0,
+          0.0,
+          6.2758,
+          0.0
+        ],
+        "progress": 0.0,
+        "rank": 4,
+        "termination": "timeout"
+      }
+    ],
+    "generation": 2,
+    "populationSize": 4
+  },
+  "generationReplay": {
+    "candidateId": "g0001-c0000",
+    "frames": [
+      {
+        "brake": 0.52380409,
+        "heading": 6.28299975,
+        "lateralSpeed": 2.083e-05,
+        "progress": 1.32e-06,
+        "simulatedSeconds": 0.01666667,
+        "speed": 0.01946946,
+        "steering": -0.15564113,
+        "throttle": 0.64942684,
+        "x": 5.00032449,
+        "y": 2.9e-07
+      },
+      {
+        "brake": 0.52444981,
+        "heading": 6.2790742,
+        "lateralSpeed": 0.00253188,
+        "progress": 0.00010166,
+        "simulatedSeconds": 0.2,
+        "speed": 0.22848061,
+        "steering": -0.15501147,
+        "throttle": 0.64974832,
+        "x": 5.02493709,
+        "y": 0.00013456
       }
     ]
   },
-  "fitnessHistory": [
-    {
-      "generation": 0,
-      "bestFitness": 50,
-      "medianFitness": 20
-    },
-    {
-      "generation": 1,
-      "bestFitness": 82.5,
-      "medianFitness": 41.25
-    }
-  ],
-  "selectedCar": {
-    "selectedCarId": "g0001-c0002",
-    "simulatedSeconds": 15,
-    "x": 18.25,
-    "y": 7.5,
-    "heading": 0.75,
-    "speed": 8.5,
-    "lateralSpeed": -0.15,
-    "steering": 0.25,
-    "throttle": 0.8,
-    "brake": 0.05,
-    "progress": 0.06875,
-    "sensorDistances": [5, 8, 12, 20, 11, 7, 4]
-  },
-  "result": {
-    "metadata": {
-      "contractVersion": 1,
-      "runId": "run-phase7-fixture",
-      "status": "completed",
-      "algorithm": "fixed-ga",
-      "seed": 42,
-      "trackId": "easy-oval",
-      "trackName": "Easy Oval",
-      "trackSha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-      "populationSize": 10,
-      "generationsRequested": 2,
-      "generationsCompleted": 2,
-      "episodeSeconds": 15,
-      "fixedTimeStep": 0.016666666666666666,
-      "simulationContractVersion": 1,
-      "evolutionContractVersion": 1,
-      "observationContractVersion": 1
-    },
-    "fitnessHistory": [
+  "generationReport": {
+    "algorithm": "fixed-ga",
+    "bestFitness": 0.121989,
+    "championId": "g0001-c0000",
+    "contractVersion": 1,
+    "finishedCount": 0,
+    "generation": 1,
+    "meanFitness": 0.056245,
+    "medianFitness": 0.051495,
+    "results": [
       {
-        "generation": 0,
-        "bestFitness": 50,
-        "medianFitness": 20
+        "candidateId": "g0001-c0000",
+        "collisionCount": 0,
+        "finished": false,
+        "fitness": 0.121989,
+        "progress": 0.000102,
+        "steps": 12
       },
       {
-        "generation": 1,
-        "bestFitness": 82.5,
-        "medianFitness": 41.25
+        "candidateId": "g0001-c0001",
+        "collisionCount": 0,
+        "finished": false,
+        "fitness": 0.079706,
+        "progress": 6.6e-05,
+        "steps": 12
+      },
+      {
+        "candidateId": "g0001-c0002",
+        "collisionCount": 0,
+        "finished": false,
+        "fitness": 0.023284,
+        "progress": 1.9e-05,
+        "steps": 12
+      },
+      {
+        "candidateId": "g0001-c0003",
+        "collisionCount": 0,
+        "finished": false,
+        "fitness": 0.0,
+        "progress": 0.0,
+        "steps": 12
+      }
+    ],
+    "worstFitness": 0.0
+  },
+  "generationTrails": [
+    {
+      "candidateId": "g0000-c0000",
+      "generation": 0,
+      "points": [
+        [
+          5.00032449,
+          2.9e-07
+        ],
+        [
+          5.02493709,
+          0.00013456
+        ]
+      ],
+      "runId": "run-observation-fixture"
+    },
+    {
+      "candidateId": "g0001-c0000",
+      "generation": 1,
+      "points": [
+        [
+          5.00032449,
+          2.9e-07
+        ],
+        [
+          5.02493709,
+          0.00013456
+        ]
+      ],
+      "runId": "run-observation-fixture"
+    }
+  ],
+  "pendingCommand": null,
+  "previousRuns": [
+    {
+      "algorithm": "neat",
+      "championFitness": 70,
+      "championProgress": 0.05833333,
+      "episodeSeconds": 15,
+      "generationsCompleted": 2,
+      "populationSize": 10,
+      "runId": "run-previous",
+      "seed": 7,
+      "trackId": "easy-oval"
+    }
+  ],
+  "result": {
+    "baselineComparisons": [
+      {
+        "collisionCount": 0,
+        "controller": "fixed-ga:g0000-c0000",
+        "finished": false,
+        "fitness": 0.12198889,
+        "label": "Champion",
+        "progress": 0.00010166,
+        "steps": 12
+      },
+      {
+        "collisionCount": 0,
+        "controller": "random-network",
+        "finished": false,
+        "fitness": 0.24383134,
+        "label": "Seeded random network",
+        "progress": 0.00020319,
+        "steps": 12
+      },
+      {
+        "collisionCount": 0,
+        "controller": "pure-pursuit",
+        "finished": false,
+        "fitness": 0.8779384,
+        "label": "Pure Pursuit",
+        "progress": 0.00073162,
+        "steps": 12
       }
     ],
     "champion": {
-      "candidateId": "g0001-c0002",
-      "fitness": 82.5,
-      "progress": 0.06875,
+      "candidateId": "g0000-c0000",
+      "fitness": 0.12198889,
       "genome": {
+        "algorithm": "fixed-ga",
         "contractVersion": 1,
-        "algorithm": "fixed-ga"
+        "network": {
+          "activations": {
+            "brake": "sigmoid",
+            "hidden": "tanh",
+            "steering": "tanh",
+            "throttle": "sigmoid"
+          },
+          "contractVersion": 1,
+          "parameters": [
+            -0.4403690528540243,
+            0.0042808872494692896,
+            0.12829563294553736,
+            -0.07807628366854513,
+            0.1734731208329543,
+            -0.02553243332706523,
+            0.03579855711022262,
+            -0.5955356590317753,
+            -0.7792109396740667,
+            -0.4897951571405561,
+            0.559631598803906,
+            -0.9491812971888518,
+            -0.2956259316551795,
+            -0.15528266879590258,
+            0.10612110780233319,
+            -0.1329459074089232,
+            0.7108176954982097,
+            0.8745602557818644,
+            0.13741538814963383,
+            -0.595035422036547,
+            0.7501001166120889,
+            0.7113135023536052,
+            -0.07149750416293221,
+            0.5959280036323862,
+            0.7687866582832061,
+            0.9018398244721226,
+            -0.5420291420225434,
+            -0.5653896351474224,
+            0.6054776877842845,
+            -0.4581825892690594,
+            -0.4512912078490088,
+            -0.9021414678124442,
+            0.5244137026989311,
+            -0.5261974408524155,
+            -0.6598460688185737,
+            0.22682113095883993,
+            -0.831443666178916,
+            0.5688132148912257,
+            -0.8361603073518877,
+            0.9439242808683772,
+            -0.7361828452872168,
+            -0.7148811751729989,
+            -0.07548590349746553,
+            0.5316425099213626,
+            -0.025811779271144752,
+            0.41728688121650626,
+            -0.5163715429662195,
+            0.7160168782450309,
+            -0.5942448220291621,
+            -0.17982314365442487,
+            0.6064247701789933,
+            -0.2145596617018164,
+            -0.8820463171208994,
+            0.43788473268091477,
+            -0.8204243427259781,
+            -0.17896224308565856,
+            -0.3136859718064917,
+            -0.021338595557996554,
+            -0.7269656622321472,
+            0.8480296153353111,
+            0.6252517992834989,
+            0.09647500414761145,
+            -0.39934420800682013,
+            -0.22803884130345065,
+            -0.4821606172294559,
+            -0.1848884808864737,
+            -0.022884249188164896,
+            0.49848326695203116,
+            -0.8091019525426941,
+            0.8661235665314846,
+            0.7947327980646732,
+            0.07009451786963128,
+            0.09519563605563808,
+            -0.8191491716956609,
+            -0.5629125040221088,
+            -0.9099894281039667,
+            -0.7811671786376451,
+            0.44514534310804366,
+            -0.6043154020329622,
+            0.3895650197816831,
+            0.5567722340874579,
+            -0.16950891872059204,
+            0.35990897880948736,
+            0.18064212571933913,
+            0.23788838690241354,
+            0.181475693759245,
+            0.2875876080210471
+          ],
+          "topology": {
+            "hiddenCount": 6,
+            "inputCount": 10,
+            "outputCount": 3
+          }
+        },
+        "vehicleGenes": {
+          "frontBrakeBias": 0.8176595170803281,
+          "frontDriveBias": 0.977790430185487,
+          "performanceLogits": [
+            -0.689220383504908,
+            0.9902883452768023,
+            -0.5889056361091283,
+            -0.732122562399899,
+            -0.5228346888014495
+          ]
+        }
       },
+      "progress": 0.00010166,
       "vehicleSetup": {
-        "maxSpeed": 31,
-        "acceleration": 6.5,
-        "brakeStrength": 9,
-        "steeringAgility": 1.1,
-        "gripRecovery": 4,
-        "frontBrakeBias": 0.55,
-        "frontDriveBias": 0.45
+        "acceleration": 8.465624294379012,
+        "brakeStrength": 8.265754989582547,
+        "frontBrakeBias": 0.8176595170803281,
+        "frontDriveBias": 0.977790430185487,
+        "gripRecovery": 2.737568670614209,
+        "maxSpeed": 23.87354154027843,
+        "steeringAgility": 0.8096860323794552
       }
     },
-    "baselineComparisons": [
+    "fitnessHistory": [
       {
-        "label": "Champion",
-        "controller": "fixed-ga:g0001-c0002",
-        "fitness": 82.5,
-        "progress": 0.06875,
-        "finished": false,
-        "collisionCount": 0,
-        "steps": 900
+        "bestFitness": 0.12198889,
+        "generation": 0,
+        "medianFitness": 0.03985309
       },
       {
-        "label": "Seeded random network",
-        "controller": "random-network",
-        "fitness": 0,
-        "progress": 0,
-        "finished": false,
-        "collisionCount": 0,
-        "steps": 900
-      },
-      {
-        "label": "Pure Pursuit",
-        "controller": "pure-pursuit",
-        "fitness": 1200,
-        "progress": 1,
-        "finished": true,
-        "collisionCount": 0,
-        "steps": 700
+        "bestFitness": 0.12198889,
+        "generation": 1,
+        "medianFitness": 0.05149529
       }
     ],
-    "replay": {
+    "metadata": {
+      "algorithm": "fixed-ga",
       "contractVersion": 1,
-      "candidateId": "g0001-c0002",
-      "sampleEverySteps": 6,
-      "vehicleSetup": {
-        "maxSpeed": 31,
-        "acceleration": 6.5,
-        "brakeStrength": 9,
-        "steeringAgility": 1.1,
-        "gripRecovery": 4,
-        "frontBrakeBias": 0.55,
-        "frontDriveBias": 0.45
-      },
-      "controllerParameters": [0.1, -0.2, 0.3],
-      "termination": "timeout",
+      "episodeSeconds": 0.2,
+      "evolutionContractVersion": 1,
+      "fixedTimeStep": 0.016666666666666666,
+      "generationsCompleted": 2,
+      "generationsRequested": 2,
+      "observationContractVersion": 1,
+      "populationSize": 4,
+      "runId": "run-observation-fixture",
+      "seed": 73,
+      "simulationContractVersion": 2,
+      "status": "completed",
+      "trackId": "easy-oval",
+      "trackName": "Easy Oval",
+      "trackSha256": "1f28e394fd8b5104b1406613945eea957e008cf36573c830e9b0ff84a4e1fec3"
+    },
+    "racingLineComparison": {
+      "championFinished": false,
+      "contractVersion": 1,
+      "matched": false,
+      "meanDeviationMeters": 41.781999,
+      "meanToleranceMeters": 1.2,
+      "method": "minimum-curvature-v1",
+      "p95DeviationMeters": 77.68535,
+      "p95ToleranceMeters": 2.64,
+      "referenceLine": [
+        [
+          0.004894,
+          0.074674
+        ],
+        [
+          4.380449,
+          -0.167098
+        ],
+        [
+          8.760898,
+          -0.167098
+        ],
+        [
+          13.141347,
+          -0.074834
+        ],
+        [
+          17.521796,
+          -0.028766
+        ],
+        [
+          21.902245,
+          0.0
+        ],
+        [
+          26.282694,
+          0.0
+        ],
+        [
+          30.663143,
+          0.0
+        ],
+        [
+          35.043592,
+          0.0
+        ],
+        [
+          39.424041,
+          0.0
+        ],
+        [
+          43.80449,
+          0.028766
+        ],
+        [
+          48.184939,
+          -0.028766
+        ],
+        [
+          52.565388,
+          -0.121561
+        ],
+        [
+          56.948805,
+          -0.149969
+        ],
+        [
+          61.31494,
+          0.173115
+        ],
+        [
+          65.571739,
+          1.055461
+        ],
+        [
+          69.575988,
+          2.714332
+        ],
+        [
+          73.143044,
+          5.185637
+        ],
+        [
+          76.057593,
+          8.401363
+        ],
+        [
+          78.244046,
+          12.154458
+        ],
+        [
+          79.560293,
+          16.30541
+        ],
+        [
+          79.913442,
+          20.65747
+        ],
+        [
+          79.297118,
+          24.988758
+        ],
+        [
+          77.710101,
+          29.059441
+        ],
+        [
+          75.295623,
+          32.686088
+        ],
+        [
+          72.14146,
+          35.677308
+        ],
+        [
+          68.414196,
+          37.896139
+        ],
+        [
+          64.307823,
+          39.282416
+        ],
+        [
+          59.998119,
+          39.971295
+        ],
+        [
+          55.619551,
+          40.195535
+        ],
+        [
+          51.239102,
+          40.195864
+        ],
+        [
+          46.858653,
+          40.103601
+        ],
+        [
+          42.478204,
+          40.028766
+        ],
+        [
+          38.097755,
+          40.0
+        ],
+        [
+          33.717306,
+          40.0
+        ],
+        [
+          29.336857,
+          40.0
+        ],
+        [
+          24.956408,
+          40.0
+        ],
+        [
+          20.575959,
+          40.0
+        ],
+        [
+          16.19551,
+          39.971234
+        ],
+        [
+          11.815061,
+          40.028766
+        ],
+        [
+          7.434612,
+          40.121561
+        ],
+        [
+          3.051195,
+          40.149969
+        ],
+        [
+          -1.31494,
+          39.826885
+        ],
+        [
+          -5.571739,
+          38.944539
+        ],
+        [
+          -9.575988,
+          37.285668
+        ],
+        [
+          -13.143044,
+          34.814363
+        ],
+        [
+          -16.057593,
+          31.598637
+        ],
+        [
+          -18.244046,
+          27.845542
+        ],
+        [
+          -19.560293,
+          23.69459
+        ],
+        [
+          -19.913442,
+          19.34253
+        ],
+        [
+          -19.269293,
+          15.018539
+        ],
+        [
+          -17.710101,
+          10.940559
+        ],
+        [
+          -15.309113,
+          7.30256
+        ],
+        [
+          -12.14146,
+          4.322692
+        ],
+        [
+          -8.394228,
+          2.145377
+        ],
+        [
+          -4.290411,
+          0.789818
+        ],
+        [
+          0.004894,
+          0.074674
+        ]
+      ]
+    },
+    "replay": {
+      "candidateId": "g0000-c0000",
+      "contractVersion": 1,
+      "controllerParameters": [
+        -0.44036905,
+        0.00428089,
+        0.12829563,
+        -0.07807628,
+        0.17347312,
+        -0.02553243,
+        0.03579856,
+        -0.59553566,
+        -0.77921094,
+        -0.48979516,
+        0.5596316,
+        -0.9491813,
+        -0.29562593,
+        -0.15528267,
+        0.10612111,
+        -0.13294591,
+        0.7108177,
+        0.87456026,
+        0.13741539,
+        -0.59503542,
+        0.75010012,
+        0.7113135,
+        -0.0714975,
+        0.595928,
+        0.76878666,
+        0.90183982,
+        -0.54202914,
+        -0.56538964,
+        0.60547769,
+        -0.45818259,
+        -0.45129121,
+        -0.90214147,
+        0.5244137,
+        -0.52619744,
+        -0.65984607,
+        0.22682113,
+        -0.83144367,
+        0.56881321,
+        -0.83616031,
+        0.94392428,
+        -0.73618285,
+        -0.71488118,
+        -0.0754859,
+        0.53164251,
+        -0.02581178,
+        0.41728688,
+        -0.51637154,
+        0.71601688,
+        -0.59424482,
+        -0.17982314,
+        0.60642477,
+        -0.21455966,
+        -0.88204632,
+        0.43788473,
+        -0.82042434,
+        -0.17896224,
+        -0.31368597,
+        -0.0213386,
+        -0.72696566,
+        0.84802962,
+        0.6252518,
+        0.096475,
+        -0.39934421,
+        -0.22803884,
+        -0.48216062,
+        -0.18488848,
+        -0.02288425,
+        0.49848327,
+        -0.80910195,
+        0.86612357,
+        0.7947328,
+        0.07009452,
+        0.09519564,
+        -0.81914917,
+        -0.5629125,
+        -0.90998943,
+        -0.78116718,
+        0.44514534,
+        -0.6043154,
+        0.38956502,
+        0.55677223,
+        -0.16950892,
+        0.35990898,
+        0.18064213,
+        0.23788839,
+        0.18147569,
+        0.28758761
+      ],
       "frames": [
         {
+          "brake": 0.52380409,
+          "heading": 6.28299975,
+          "lateralSpeed": 2.083e-05,
+          "progress": 1.32e-06,
           "simulatedSeconds": 0.01666667,
-          "x": 1,
-          "y": 2,
-          "heading": 0,
-          "speed": 0.1,
-          "lateralSpeed": 0,
-          "steering": 0.2,
-          "throttle": 0.8,
-          "brake": 0,
-          "progress": 0
+          "speed": 0.01946946,
+          "steering": -0.15564113,
+          "throttle": 0.64942684,
+          "x": 5.00032449,
+          "y": 2.9e-07
         },
         {
+          "brake": 0.52416133,
+          "heading": 6.28088262,
+          "lateralSpeed": 0.00097453,
+          "progress": 3.674e-05,
           "simulatedSeconds": 0.11666667,
-          "x": 1.04,
-          "y": 2.01,
-          "heading": 0.03,
-          "speed": 0.7,
-          "lateralSpeed": -0.01,
-          "steering": 0.2,
-          "throttle": 0.8,
-          "brake": 0,
-          "progress": 0.001
+          "speed": 0.134633,
+          "steering": -0.15541478,
+          "throttle": 0.64959825,
+          "x": 5.00901211,
+          "y": 3.446e-05
+        },
+        {
+          "brake": 0.52444981,
+          "heading": 6.2790742,
+          "lateralSpeed": 0.00253188,
+          "progress": 0.00010166,
+          "simulatedSeconds": 0.2,
+          "speed": 0.22848061,
+          "steering": -0.15501147,
+          "throttle": 0.64974832,
+          "x": 5.02493709,
+          "y": 0.00013456
         }
-      ]
+      ],
+      "sampleEverySteps": 6,
+      "termination": "timeout",
+      "vehicleSetup": {
+        "acceleration": 8.465624294379012,
+        "brakeStrength": 8.265754989582547,
+        "frontBrakeBias": 0.8176595170803281,
+        "frontDriveBias": 0.977790430185487,
+        "gripRecovery": 2.737568670614209,
+        "maxSpeed": 23.87354154027843,
+        "steeringAgility": 0.8096860323794552
+      }
     }
   },
-  "generationTrails": [],
-  "previousRuns": [
-    {
-      "runId": "run-previous",
-      "algorithm": "neat",
-      "trackId": "easy-oval",
-      "seed": 7,
-      "generationsCompleted": 2,
-      "populationSize": 10,
-      "episodeSeconds": 15,
-      "championFitness": 70,
-      "championProgress": 0.05833333
-    }
-  ]
+  "runId": "run-observation-fixture",
+  "selectedCar": {
+    "brake": 0.52445,
+    "heading": 6.279074,
+    "lateralSpeed": 0.002532,
+    "progress": 0.000102,
+    "selectedCarId": "g0001-c0000",
+    "sensorDistances": [
+      6.203504,
+      8.449416,
+      15.524965,
+      36.0,
+      15.835615,
+      8.518786,
+      6.216889
+    ],
+    "simulatedSeconds": 0.2,
+    "speed": 0.228481,
+    "steering": -0.155011,
+    "throttle": 0.649748,
+    "x": 5.024937,
+    "y": 0.000135
+  },
+  "status": "completed",
+  "totalGenerations": 2
 }

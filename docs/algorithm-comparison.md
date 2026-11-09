@@ -6,14 +6,14 @@ Fixed GA and feed-forward NEAT differ in how they create the next population.
 They do not receive different tracks, physics, sensors, termination rules, or
 fitness functions.
 
-| Property             | Fixed GA                                           | Feed-forward NEAT                           |
-| -------------------- | -------------------------------------------------- | ------------------------------------------- |
-| Controller structure | Fixed `10 -> 6 -> 3` network                       | Evolved feed-forward DAG                    |
-| Network evolution    | Weights and biases                                 | Topology, weights, and biases               |
-| Vehicle genes        | Five budget logits plus two full-domain bias genes | The same seven vehicle genes                |
-| Active episode       | Controller and vehicle values frozen               | Controller and vehicle values frozen        |
-| Evaluation           | Canonical Python evaluator                         | The same canonical Python evaluator         |
-| Resume evidence      | Seeded population lifecycle                        | Deterministic neat-python checkpoint replay |
+| Property             | Fixed GA                                           | Feed-forward NEAT                    |
+| -------------------- | -------------------------------------------------- | ------------------------------------ |
+| Controller structure | Fixed `10 -> 6 -> 3` network                       | Evolved feed-forward DAG             |
+| Network evolution    | Weights and biases                                 | Topology, weights, and biases        |
+| Vehicle genes        | Five budget logits plus two full-domain bias genes | The same seven vehicle genes         |
+| Active episode       | Controller and vehicle values frozen               | Controller and vehicle values frozen |
+| Evaluation           | Canonical Python evaluator                         | The same canonical Python evaluator  |
+| Resume               | Replay from seed, checked against the saved hash   | The same                             |
 
 ## Saved evidence
 
