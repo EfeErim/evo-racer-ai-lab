@@ -2,8 +2,8 @@ import type { PresetGeometryState } from "../app-store";
 import type { AppState } from "../onboarding";
 import type { TrackWorkspaceState } from "../track-builder";
 import type { CompiledTrackV1 } from "../track-renderer";
-import { renderStartPanel } from "./review";
-import { renderPlanSection } from "./settings";
+import { renderStartPanel } from "./start-panel";
+import { renderPlanSection } from "./plan";
 import { pageHeader } from "./shared";
 import { renderTrackChoices } from "./track";
 

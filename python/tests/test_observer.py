@@ -26,7 +26,7 @@ def _session(
     *,
     algorithm: str = "fixed-ga",
     generations: int = 2,
-    run_id: str = "run-phase7-test",
+    run_id: str = "run-observer-test",
 ) -> RunSession:
     return RunSession(
         run_id=run_id,
@@ -76,7 +76,7 @@ def test_batched_observation_completes_both_algorithms(algorithm: str) -> None:
 
     assert metadata == {
         "contractVersion": 1,
-        "runId": "run-phase7-test",
+        "runId": "run-observer-test",
         "status": "completed",
         "algorithm": algorithm,
         "seed": 73,

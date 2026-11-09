@@ -51,7 +51,7 @@ def _session(
     *,
     algorithm: str = "fixed-ga",
     generations: int = 2,
-    run_id: str = "run-phase8-test",
+    run_id: str = "run-library-test",
 ) -> RunSession:
     return RunSession(
         run_id=run_id,

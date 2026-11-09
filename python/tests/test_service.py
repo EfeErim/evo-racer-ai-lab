@@ -282,7 +282,7 @@ def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
         thread.join(timeout=2)
 
 
-def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
+def test_generator_and_library_stay_on_versioned_loopback_contracts(
     tmp_path: Path,
 ) -> None:
     server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
@@ -365,7 +365,7 @@ def test_phase_three_generator_and_library_stay_on_versioned_loopback_contracts(
         thread.join(timeout=2)
 
 
-def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
+def test_run_commands_are_served_on_the_loopback_contract(
     tmp_path: Path,
 ) -> None:
     server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
@@ -453,11 +453,11 @@ def test_phase_seven_run_commands_are_served_on_the_loopback_contract(
         thread.join(timeout=2)
 
 
-def test_phase_eight_run_library_resume_export_and_delete_survive_restart(
+def test_run_library_resume_export_and_delete_survive_restart(
     tmp_path: Path,
 ) -> None:
     session = RunSession(
-        run_id="run-service-phase8",
+        run_id="run-service-library",
         compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
         settings=RunSettings(
             algorithm="fixed-ga",

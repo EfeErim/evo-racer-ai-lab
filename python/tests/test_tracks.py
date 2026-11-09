@@ -20,7 +20,7 @@ from evo_racer.tracks import (
 CONTRACTS_DIR = Path(__file__).parents[2] / "contracts"
 
 
-def test_segment_catalogue_contains_every_locked_phase_two_family() -> None:
+def test_segment_catalogue_contains_every_piece_family() -> None:
     assert SEGMENT_CATALOGUE == (
         "start-finish",
         "straight-short",

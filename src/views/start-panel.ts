@@ -7,7 +7,7 @@ import {
   startFailurePresentation,
 } from "../onboarding";
 import type { CompiledTrackV1 } from "../track-renderer";
-import { selectedTrainingPreset } from "./settings";
+import { selectedTrainingPreset } from "./plan";
 import { trackIdentity } from "./shared";
 
 /** The bottom of Set up: what will run, whether it is valid, and Start. */
