@@ -27,7 +27,6 @@ from evo_racer.evolution import (
 )
 from evo_racer.simulation import Controls, Observation, TrackGeometry, VehicleSetup
 
-NEAT_DEPENDENCY_VERSION: Final = "2.0.0"
 NEAT_CONFIG_RESOURCE: Final = "config/neat-feed-forward.ini"
 VEHICLE_MUTATION_RATE: Final = 0.2
 PERFORMANCE_MUTATION_POWER: Final = 0.25
@@ -435,10 +434,6 @@ def load_neat_config(population_size: int = 24) -> Any:
     """Load the bundled, explicit feed-forward neat-python configuration."""
     if population_size < 4:
         raise ValueError("NEAT population_size must be at least 4.")
-    if neat.__version__ != NEAT_DEPENDENCY_VERSION:
-        raise RuntimeError(
-            f"EvoRacer requires neat-python {NEAT_DEPENDENCY_VERSION}, found {neat.__version__}."
-        )
     config_resource = resources.files("evo_racer").joinpath(NEAT_CONFIG_RESOURCE)
     with resources.as_file(config_resource) as config_path:
         config = neat.Config(

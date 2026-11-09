@@ -51,10 +51,8 @@ Home -> Set up -> Race -> Results
 Opening a screen or checking a setup never starts training. Only the Start
 button creates a run.
 
-Changing the track or plan while Python is checking starts a fresh check. A late
-answer for an earlier choice cannot unlock Start or move keyboard focus. If the
-setup is invalid, the panel lists the issue with a link to the section to fix and
-a **Check again** button.
+If the setup is invalid, the panel lists the issue with a link to the section to
+fix and a **Check again** button.
 
 If Python rejects Start, Set up stays open, shows the exact issue, and requires
 another check before another attempt. If the Start response is interrupted,
@@ -117,15 +115,6 @@ loaded into a run. Generate, save, and delete failures name the operation that
 failed; a delete is reported as successful only when Python confirms that the
 exact local record was removed.
 
-While an imported JSON file is being read and validated, the picker shows
-**Importing…** and cannot accept a second file. Closing Track Builder or leaving
-the Track Builder page invalidates that pending presentation. A late Python response
-cannot reopen the Builder or replace the current editor after you leave.
-
-Library refreshes are ordered. A delayed older response cannot close the Track
-Builder, replace current editor/generator work, or hide a track that a newer
-save refresh already confirmed.
-
 ## Training settings
 
 Choose a training plan first. The exact controls below stay collapsed under
@@ -187,12 +176,7 @@ footer says when training has already moved on to a later one. When a race ends,
 the newest finished generation starts; if none is newer, the same race plays
 again. Choose **1×**, **2×**, or **4×** to change how fast the race plays.
 
-Python records each car's position every three physics steps (20 times per
-simulated second). The browser draws smooth curves between those recorded
-positions using the recorded speed and heading, at the display's frame rate, so
-cars move without jumps. The race is drawn on one canvas that stays in place
-while the rest of the screen updates. Earlier generations' best paths stay on the
-track as faint dashed lines. Before the first generation finishes, the track
+Earlier generations' best paths stay on the track as faint dashed lines. Before the first generation finishes, the track
 shows a short note instead of cars.
 
 **Score over generations** and **Car telemetry** sit below the race and are
@@ -215,10 +199,6 @@ The same screen shows continuous steering/throttle/brake outputs, progress,
 speed, seven road-edge sensors, and candidate position within the population.
 Best and median fitness update when a complete generation reaches its
 deterministic boundary.
-
-Observation refreshes preserve the currently focused Training control. If a
-temporary local-core error releases a pending Pause, Resume, or Stop command,
-focus returns to that control so keyboard operation can continue.
 
 The overall progress bar combines completed generations with the candidates
 already completed in the active generation. It is evaluation progress, not a
@@ -279,11 +259,6 @@ the current recorded frame, and the step buttons move one recorded frame at a
 time; drag the slider to jump to any recorded frame. With **Animate races** off
 (in **Menu**), the replay holds its final frame without hiding either route;
 Play is then off and the slider and step buttons still work.
-Empty replays, non-positive sampling intervals, negative times, and frames whose
-simulated times do not increase are treated as corrupt local run data instead
-of being animated. When a Saved results record fails this check, its exact
-replay error is shown while the valid run library remains available for another
-action.
 
 ## Saved runs and local data
 
@@ -298,19 +273,7 @@ application never restarts training automatically. Choose Resume on a supported
 interrupted run to reconstruct and verify its checkpoint before continuing.
 
 Use Saved runs on Home to resume, export, or delete an exact run. Exported
-files are versioned JSON records suitable for backup and inspection. Library
-actions lock while pending. If one action fails, its exact error is shown while
-the rest of the valid run library remains available.
-
-Saved-run refreshes are ordered as well. A delayed startup list cannot replace
-a newer terminal-run list or make a newly saved run temporarily disappear.
-
-Saved-run actions also belong to Home, where they were started.
-If you leave Home before a response returns, that late response cannot open
-Results, restore Training, or start a download after you come back. Open and
-Export responses are ignored. Because Python may already have completed a
-requested Resume or Delete, EvoRacer refreshes the run library in the
-background instead of claiming that the local operation was canceled.
+files are versioned JSON records suitable for backup and inspection.
 
 Interrupted running or paused records provide **Resume**. Completed and safely
 stopped records provide **Open results**, which revalidates the saved RunV1,

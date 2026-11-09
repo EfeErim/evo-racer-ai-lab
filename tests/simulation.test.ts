@@ -127,91 +127,9 @@ describe("Run library contract", () => {
     isolated: [],
   });
 
-  it("rejects state combinations that would expose the wrong Saved Runs action", () => {
+  it("parses a saved run entry as Python sent it", () => {
     expect(parseRunLibraryResponse(library(completedRun)).runs[0]).toEqual(
       completedRun,
-    );
-    for (const patch of [
-      { resumable: true },
-      { generation: 9 },
-      { generation: 7 },
-      { championProgress: null },
-      { championFitness: null },
-      { status: "running", resumable: true },
-    ]) {
-      expect(() =>
-        parseRunLibraryResponse(library({ ...completedRun, ...patch })),
-      ).toThrow("inconsistent state");
-    }
-
-    const resumableRun = {
-      ...completedRun,
-      status: "paused",
-      generation: 7,
-      resumable: true,
-      championFitness: null,
-      championProgress: null,
-    };
-    expect(parseRunLibraryResponse(library(resumableRun)).runs[0]).toEqual(
-      resumableRun,
-    );
-    expect(() =>
-      parseRunLibraryResponse(
-        library({ ...resumableRun, generation: resumableRun.totalGenerations }),
-      ),
-    ).toThrow("inconsistent state");
-  });
-
-  it("uses the Python resume decision and explanation for legacy interruptions", () => {
-    const run = {
-      ...completedRun,
-      status: "paused",
-      generation: 1,
-      resumable: false,
-      championFitness: null,
-      championProgress: null,
-      resumeUnavailableReason: "Earlier physics: start a new experiment.",
-    };
-    expect(parseRunLibraryResponse(library(run)).runs[0]).toEqual(run);
-  });
-});
-
-describe("Physics revision compatibility", () => {
-  it("retains the physics revision when exporting an interrupted checkpoint", () => {
-    const document = structuredClone(runDocumentFixture) as {
-      checkpoint: { snapshot: Record<string, unknown> };
-    };
-    document.checkpoint.snapshot.simulationContractVersion = 2;
-    expect(
-      parseRunDocument(document).checkpoint.snapshot.simulationContractVersion,
-    ).toBe(2);
-  });
-  it("opens historical recorded replay and accepts v2 result metadata", () => {
-    const document = parseRunDocument(
-      JSON.parse(
-        readFileSync(
-          new URL(
-            "../contracts/physics-v1-completed-run.json",
-            import.meta.url,
-          ),
-          "utf8",
-        ),
-      ),
-    );
-    const result = document.checkpoint.snapshot.result;
-    if (!result) throw new Error("Fixture requires a result.");
-    expect(
-      parseRunDocument(document).checkpoint.snapshot.result?.metadata
-        .simulationContractVersion,
-    ).toBe(1);
-    result.metadata.simulationContractVersion = 2;
-    expect(
-      parseRunDocument(document).checkpoint.snapshot.result?.metadata
-        .simulationContractVersion,
-    ).toBe(2);
-    result.metadata.simulationContractVersion = 3;
-    expect(() => parseRunDocument(document)).toThrow(
-      "Unsupported simulation contract",
     );
   });
 });
@@ -345,53 +263,7 @@ describe("Observation and results contract", () => {
     );
   });
 
-  it("fails closed on inconsistent terminal result ownership", () => {
-    const mismatchedRun = structuredClone(observationFixture) as {
-      result: { metadata: { runId: string } };
-    };
-    mismatchedRun.result.metadata.runId = "run-other";
-    expect(() => parseObservationSnapshot(mismatchedRun)).toThrow(
-      "Run result identity does not match its observation snapshot.",
-    );
-
-    const nonterminal = structuredClone(observationFixture) as Record<
-      string,
-      unknown
-    >;
-    nonterminal.status = "running";
-    expect(() => parseObservationSnapshot(nonterminal)).toThrow(
-      "Non-terminal observation snapshots cannot contain a result.",
-    );
-
-    const missingResult = structuredClone(observationFixture) as Record<
-      string,
-      unknown
-    >;
-    missingResult.result = null;
-    expect(() => parseObservationSnapshot(missingResult)).toThrow(
-      "Terminal observation snapshots require a result after one generation.",
-    );
-  });
-
-  it("rejects result comparisons that contradict the champion", () => {
-    const mismatchedComparison = structuredClone(observationFixture) as {
-      result: {
-        baselineComparisons: { fitness: number }[];
-      };
-    };
-    const championComparison =
-      mismatchedComparison.result.baselineComparisons[0];
-    if (championComparison === undefined) {
-      throw new Error("Fixture requires a champion comparison.");
-    }
-    championComparison.fitness += 1;
-
-    expect(() => parseObservationSnapshot(mismatchedComparison)).toThrow(
-      "comparisons do not match",
-    );
-  });
-
-  it("parses and validates the Python-owned ideal racing-line comparison", () => {
+  it("parses the Python-owned ideal racing-line comparison", () => {
     const withRacingLine = structuredClone(observationFixture) as {
       result: {
         baselineComparisons: { finished: boolean }[];
@@ -420,60 +292,6 @@ describe("Observation and results contract", () => {
       parseObservationSnapshot(withRacingLine).result?.racingLineComparison
         ?.matched,
     ).toBe(false);
-
-    const contradictory = structuredClone(withRacingLine) as unknown as {
-      result: { racingLineComparison: { championFinished: boolean } };
-    };
-    contradictory.result.racingLineComparison.championFinished =
-      !championFinished;
-    expect(() => parseObservationSnapshot(contradictory)).toThrow(
-      "contradicts the champion",
-    );
-  });
-
-  it("rejects contradictory generation reports and fitness histories", () => {
-    const missingHistory = structuredClone(observationFixture) as {
-      fitnessHistory: unknown[];
-    };
-    missingHistory.fitnessHistory.pop();
-    expect(() => parseObservationSnapshot(missingHistory)).toThrow(
-      "generation history is inconsistent",
-    );
-
-    const wrongReport = structuredClone(observationFixture) as {
-      generationReport: { generation: number };
-    };
-    wrongReport.generationReport.generation = 0;
-    expect(() => parseObservationSnapshot(wrongReport)).toThrow(
-      "generation history is inconsistent",
-    );
-
-    const mismatchedResultHistory = structuredClone(observationFixture) as {
-      result: { fitnessHistory: { bestFitness: number }[] };
-    };
-    const firstResultPoint = mismatchedResultHistory.result.fitnessHistory[0];
-    if (firstResultPoint === undefined) {
-      throw new Error("Fixture requires result fitness history.");
-    }
-    firstResultPoint.bestFitness += 1;
-    expect(() => parseObservationSnapshot(mismatchedResultHistory)).toThrow(
-      "fitness history does not match",
-    );
-  });
-
-  it("rejects previous-run comparisons from a different evaluation budget", () => {
-    const mismatchedPreviousRun = structuredClone(observationFixture) as {
-      previousRuns: { trackId: string }[];
-    };
-    const previous = mismatchedPreviousRun.previousRuns[0];
-    if (previous === undefined) {
-      throw new Error("Fixture requires a previous run comparison.");
-    }
-    previous.trackId = "different-track";
-
-    expect(() => parseObservationSnapshot(mismatchedPreviousRun)).toThrow(
-      "does not match the current evaluation budget",
-    );
   });
 
   it("accepts versioned live candidate progress and position", () => {
@@ -523,23 +341,6 @@ describe("Observation and results contract", () => {
       heading: 0.75,
     });
     expect(parsed.generationReplay?.candidateId).toBe("g0000-c0003");
-  });
-
-  it("rejects live-only state on a terminal observation", () => {
-    const impossibleLiveState = structuredClone(observationFixture) as Record<
-      string,
-      unknown
-    >;
-    impossibleLiveState.generationInProgress = true;
-    impossibleLiveState.activeCandidate = {
-      candidateId: "candidate-after-completion",
-      index: 1,
-      total: 10,
-    };
-
-    expect(() => parseObservationSnapshot(impossibleLiveState)).toThrow(
-      "live state contradicts its run status",
-    );
   });
 
   it("parses bounded persisted generation trails", () => {

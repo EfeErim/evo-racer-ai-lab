@@ -74,7 +74,6 @@ export function renderWelcome(
                             <button class="button secondary compact" type="button" data-run-action="export" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "export" && pending.runId === run.runId ? "Exporting…" : "Export"}</button>
                             <button class="button danger compact" type="button" data-run-action="delete" data-run-id="${escapeHtml(run.runId)}" ${pending === undefined ? "" : "disabled"}>${pending?.action === "delete" && pending.runId === run.runId ? "Deleting…" : "Delete"}</button>
                           </div>
-                          ${run.resumeUnavailableReason ? `<p>${escapeHtml(run.resumeUnavailableReason)}</p>` : ""}
                         </td>
                       </tr>
                     `,

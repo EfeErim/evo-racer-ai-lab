@@ -107,7 +107,7 @@ function patchNode(current: Node, next: Node): void {
 }
 
 /** Makes `current`'s children match `next`'s, reusing nodes where it can. */
-export function patchChildren(current: Node, next: Node): void {
+function patchChildren(current: Node, next: Node): void {
   const wanted = [...next.childNodes];
   const existing = [...current.childNodes].filter((node) => !isPreserved(node));
   const keyed = new Map<string, Node>();

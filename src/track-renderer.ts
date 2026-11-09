@@ -80,7 +80,7 @@ export function parseCompiledTrack(
   return payload as CompiledTrackV1;
 }
 
-export function trackMarkerTransform(marker: TrackMarker): string {
+function trackMarkerTransform(marker: TrackMarker): string {
   return `translate(${formatNumber(marker.x)} ${formatNumber(marker.y)}) rotate(${formatNumber((marker.heading * 180) / Math.PI)})`;
 }
 

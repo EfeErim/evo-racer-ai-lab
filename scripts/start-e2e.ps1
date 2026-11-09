@@ -1,8 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path -LiteralPath (Split-Path -Parent $PSScriptRoot)).Path
-. (Join-Path $PSScriptRoot "venv-python.ps1")
-$pythonPath = Resolve-VenvPython $repoRoot
+$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $dataRoot = Join-Path $repoRoot ".runtime_tmp\e2e-data"
 $staticRoot = Join-Path $repoRoot "dist"
 $port = if ($env:EVORACER_E2E_PORT) { [int] $env:EVORACER_E2E_PORT } else { 8765 }

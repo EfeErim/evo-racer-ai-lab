@@ -142,7 +142,7 @@ function renderRunRecoveryNotice(message: string | undefined): string {
   `;
 }
 
-export function raceCaption(
+function raceCaption(
   info: TrainingStageInfo,
   snapshot: ObservationSnapshotV1,
 ): { title: string; detail: string } {

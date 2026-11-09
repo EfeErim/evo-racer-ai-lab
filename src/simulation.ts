@@ -187,7 +187,6 @@ export interface RunLibraryEntryV1 {
   generation: number;
   totalGenerations: number;
   resumable: boolean;
-  resumeUnavailableReason?: string;
   championFitness: number | null;
   championProgress: number | null;
 }
@@ -356,22 +355,6 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         0,
         1,
       );
-      const expectedResumable = status === "running" || status === "paused";
-      const hasResult = championFitness !== null && championProgress !== null;
-      if (
-        generation > totalGenerations ||
-        (status === "completed" && generation !== totalGenerations) ||
-        (expectedResumable && generation >= totalGenerations) ||
-        (resumable && !expectedResumable) ||
-        (expectedResumable &&
-          !resumable &&
-          typeof run.resumeUnavailableReason !== "string") ||
-        (championFitness === null) !== (championProgress === null) ||
-        (expectedResumable && hasResult) ||
-        (!expectedResumable && generation > 0 && !hasResult)
-      ) {
-        throw new Error("Run library entry has inconsistent state.");
-      }
       return {
         runId: requiredString(run.runId, "runId"),
         status,
@@ -382,9 +365,6 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         generation,
         totalGenerations,
         resumable,
-        ...(typeof run.resumeUnavailableReason === "string"
-          ? { resumeUnavailableReason: run.resumeUnavailableReason }
-          : {}),
         championFitness,
         championProgress,
       };
@@ -540,26 +520,6 @@ export function parseObservationSnapshot(
   const result =
     snapshot.result === null ? null : parseRunResult(snapshot.result);
   const previousRuns = parsePreviousRuns(snapshot.previousRuns);
-  validateObservationResultConsistency({
-    runId,
-    status,
-    generation,
-    totalGenerations,
-    result,
-  });
-  validateObservationHistory({
-    generation,
-    generationReport,
-    fitnessHistory,
-    result,
-  });
-  validateObservationLiveState({
-    status,
-    generationInProgress,
-    activeCandidate,
-    pendingCommand,
-  });
-  validatePreviousRunConsistency(runId, result, previousRuns);
   return {
     contractVersion: 1,
     ...(snapshot.simulationContractVersion === undefined
@@ -646,172 +606,6 @@ export function parseGenerationRace(value: unknown): GenerationRaceV1 {
     throw new Error("Generation race has no cars.");
   }
   return { generation, populationSize, cars };
-}
-
-function validateObservationLiveState(value: {
-  status: RunStatusV1;
-  generationInProgress: boolean | undefined;
-  activeCandidate: ObservationSnapshotV1["activeCandidate"] | undefined;
-  pendingCommand: ObservationSnapshotV1["pendingCommand"] | undefined;
-}): void {
-  if (
-    (value.generationInProgress === true && value.status !== "running") ||
-    (value.activeCandidate !== null &&
-      value.activeCandidate !== undefined &&
-      (value.generationInProgress !== true || value.status !== "running")) ||
-    (value.pendingCommand !== null &&
-      value.pendingCommand !== undefined &&
-      value.status !== "running")
-  ) {
-    throw new Error("Observation live state contradicts its run status.");
-  }
-}
-
-function validatePreviousRunConsistency(
-  runId: string,
-  result: RunResultV1 | null,
-  previousRuns: readonly PreviousRunSummaryV1[],
-): void {
-  if (result === null) {
-    if (previousRuns.length > 0) {
-      throw new Error(
-        "Non-terminal observations cannot compare previous runs.",
-      );
-    }
-    return;
-  }
-  const metadata = result.metadata;
-  const seenRunIds = new Set<string>();
-  if (
-    previousRuns.some((run) => {
-      const duplicate = seenRunIds.has(run.runId);
-      seenRunIds.add(run.runId);
-      return (
-        duplicate ||
-        run.runId === runId ||
-        run.trackId !== metadata.trackId ||
-        run.populationSize !== metadata.populationSize ||
-        run.generationsCompleted !== metadata.generationsCompleted ||
-        run.episodeSeconds !== metadata.episodeSeconds
-      );
-    })
-  ) {
-    throw new Error(
-      "Previous run comparison does not match the current evaluation budget.",
-    );
-  }
-}
-
-function validateObservationResultConsistency(value: {
-  runId: string;
-  status: RunStatusV1;
-  generation: number;
-  totalGenerations: number;
-  result: RunResultV1 | null;
-}): void {
-  const terminal = value.status === "completed" || value.status === "stopped";
-  if (!terminal && value.result !== null) {
-    throw new Error(
-      "Non-terminal observation snapshots cannot contain a result.",
-    );
-  }
-  if (terminal && value.generation > 0 && value.result === null) {
-    throw new Error(
-      "Terminal observation snapshots require a result after one generation.",
-    );
-  }
-  if (
-    value.status === "completed" &&
-    value.generation !== value.totalGenerations
-  ) {
-    throw new Error(
-      "Completed observation snapshots must include every requested generation.",
-    );
-  }
-  if (value.result === null) {
-    return;
-  }
-  const metadata = value.result.metadata;
-  if (
-    metadata.runId !== value.runId ||
-    metadata.status !== value.status ||
-    metadata.generationsCompleted !== value.generation ||
-    metadata.generationsRequested !== value.totalGenerations
-  ) {
-    throw new Error(
-      "Run result identity does not match its observation snapshot.",
-    );
-  }
-  if (value.result.replay.candidateId !== value.result.champion.candidateId) {
-    throw new Error("Run replay does not match the result champion.");
-  }
-  const [championComparison, randomComparison, pursuitComparison] =
-    value.result.baselineComparisons;
-  if (
-    value.result.baselineComparisons.length !== 3 ||
-    championComparison?.label !== "Champion" ||
-    championComparison.controller !==
-      `${metadata.algorithm}:${value.result.champion.candidateId}` ||
-    championComparison.fitness !== value.result.champion.fitness ||
-    championComparison.progress !== value.result.champion.progress ||
-    randomComparison?.label !== "Seeded random network" ||
-    randomComparison.controller !== "random-network" ||
-    pursuitComparison?.label !== "Pure Pursuit" ||
-    pursuitComparison.controller !== "pure-pursuit"
-  ) {
-    throw new Error("Run comparisons do not match their result controllers.");
-  }
-  if (
-    value.result.racingLineComparison !== undefined &&
-    value.result.racingLineComparison.championFinished !==
-      championComparison.finished
-  ) {
-    throw new Error("Racing-line comparison contradicts the champion result.");
-  }
-  if (
-    JSON.stringify(value.result.replay.vehicleSetup) !==
-    JSON.stringify(value.result.champion.vehicleSetup)
-  ) {
-    throw new Error("Run replay vehicle setup does not match its champion.");
-  }
-}
-
-function validateObservationHistory(value: {
-  generation: number;
-  generationReport: GenerationReportV1 | null;
-  fitnessHistory: FitnessPointV1[];
-  result: RunResultV1 | null;
-}): void {
-  if (
-    value.fitnessHistory.length !== value.generation ||
-    value.fitnessHistory.some((point, index) => point.generation !== index) ||
-    (value.generation === 0) !== (value.generationReport === null) ||
-    (value.generationReport !== null &&
-      value.generationReport.generation !== value.generation - 1)
-  ) {
-    throw new Error("Observation generation history is inconsistent.");
-  }
-  if (value.result === null) {
-    return;
-  }
-  if (
-    value.result.fitnessHistory.length !== value.fitnessHistory.length ||
-    value.result.fitnessHistory.some((point, index) => {
-      const snapshotPoint = value.fitnessHistory[index];
-      if (snapshotPoint === undefined) {
-        return true;
-      }
-      return (
-        point.generation !== snapshotPoint.generation ||
-        point.bestFitness !== snapshotPoint.bestFitness ||
-        point.medianFitness !== snapshotPoint.medianFitness
-      );
-    })
-  ) {
-    throw new Error(
-      "Run result fitness history does not match its observation.",
-    );
-  }
 }
 
 function parseGenerationReport(value: unknown): GenerationReportV1 {

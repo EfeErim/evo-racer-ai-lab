@@ -36,7 +36,6 @@ export const TRACK_PRESETS = [
   },
 ] as const;
 
-export type TrackPresetId = (typeof TRACK_PRESETS)[number]["id"];
 export type AlgorithmId = "fixed-ga" | "neat";
 
 export interface TrainingSettings {

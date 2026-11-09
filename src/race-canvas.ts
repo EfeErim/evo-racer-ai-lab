@@ -64,7 +64,7 @@ function cssVar(style: CSSStyleDeclaration, name: string, fallback: string) {
  * One long-lived canvas for a race surface. It survives page re-renders by
  * being moved between host elements, so its animation never restarts.
  */
-export class RaceCanvas {
+class RaceCanvas {
   readonly element: HTMLCanvasElement;
   private track: CompiledTrackV1 | undefined;
   private staticLines: RaceLine[] = [];

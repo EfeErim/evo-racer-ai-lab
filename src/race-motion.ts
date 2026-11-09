@@ -71,12 +71,12 @@ export function pathEnd(path: MotionPath): number {
   return path.count === 0 ? 0 : (path.data[(path.count - 1) * STRIDE] ?? 0);
 }
 
-export function sampleTime(path: MotionPath, index: number): number {
+function sampleTime(path: MotionPath, index: number): number {
   return path.data[index * STRIDE] ?? 0;
 }
 
 /** Index of the last sample at or before `seconds`. */
-export function sampleIndexAt(path: MotionPath, seconds: number): number {
+function sampleIndexAt(path: MotionPath, seconds: number): number {
   let lower = 0;
   let upper = path.count - 1;
   if (upper <= 0 || seconds <= sampleTime(path, 0)) {

@@ -5,8 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-. (Join-Path $PSScriptRoot "venv-python.ps1")
-$pythonPath = Resolve-VenvPython $repoRoot
+$pythonPath = Join-Path $repoRoot ".venv\Scripts\python.exe"
 $vitePath = Join-Path $repoRoot "node_modules\vite\bin\vite.js"
 
 if (-not (Test-Path -LiteralPath $vitePath)) {

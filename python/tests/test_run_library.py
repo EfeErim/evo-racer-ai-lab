@@ -38,45 +38,13 @@ def test_v2_terminal_record_survives_restart_and_export(tmp_path: Path, algorith
     assert cast(Any, restarted.library())["runs"][0]["simulationContractVersion"] == 2
 
 
-def test_legacy_terminal_replay_and_export_are_preserved(tmp_path: Path) -> None:
-    document = json.loads(
-        (CONTRACT_PATH.parent / "physics-v1-completed-run.json").read_text(encoding="utf-8")
-    )
-    saved = save_run_document(document, tmp_path)
-    assert RunManager(tmp_path).export(document["runId"])["run"] == saved
-    assert (
-        cast(Any, saved)["checkpoint"]["snapshot"]["result"]["replay"]
-        == (document["checkpoint"]["snapshot"]["result"]["replay"])
-    )
-
-
-def test_legacy_interruption_is_preserved_but_cannot_resume(tmp_path: Path) -> None:
+def test_record_from_other_physics_is_isolated(tmp_path: Path) -> None:
     document = cast(Any, _session().to_run_document())
     snapshot = document["checkpoint"]["snapshot"]
-    snapshot.pop("simulationContractVersion")
-    document["checkpoint"]["sha256"] = checkpoint_sha256(snapshot)
-    saved = save_run_document(document, tmp_path)
-    manager = RunManager(tmp_path)
-    summary = cast(Any, manager.library())["runs"][0]
-    assert summary["resumable"] is False
-    assert "Start a new experiment" in summary["resumeUnavailableReason"]
-    response = manager.resume({"contractVersion": 1, "runId": document["runId"]})
-    assert cast(Any, response)["errors"][0]["code"] == "RUN_PHYSICS_INCOMPATIBLE"
-    assert manager.export(document["runId"])["run"] == saved
-
-
-def test_comparison_excludes_other_physics(tmp_path: Path) -> None:
-    current = _session(generations=1, run_id="current-v2")
-    current.advance()
-    legacy = _session(generations=1, run_id="legacy-v1")
-    legacy.advance()
-    document = cast(Any, legacy.to_run_document())
-    snapshot = document["checkpoint"]["snapshot"]
     snapshot["simulationContractVersion"] = 1
-    snapshot["result"]["metadata"]["simulationContractVersion"] = 1
     document["checkpoint"]["sha256"] = checkpoint_sha256(snapshot)
-    save_run_document(document, tmp_path)
-    assert cast(Any, RunManager(tmp_path)._response(current))["snapshot"]["previousRuns"] == []
+    with pytest.raises(RunRecordError):
+        validate_run_document(document)
 
 
 def _session(

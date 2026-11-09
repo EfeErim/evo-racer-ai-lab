@@ -27,19 +27,10 @@ class RunRecordError(ValueError):
     """Raised when one local run document cannot satisfy the versioned schema."""
 
 
-def simulation_version(snapshot: dict[str, object]) -> int:
-    """Old checkpoints without a revision belong to physics v1."""
-    result = snapshot.get("result")
-    metadata = result.get("metadata") if isinstance(result, dict) else None
-    result_version = (
-        metadata.get("simulationContractVersion", 1) if isinstance(metadata, dict) else 1
-    )
-    version = snapshot.get("simulationContractVersion", result_version)
-    if type(version) is not int or version not in {1, 2}:
-        raise RunRecordError("Unsupported simulation revision.")
-    if isinstance(metadata, dict) and version != result_version:
-        raise RunRecordError("Result and checkpoint simulation revisions differ.")
-    return version
+def _require_current_physics(snapshot: dict[str, object]) -> None:
+    """Saved runs replay deterministically only under the physics that recorded them."""
+    if snapshot.get("simulationContractVersion") != SIMULATION_CONTRACT_VERSION:
+        raise RunRecordError("The checkpoint was recorded under different physics.")
 
 
 def checkpoint_sha256(snapshot: object) -> str:
@@ -230,7 +221,7 @@ def validate_run_document(payload: object) -> dict[str, object]:
     if status not in {"running", "paused", "stopped", "completed"}:
         raise RunRecordError("checkpoint.status is unsupported.")
     snapshot = _object(checkpoint.get("snapshot"), "checkpoint.snapshot")
-    simulation_version(snapshot)
+    _require_current_physics(snapshot)
     if checkpoint.get("sha256") != checkpoint_sha256(snapshot):
         raise RunRecordError("checkpoint.sha256 does not match the saved snapshot.")
     if snapshot.get("contractVersion") != 1 or snapshot.get("runId") != run_id:
@@ -320,16 +311,8 @@ def run_summary(document: dict[str, object]) -> dict[str, object]:
         "episodeSeconds": settings["episodeSeconds"],
         "generation": checkpoint["generation"],
         "totalGenerations": settings["generations"],
-        "simulationContractVersion": simulation_version(snapshot),
-        "resumable": checkpoint["status"] in {"running", "paused"}
-        and simulation_version(snapshot) == SIMULATION_CONTRACT_VERSION,
-        "resumeUnavailableReason": (
-            "This run uses earlier physics and cannot continue in this version. "
-            "Your saved run is preserved. Start a new experiment from Welcome."
-            if checkpoint["status"] in {"running", "paused"}
-            and simulation_version(snapshot) != SIMULATION_CONTRACT_VERSION
-            else None
-        ),
+        "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
+        "resumable": checkpoint["status"] in {"running", "paused"},
         "championFitness": champion_fitness,
         "championProgress": champion_progress,
     }
@@ -392,7 +375,7 @@ def _validate_terminal_result(
         "generationsRequested": settings["generations"],
         "generationsCompleted": generation,
         "episodeSeconds": settings["episodeSeconds"],
-        "simulationContractVersion": simulation_version(snapshot),
+        "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
         "evolutionContractVersion": 1,
         "observationContractVersion": 1,
     }

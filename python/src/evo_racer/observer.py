@@ -45,7 +45,6 @@ from evo_racer.run_library import (
     read_run_document,
     run_library_payload,
     save_run_document,
-    simulation_version,
     validate_run_document,
 )
 from evo_racer.simulation import (
@@ -322,8 +321,6 @@ class RunSession:
         settings_value = cast(dict[str, object], document["settings"])
         checkpoint = cast(dict[str, object], document["checkpoint"])
         expected_snapshot = cast(dict[str, object], checkpoint["snapshot"])
-        if simulation_version(expected_snapshot) != SIMULATION_CONTRACT_VERSION:
-            raise RunRecordError("Earlier physics checkpoints cannot resume under current physics.")
         status = cast(RunStatus, checkpoint["status"])
         session = cls(
             run_id=cast(str, document["runId"]),
@@ -715,15 +712,6 @@ class RunManager:
         if session is None:
             try:
                 document = read_run_document(run_id, self._data_root)
-                checkpoint = cast(dict[str, object], document["checkpoint"])
-                saved_snapshot = cast(dict[str, object], checkpoint["snapshot"])
-                if simulation_version(saved_snapshot) != SIMULATION_CONTRACT_VERSION:
-                    return _run_error(
-                        "RUN_PHYSICS_INCOMPATIBLE",
-                        "runId",
-                        "This saved run uses earlier physics. "
-                        "It is preserved; start a new experiment.",
-                    )
                 session = RunSession.from_run_document(document)
             except FileNotFoundError:
                 return _run_error("RUN_NOT_FOUND", "runId", "The local run does not exist.")

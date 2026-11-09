@@ -55,8 +55,9 @@
       "fitnessHistory": [],
       "selectedCar": null,
       "result": null,
-      "previousRuns": []
+      "previousRuns": [],
+      "simulationContractVersion": 2
     },
-    "sha256": "5a765d6bae4fb0d449eeb0300d9da0c1c06dab6250f5c51cd00c460ef16d58b6"
+    "sha256": "f8d767bc0b96e2a6c4a560641fbc9e061c93ba68faa55ebff75768a55592d3c9"
   }
 }

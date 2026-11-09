@@ -1,7 +1,5 @@
 $ErrorActionPreference = "Stop"
 
-. (Join-Path $PSScriptRoot "venv-python.ps1")
-
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repoRoot
 
@@ -13,7 +11,7 @@ try {
         }
     }
 
-    $python = Resolve-VenvPython $repoRoot
+    $python = Join-Path $repoRoot ".venv\Scripts\python.exe"
 
     & $python -m pip install --disable-pip-version-check -r requirements-dev.lock
     if ($LASTEXITCODE -ne 0) {

@@ -11,7 +11,6 @@ import pytest
 
 from evo_racer.evolution import CandidateEvaluation, VehicleGenome
 from evo_racer.neat_evolution import (
-    NEAT_DEPENDENCY_VERSION,
     CompiledNEATNetwork,
     EvoRacerGenome,
     NEATCandidate,
@@ -46,7 +45,7 @@ def test_pinned_feed_forward_config_and_runtime_compiler_match_neat_python() -> 
     library_network = neat.nn.FeedForwardNetwork.create(raw_genome, config)
     features = tuple(index / 20.0 for index in range(10))
 
-    assert neat.__version__ == NEAT_DEPENDENCY_VERSION
+    assert neat.__version__ == "2.0.0"
     assert config.genome_config.feed_forward is True
     assert config.genome_config.num_inputs == 10
     assert config.genome_config.num_outputs == 3
