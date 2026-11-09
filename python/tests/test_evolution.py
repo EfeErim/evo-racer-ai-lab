@@ -20,13 +20,17 @@ from evo_racer.evolution import (
     GenerationReport,
     ScoredCandidate,
     VehicleGenome,
+    controller_features,
     episode_fitness,
 )
 from evo_racer.simulation import (
+    SENSOR_RANGE,
     Controller,
+    Observation,
     RandomNetworkBaseline,
     TrackGeometry,
     VehicleSetup,
+    VehicleState,
     episode_step_limit,
     evaluate_episode,
     preset_geometry,
@@ -142,6 +146,42 @@ def test_elites_remain_byte_for_byte_unchanged() -> None:
     ga.advance(report)
 
     assert tuple(candidate.genome for candidate in ga.population[:2]) == elite_genomes
+
+
+def test_fitness_terms_add_up_exactly() -> None:
+    """Pin each term of the fitness formula documented in docs/experiments/physics-v2.md."""
+    baseline = evaluate_episode(
+        preset_geometry("easy-oval"), RandomNetworkBaseline(0), max_seconds=0.5
+    )
+    crashed_halfway = replace(
+        baseline, finished=False, steps=200, progress_fraction=0.5, collision_count=2
+    )
+    finished_in_half_time = replace(
+        baseline, finished=True, steps=300, progress_fraction=1.0, collision_count=0
+    )
+
+    # 1200 x progress - 75 per collision; no time bonus without a finish.
+    assert episode_fitness(crashed_halfway, 600).fitness == pytest.approx(600.0 - 150.0)
+    # 1200 + 1000 for the finish + 300 x the unused share of the time limit.
+    assert episode_fitness(finished_in_half_time, 600).fitness == pytest.approx(
+        1200.0 + 1000.0 + 150.0
+    )
+
+
+def test_controller_features_keep_their_scale_and_sign() -> None:
+    """Saved champions were trained on these inputs; changing them breaks every saved run."""
+    state = VehicleState(0.0, 0.0, 0.0, forward_speed=20.0, lateral_speed=-5.0)
+    observation = Observation(
+        state=state,
+        progress_distance=0.0,
+        progress_fraction=0.0,
+        heading_error=math.pi / 4,
+        sensor_distances=(SENSOR_RANGE,) * 3 + (SENSOR_RANGE / 2,) + (0.0,) * 3,
+    )
+
+    assert controller_features(observation) == pytest.approx(
+        (0.5, -0.5, 0.25, 1.0, 1.0, 1.0, 0.5, 0.0, 0.0, 0.0)
+    )
 
 
 def test_fitness_does_not_reward_survival_speed_or_collision() -> None:

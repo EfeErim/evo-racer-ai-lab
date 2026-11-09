@@ -105,9 +105,6 @@ function headingBetween(from: number, to: number, amount: number): number {
 /** Smooth pose at `seconds`, held at the first and last recorded sample. */
 export function poseAt(path: MotionPath, seconds: number): MotionPose {
   const { data, count } = path;
-  if (count === 0) {
-    return { x: 0, y: 0, heading: 0, speed: 0 };
-  }
   const index = sampleIndexAt(path, seconds);
   const a = index * STRIDE;
   if (index >= count - 1 || seconds <= (data[a] ?? 0)) {

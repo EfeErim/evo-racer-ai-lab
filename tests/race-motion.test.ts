@@ -44,6 +44,11 @@ describe("race motion interpolation", () => {
     }
   });
 
+  it("holds a car with no samples still at the origin instead of producing NaN", () => {
+    const empty = pathFromRacePoses(new Float64Array());
+    expect(poseAt(empty, 1.5)).toEqual({ x: 0, y: 0, heading: 0, speed: 0 });
+  });
+
   it("is exact at samples and holds at both ends", () => {
     const path = pathFromRacePoses(Float64Array.from(circlePoses(0.5, 2)));
     expect(poseAt(path, 0.5).x).toBeCloseTo(10 * Math.cos(0.25), 9);
