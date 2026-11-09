@@ -43,7 +43,3 @@ select = ["B", "E", "F", "I", "UP"]
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-
-[[tool.mypy.overrides]]
-module = "tests.*"
-disallow_untyped_defs = true

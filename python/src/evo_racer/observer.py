@@ -343,8 +343,6 @@ class RunSession:
         actual_projection = _resume_projection(session.snapshot())
         expected_projection = _resume_projection(expected_snapshot)
         expected_projection.pop("simulationContractVersion", None)
-        if "generationTrails" not in expected_projection:
-            actual_projection.pop("generationTrails", None)
         if actual_projection != expected_projection:
             raise RunRecordError(
                 "Saved checkpoint does not reproduce from its track, settings, and seed."

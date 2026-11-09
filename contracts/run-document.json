@@ -56,8 +56,9 @@
       "selectedCar": null,
       "result": null,
       "previousRuns": [],
-      "simulationContractVersion": 2
+      "simulationContractVersion": 2,
+      "generationTrails": []
     },
-    "sha256": "f8d767bc0b96e2a6c4a560641fbc9e061c93ba68faa55ebff75768a55592d3c9"
+    "sha256": "29d2114e7f8499115e6440e87520aa87d0b517cf06a71848f66d9ff3c39ce857"
   }
 }

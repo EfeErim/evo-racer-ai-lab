@@ -109,10 +109,7 @@ export function createRunSession(
         store.latestRace = { runId: incoming.runId, race: generationRace };
       }
       const snapshot = mergeObservationSnapshot(previousSnapshot, incoming);
-      store.generationTrails = updateGenerationTrails(
-        store.generationTrails,
-        snapshot,
-      );
+      store.generationTrails = updateGenerationTrails(snapshot);
       store.simulation = { status: "ready", snapshot };
       if (snapshot.status === "completed" || snapshot.status === "stopped") {
         void refreshRuns();

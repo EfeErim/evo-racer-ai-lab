@@ -397,30 +397,17 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function serviceUnavailableResponse(
   error?: unknown,
 ): SetupValidationResponse {
-  const errorMessage = error instanceof Error ? error.message : undefined;
-  const rejectedByCore = errorMessage?.startsWith(
-    "Local validation has no confirmed response yet (status ",
-  );
-  const invalidResponse =
-    errorMessage === "Local validation returned invalid JSON." ||
-    errorMessage === "Local validation returned an invalid response." ||
-    errorMessage === "Local validation returned an inconsistent response.";
   return {
     contractVersion: 1,
     valid: false,
     errors: [
       {
-        code: rejectedByCore
-          ? "LOCAL_VALIDATION_REQUEST_FAILED"
-          : invalidResponse
-            ? "LOCAL_VALIDATION_RESPONSE_INVALID"
-            : "SERVICE_UNAVAILABLE",
+        code: "SERVICE_UNAVAILABLE",
         field: "service",
         message:
-          rejectedByCore && errorMessage !== undefined
-            ? `${errorMessage} Confirm that the app is open on a supported loopback address.`
-            : (errorMessage ??
-              "No response yet from the local core. Try again."),
+          error instanceof Error
+            ? error.message
+            : "No response yet from the local core. Try again.",
       },
     ],
   };

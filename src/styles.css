@@ -368,11 +368,6 @@ ol {
   background: var(--surface-raised);
 }
 
-.motion-button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
 .tool-icon {
   width: 1rem;
   height: 1rem;
@@ -1777,42 +1772,7 @@ thead th {
   gap: var(--space-4);
 }
 
-/* Review */
-
-.review-page {
-  max-width: 56rem;
-}
-
-.review-summary {
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-}
-
-.review-summary > div {
-  display: grid;
-  min-height: var(--target-primary);
-  grid-template-columns: 10rem minmax(0, 1fr) auto;
-  gap: var(--space-1) var(--space-3);
-  align-items: center;
-  padding: var(--space-2) var(--space-4);
-}
-
-.review-summary > div + div {
-  border-top: 1px solid var(--border);
-}
-
-.review-summary dt {
-  color: var(--text-muted);
-}
-
-.review-summary dd strong {
-  font-size: var(--text-md);
-}
-
-.review-summary dd span {
-  color: var(--text-muted);
-}
+/* Start panel */
 
 .validation-status {
   display: flex;
@@ -2059,10 +2019,6 @@ thead th {
   display: grid;
   gap: var(--space-1);
   color: var(--text-muted);
-}
-
-.race-readout {
-  color: var(--text);
 }
 
 .training-stage {
@@ -2597,14 +2553,6 @@ thead th {
 
   .page-actions .button {
     flex: 1 1 auto;
-  }
-
-  .review-summary > div {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .review-summary dt {
-    grid-column: 1 / -1;
   }
 
   .start-button,

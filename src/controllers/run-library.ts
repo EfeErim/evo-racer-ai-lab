@@ -167,7 +167,7 @@ export function createRunLibraryController(
           ...store.trackWorkspace,
           selected: compiled.compiled,
         };
-        store.generationTrails = updateGenerationTrails([], snapshot);
+        store.generationTrails = updateGenerationTrails(snapshot);
         store.replayFrameIndex = 0;
         store.simulation = { status: "ready", snapshot };
         store.runLibrary = {

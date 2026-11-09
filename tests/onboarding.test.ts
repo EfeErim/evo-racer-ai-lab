@@ -299,58 +299,19 @@ describe("Onboarding contract", () => {
 });
 
 describe("setup validation transport errors", () => {
-  it("distinguishes an HTTP rejection from an unavailable local core", () => {
-    expect(
-      serviceUnavailableResponse(
-        new Error(
-          "Local validation has no confirmed response yet (status 403). Try again.",
-        ),
-      ),
-    ).toEqual({
-      contractVersion: 1,
-      valid: false,
-      errors: [
-        {
-          code: "LOCAL_VALIDATION_REQUEST_FAILED",
-          field: "service",
-          message:
-            "Local validation has no confirmed response yet (status 403). Try again. Confirm that the app is open on a supported loopback address.",
-        },
-      ],
-    });
-
-    expect(serviceUnavailableResponse().errors[0]?.code).toBe(
-      "SERVICE_UNAVAILABLE",
-    );
-  });
-
-  it("preserves invalid-response and connection details", () => {
+  it("shows the transport error as an unavailable local service", () => {
     expect(
       serviceUnavailableResponse(
         new Error("Local validation returned invalid JSON."),
       ).errors[0],
     ).toEqual({
-      code: "LOCAL_VALIDATION_RESPONSE_INVALID",
+      code: "SERVICE_UNAVAILABLE",
       field: "service",
       message: "Local validation returned invalid JSON.",
     });
-    expect(
-      serviceUnavailableResponse(
-        new Error("Local validation returned an inconsistent response."),
-      ).errors[0]?.code,
-    ).toBe("LOCAL_VALIDATION_RESPONSE_INVALID");
-    expect(
-      serviceUnavailableResponse(
-        new Error(
-          "Local validation could not reach the local service. fetch failed",
-        ),
-      ).errors[0],
-    ).toEqual({
-      code: "SERVICE_UNAVAILABLE",
-      field: "service",
-      message:
-        "Local validation could not reach the local service. fetch failed",
-    });
+    expect(serviceUnavailableResponse().errors[0]?.message).toBe(
+      "No response yet from the local core. Try again.",
+    );
   });
 });
 

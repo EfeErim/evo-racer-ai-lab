@@ -13,8 +13,6 @@ export interface SelectedCarTelemetryV1 {
   sensorDistances: [number, number, number, number, number, number, number];
 }
 
-const SELECTED_CAR_SENSOR_RANGE_METERS = 36;
-
 export interface VehicleSetupV1 {
   maxSpeed: number;
   acceleration: number;
@@ -232,7 +230,7 @@ export interface ObservationSnapshotV1 {
   pendingCommand?: "pause" | "stop" | null;
   generationReplay?: GenerationReplayV1 | null;
   generationRace?: GenerationRaceV1;
-  generationTrails?: GenerationTrailV1[];
+  generationTrails: GenerationTrailV1[];
   generationReport: GenerationReportV1 | null;
   fitnessHistory: FitnessPointV1[];
   selectedCar: SelectedCarTelemetryV1 | null;
@@ -272,10 +270,7 @@ export function parseSelectedCarTelemetry(
 
   return {
     selectedCarId: requiredString(record.selectedCarId, "selectedCarId"),
-    simulatedSeconds: nonNegativeNumber(
-      record.simulatedSeconds,
-      "simulatedSeconds",
-    ),
+    simulatedSeconds: finiteNumber(record.simulatedSeconds, "simulatedSeconds"),
     ...(hasPosition
       ? {
           x: finiteNumber(record.x, "x"),
@@ -283,19 +278,14 @@ export function parseSelectedCarTelemetry(
           heading: finiteNumber(record.heading, "heading"),
         }
       : {}),
-    speed: nonNegativeNumber(record.speed, "speed"),
+    speed: finiteNumber(record.speed, "speed"),
     lateralSpeed: finiteNumber(record.lateralSpeed, "lateralSpeed"),
-    steering: boundedNumber(record.steering, "steering", -1, 1),
-    throttle: boundedNumber(record.throttle, "throttle", 0, 1),
-    brake: boundedNumber(record.brake, "brake", 0, 1),
-    progress: boundedNumber(record.progress, "progress", 0, 1),
+    steering: finiteNumber(record.steering, "steering"),
+    throttle: finiteNumber(record.throttle, "throttle"),
+    brake: finiteNumber(record.brake, "brake"),
+    progress: finiteNumber(record.progress, "progress"),
     sensorDistances: sensors.map((distance, index) =>
-      boundedNumber(
-        distance,
-        `sensorDistances[${String(index)}]`,
-        0,
-        SELECTED_CAR_SENSOR_RANGE_METERS,
-      ),
+      finiteNumber(distance, `sensorDistances[${String(index)}]`),
     ) as SelectedCarTelemetryV1["sensorDistances"],
   };
 }
@@ -349,11 +339,9 @@ export function parseRunLibraryResponse(value: unknown): RunLibraryResponseV1 {
         run.championFitness,
         "championFitness",
       );
-      const championProgress = nullableBoundedNumber(
+      const championProgress = nullableFiniteNumber(
         run.championProgress,
         "championProgress",
-        0,
-        1,
       );
       return {
         runId: requiredString(run.runId, "runId"),
@@ -511,10 +499,7 @@ export function parseObservationSnapshot(
     snapshot.generationRace === undefined
       ? undefined
       : parseGenerationRace(snapshot.generationRace);
-  const generationTrails =
-    snapshot.generationTrails === undefined
-      ? undefined
-      : parseGenerationTrails(snapshot.generationTrails);
+  const generationTrails = parseGenerationTrails(snapshot.generationTrails);
   const runId = requiredString(snapshot.runId, "runId");
   const fitnessHistory = parseFitnessHistory(snapshot.fitnessHistory);
   const result =
@@ -539,7 +524,7 @@ export function parseObservationSnapshot(
     ...(pendingCommand === undefined ? {} : { pendingCommand }),
     ...(generationReplay === undefined ? {} : { generationReplay }),
     ...(generationRace === undefined ? {} : { generationRace }),
-    ...(generationTrails === undefined ? {} : { generationTrails }),
+    generationTrails,
     generationReport,
     fitnessHistory,
     selectedCar,
@@ -639,7 +624,7 @@ function parseGenerationReport(value: unknown): GenerationReportV1 {
       return {
         candidateId: requiredString(item.candidateId, "candidateId"),
         fitness: finiteNumber(item.fitness, "fitness"),
-        progress: boundedNumber(item.progress, "progress", 0, 1),
+        progress: finiteNumber(item.progress, "progress"),
         finished: requiredBoolean(item.finished, "finished"),
         collisionCount: nonNegativeInteger(
           item.collisionCount,
@@ -716,8 +701,8 @@ function parseRunResult(value: unknown): RunResultV1 {
         metadata.generationsCompleted,
         "generationsCompleted",
       ),
-      episodeSeconds: positiveNumber(metadata.episodeSeconds, "episodeSeconds"),
-      fixedTimeStep: positiveNumber(metadata.fixedTimeStep, "fixedTimeStep"),
+      episodeSeconds: finiteNumber(metadata.episodeSeconds, "episodeSeconds"),
+      fixedTimeStep: finiteNumber(metadata.fixedTimeStep, "fixedTimeStep"),
       simulationContractVersion: requiredSimulationVersion(
         metadata.simulationContractVersion,
         "simulation contract",
@@ -735,7 +720,7 @@ function parseRunResult(value: unknown): RunResultV1 {
     champion: {
       candidateId: requiredString(champion.candidateId, "candidateId"),
       fitness: finiteNumber(champion.fitness, "fitness"),
-      progress: boundedNumber(champion.progress, "progress", 0, 1),
+      progress: finiteNumber(champion.progress, "progress"),
       genome,
       vehicleSetup: parseVehicleSetup(champion.vehicleSetup),
     },
@@ -745,7 +730,7 @@ function parseRunResult(value: unknown): RunResultV1 {
         label: requiredString(item.label, "label"),
         controller: requiredString(item.controller, "controller"),
         fitness: finiteNumber(item.fitness, "fitness"),
-        progress: boundedNumber(item.progress, "progress", 0, 1),
+        progress: finiteNumber(item.progress, "progress"),
         finished: requiredBoolean(item.finished, "finished"),
         collisionCount: nonNegativeInteger(
           item.collisionCount,
@@ -814,19 +799,19 @@ function parseRacingLineComparison(
     method: "minimum-curvature-v1",
     referenceLine,
     championFinished,
-    meanDeviationMeters: nonNegativeNumber(
+    meanDeviationMeters: finiteNumber(
       comparison.meanDeviationMeters,
       "meanDeviationMeters",
     ),
-    p95DeviationMeters: nonNegativeNumber(
+    p95DeviationMeters: finiteNumber(
       comparison.p95DeviationMeters,
       "p95DeviationMeters",
     ),
-    meanToleranceMeters: positiveNumber(
+    meanToleranceMeters: finiteNumber(
       comparison.meanToleranceMeters,
       "meanToleranceMeters",
     ),
-    p95ToleranceMeters: positiveNumber(
+    p95ToleranceMeters: finiteNumber(
       comparison.p95ToleranceMeters,
       "p95ToleranceMeters",
     ),
@@ -873,12 +858,12 @@ function parseReplayFrame(value: unknown): ReplayFrameV1 {
     x: finiteNumber(frame.x, "x"),
     y: finiteNumber(frame.y, "y"),
     heading: finiteNumber(frame.heading, "heading"),
-    speed: nonNegativeNumber(frame.speed, "speed"),
+    speed: finiteNumber(frame.speed, "speed"),
     lateralSpeed: finiteNumber(frame.lateralSpeed, "lateralSpeed"),
-    steering: boundedNumber(frame.steering, "steering", -1, 1),
-    throttle: boundedNumber(frame.throttle, "throttle", 0, 1),
-    brake: boundedNumber(frame.brake, "brake", 0, 1),
-    progress: boundedNumber(frame.progress, "progress", 0, 1),
+    steering: finiteNumber(frame.steering, "steering"),
+    throttle: finiteNumber(frame.throttle, "throttle"),
+    brake: finiteNumber(frame.brake, "brake"),
+    progress: finiteNumber(frame.progress, "progress"),
   };
 }
 
@@ -925,14 +910,9 @@ function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
         "generationsCompleted",
       ),
       populationSize: positiveInteger(run.populationSize, "populationSize"),
-      episodeSeconds: positiveNumber(run.episodeSeconds, "episodeSeconds"),
+      episodeSeconds: finiteNumber(run.episodeSeconds, "episodeSeconds"),
       championFitness: finiteNumber(run.championFitness, "championFitness"),
-      championProgress: boundedNumber(
-        run.championProgress,
-        "championProgress",
-        0,
-        1,
-      ),
+      championProgress: finiteNumber(run.championProgress, "championProgress"),
     };
   });
 }
@@ -940,13 +920,13 @@ function parsePreviousRuns(value: unknown): PreviousRunSummaryV1[] {
 function parseVehicleSetup(value: unknown): VehicleSetupV1 {
   const setup = asRecord(value, "Vehicle setup");
   return {
-    maxSpeed: positiveNumber(setup.maxSpeed, "maxSpeed"),
-    acceleration: positiveNumber(setup.acceleration, "acceleration"),
-    brakeStrength: positiveNumber(setup.brakeStrength, "brakeStrength"),
-    steeringAgility: positiveNumber(setup.steeringAgility, "steeringAgility"),
-    gripRecovery: positiveNumber(setup.gripRecovery, "gripRecovery"),
-    frontBrakeBias: boundedNumber(setup.frontBrakeBias, "frontBrakeBias", 0, 1),
-    frontDriveBias: boundedNumber(setup.frontDriveBias, "frontDriveBias", 0, 1),
+    maxSpeed: finiteNumber(setup.maxSpeed, "maxSpeed"),
+    acceleration: finiteNumber(setup.acceleration, "acceleration"),
+    brakeStrength: finiteNumber(setup.brakeStrength, "brakeStrength"),
+    steeringAgility: finiteNumber(setup.steeringAgility, "steeringAgility"),
+    gripRecovery: finiteNumber(setup.gripRecovery, "gripRecovery"),
+    frontBrakeBias: finiteNumber(setup.frontBrakeBias, "frontBrakeBias"),
+    frontDriveBias: finiteNumber(setup.frontDriveBias, "frontDriveBias"),
   };
 }
 
@@ -978,7 +958,7 @@ function parseRunSettings(value: unknown): RunSetupV1["settings"] {
     algorithm: parseAlgorithm(settings.algorithm),
     populationSize: positiveInteger(settings.populationSize, "populationSize"),
     generations: positiveInteger(settings.generations, "generations"),
-    episodeSeconds: positiveNumber(settings.episodeSeconds, "episodeSeconds"),
+    episodeSeconds: finiteNumber(settings.episodeSeconds, "episodeSeconds"),
     seed: integerNumber(settings.seed, "seed"),
   };
 }
@@ -1080,22 +1060,6 @@ function integerNumber(value: unknown, field: string): number {
   return number;
 }
 
-function nonNegativeNumber(value: unknown, field: string): number {
-  const number = finiteNumber(value, field);
-  if (number < 0) {
-    throw new Error(`${field} cannot be negative.`);
-  }
-  return number;
-}
-
-function positiveNumber(value: unknown, field: string): number {
-  const number = finiteNumber(value, field);
-  if (number <= 0) {
-    throw new Error(`${field} must be positive.`);
-  }
-  return number;
-}
-
 function nonNegativeInteger(value: unknown, field: string): number {
   const number = integerNumber(value, field);
   if (number < 0) {
@@ -1112,25 +1076,4 @@ function positiveInteger(value: unknown, field: string): number {
   return number;
 }
 
-function boundedNumber(
-  value: unknown,
-  field: string,
-  minimum: number,
-  maximum: number,
-): number {
-  const number = finiteNumber(value, field);
-  if (number < minimum || number > maximum) {
-    throw new Error(`${field} is outside its contract range.`);
-  }
-  return number;
-}
-
-function nullableBoundedNumber(
-  value: unknown,
-  field: string,
-  minimum: number,
-  maximum: number,
-): number | null {
-  return value === null ? null : boundedNumber(value, field, minimum, maximum);
-}
 import type { TrackV1 } from "./track-renderer";

@@ -38,6 +38,7 @@ function snapshot(
     generationReport: null,
     fitnessHistory: [],
     selectedCar: null,
+    generationTrails: [],
     previousRuns: [],
     result: null,
     ...overrides,

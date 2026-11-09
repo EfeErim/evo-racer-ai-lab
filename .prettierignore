@@ -1,7 +1,11 @@
 .agents/
 .venv/
+contracts/
 coverage/
 dist/
+docs/media/
 node_modules/
 package-lock.json
 python/
+release/
+test-results/
