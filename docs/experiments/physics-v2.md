@@ -3,11 +3,34 @@
 Physics v2 lowered drag and added a corner speed limit. These experiments ask what that
 changed: whether braking became useful, whether evolution still beats random search on
 held-out seeds and tracks, whether evolved drivers actually brake for corners, and what
-each shipped training plan achieves. Nothing below was tuned against its own results.
+each shipped training plan achieves.
 
-The study scripts and per-run files were removed to keep the repository small. The
-summary JSON files linked from each section hold the recorded numbers; the scripts and
-raw runs remain in git history.
+The lap-time weight and training plan designs were committed before their results
+([lap-weight plan](lap-weight-plan.md) in `4a9a7b6`, results in `3c74218`;
+[training plan](training-plan.md) in `adbba08`, results in `e8e5e46`). The
+[held-out plan](heldout-v2-plan.md) is dated before its run but was committed together
+with its results in `ee993b0`, so git history does not prove it came first.
+
+## Reproduce
+
+The study scripts and per-run files were removed from the current tree in `773e0d6` to
+keep the repository small. Only the summary JSON files remain in `contracts/`. Each
+summary is reproduced by checking out the commit that recorded it and running its script
+from the repository root after `./scripts/setup.ps1`:
+
+| Summary                         | Commit    | Command                                                                              |
+| ------------------------------- | --------- | ------------------------------------------------------------------------------------ |
+| `braking-study-v2.json`         | `ee993b0` | `.venv\Scripts\python python/tools/braking_study.py`                                 |
+| `heldout-v2-summary.json`       | `ee993b0` | `.venv\Scripts\python python/tools/heldout_benchmark.py`                             |
+| `heldout-v2-brake-use.json`     | `ee993b0` | `.venv\Scripts\python python/tools/champion_brake_study.py` (after the held-out run) |
+| `brake-value-v2.json`           | `af6b9d0` | `.venv\Scripts\python python/tools/brake_value_study.py`                             |
+| `lap-weight-dev-summary.json`   | `3c74218` | `.venv\Scripts\python python/tools/lap_weight_study.py dev`                          |
+| `training-plans-a-summary.json` | `e8e5e46` | `.venv\Scripts\python python/tools/training_plan_study.py a`                         |
+
+The regression fixture `contracts/regression-matrix-v2.json` is byte-identical to its
+`ee993b0` version and `python/tests/test_regression_matrix.py` still reproduces it at
+the current commit, so the simulation these studies ran on has not changed. The runs take from minutes to about `100` minutes on a desktop
+CPU and were not rerun for this page.
 
 ## Brake factorial experiment
 
