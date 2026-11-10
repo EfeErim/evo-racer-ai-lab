@@ -60,7 +60,6 @@ export interface RunLibraryNotice {
 export interface AppStore {
   applicationLifecycle: ApplicationLifecycle;
   reducedMotionOverride: boolean;
-  systemMotionOptIn: boolean;
   state: AppState;
   presetGeometry: PresetGeometryState;
   simulation: SimulationState;
@@ -90,26 +89,23 @@ export interface AppStore {
 export interface AppContext {
   root: HTMLElement;
   store: AppStore;
-  reducedMotionQuery: MediaQueryList;
   render: (focusHeading?: boolean) => void;
   dispatch: (action: AppAction) => void;
 }
 
-/** Windows' preference is the default; only an explicit in-app choice opts out. */
-export function motionIsReduced(
-  store: AppStore,
-  systemReducedMotion: MediaQueryList,
-): boolean {
-  return systemReducedMotion.matches
-    ? !store.systemMotionOptIn
-    : store.reducedMotionOverride;
+/**
+ * Races always animate unless the player turns them off in the menu. The race
+ * is the content, not decoration: Windows' "Animation effects" switch (often
+ * off) would otherwise reduce every generation to a single end-of-race frame.
+ */
+export function motionIsReduced(store: AppStore): boolean {
+  return store.reducedMotionOverride;
 }
 
 export function createAppStore(): AppStore {
   return {
     applicationLifecycle: "active",
     reducedMotionOverride: false,
-    systemMotionOptIn: false,
     state: createInitialState(),
     presetGeometry: { status: "loading" },
     simulation: { status: "idle" },

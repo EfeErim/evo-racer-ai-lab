@@ -123,7 +123,7 @@ function championPathFor(
 }
 
 export function createRacePlayback(context: AppContext) {
-  const { store, reducedMotionQuery, render } = context;
+  const { store, render } = context;
   let renderQueued = false;
 
   const queueRender = (): void => {
@@ -136,7 +136,7 @@ export function createRacePlayback(context: AppContext) {
     }
   };
 
-  const reduced = (): boolean => motionIsReduced(store, reducedMotionQuery);
+  const reduced = (): boolean => motionIsReduced(store);
 
   const activeTrack = (): CompiledTrackV1 | undefined => {
     const draftTrack = store.state.draft.track;

@@ -36,13 +36,9 @@ export interface AppController {
 
 export function mountApp(root: HTMLElement): AppController {
   const store = createAppStore();
-  const reducedMotionQuery = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  );
   const context: AppContext = {
     root,
     store,
-    reducedMotionQuery,
     render: (focusHeading) => {
       render(focusHeading);
     },
@@ -267,10 +263,6 @@ export function mountApp(root: HTMLElement): AppController {
       await shutdownApplication();
       store.applicationLifecycle = "stopped";
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      reducedMotionQuery.removeEventListener(
-        "change",
-        handleReducedMotionChange,
-      );
       showShutdownScreen("stopped");
     } catch (error) {
       store.applicationLifecycle = "active";
@@ -305,8 +297,7 @@ export function mountApp(root: HTMLElement): AppController {
           frameIndex: store.replayFrameIndex,
           paused: store.replayPaused,
         },
-        motionIsReduced(store, reducedMotionQuery),
-        reducedMotionQuery.matches,
+        motionIsReduced(store),
         trainingStageInfo(),
         store.raceSpeed,
       ),
@@ -338,10 +329,6 @@ export function mountApp(root: HTMLElement): AppController {
       autoReviewedState = store.state;
       void review();
     }
-  };
-
-  const handleReducedMotionChange = (): void => {
-    render();
   };
 
   installActions(root, {
@@ -384,11 +371,7 @@ export function mountApp(root: HTMLElement): AppController {
     retryRunLibrary,
     exitApplication,
     toggleReducedMotion: () => {
-      if (reducedMotionQuery.matches) {
-        store.systemMotionOptIn = !store.systemMotionOptIn;
-      } else {
-        store.reducedMotionOverride = !store.reducedMotionOverride;
-      }
+      store.reducedMotionOverride = !store.reducedMotionOverride;
       render();
     },
     updateEditor: (name, roadWidth) => {
@@ -408,7 +391,6 @@ export function mountApp(root: HTMLElement): AppController {
 
   render(true);
   document.addEventListener("visibilitychange", handleVisibilityChange);
-  reducedMotionQuery.addEventListener("change", handleReducedMotionChange);
   void refreshPresetGeometry();
   void refreshLibrary();
   void refreshRuns();

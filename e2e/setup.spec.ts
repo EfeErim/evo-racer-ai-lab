@@ -22,12 +22,10 @@ test("Welcome explains the racing loop and provides a local motion control", asy
   const setUpBox = await setUp.boundingBox();
   expect(setUpBox?.height).toBeGreaterThanOrEqual(44);
 
-  // Windows' reduced-motion preference starts races still until opted in.
+  // Windows' "Animation effects: Off" must not freeze the races.
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.reload();
   await openMenu(page);
-  await expect(motion).toHaveAttribute("aria-pressed", "false");
-  await motion.click();
   await expect(motion).toHaveAttribute("aria-pressed", "true");
 });
 

@@ -49,7 +49,6 @@ export function renderShell(
   runLibrary: RunLibraryState,
   replay: ReplayPresentation,
   reducedMotion: boolean,
-  systemReducedMotion: boolean,
   stageInfo: TrainingStageInfo,
   raceSpeed: number,
 ): string {
@@ -119,7 +118,7 @@ export function renderShell(
                 <span>Animate races</span>
                 <span class="menu-state">${animating ? "On" : "Off"}</span>
               </button>
-              <p class="menu-note">${systemReducedMotion ? "Windows asks apps to reduce motion, so this starts Off. Your choice lasts until you close EvoRacer." : "Turn off to show still frames instead of moving cars."}</p>
+              <p class="menu-note">Turn off to show still frames instead of moving cars.</p>
               <p class="menu-note">Everything runs on this computer. Nothing is sent anywhere.</p>
               <button class="menu-item is-danger" type="button" data-action="exit-application">
                 ${EXIT_ICON}

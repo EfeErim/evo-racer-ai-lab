@@ -166,7 +166,7 @@ test("Training races a whole generation together on one smooth canvas", async ({
   await page.getByRole("button", { name: /Stop after generation/ }).click();
 });
 
-test("Windows reduced motion holds the race still until the player presses Play", async ({
+test("races animate even when Windows asks for reduced motion", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -180,7 +180,12 @@ test("Windows reduced motion holds the race still until the player presses Play"
 
   const selector = '[data-race-host="training"] canvas';
   await expect(page.locator(selector)).toBeVisible();
-  await expect(page.getByRole("button", { name: "4×" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "4×" })).toBeVisible();
+  expect(await distinctCanvasFrames(page, selector, 800)).toBeGreaterThan(10);
+
+  // The in-app menu is the only switch that stills the race.
+  await openMenu(page);
+  await page.getByRole("button", { name: /Animate races/ }).click();
 
   // A new still frame appears whenever a generation finishes, so measure
   // stillness once the run has stopped producing generations.
