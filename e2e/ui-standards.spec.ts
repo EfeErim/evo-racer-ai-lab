@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { distinctCanvasFrames, openSetup } from "./flow";
+import { distinctCanvasFrames, openMenu, openSetup } from "./flow";
 import { expectSurfaceMeetsLimits } from "./surface";
 
 async function startRecommendedRun(page: Page) {
@@ -266,7 +266,7 @@ test("Results replay can be paused, stepped, and restarted, and Set up is reacha
   ).toBeEnabled();
 });
 
-test("reduced motion holds still without changing what the run produces", async ({
+test("turning off race animation holds still without changing what the run produces", async ({
   page,
 }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -280,6 +280,10 @@ test("reduced motion holds still without changing what the run produces", async 
         : getComputedStyle(button).transitionDuration;
     }),
   ).toBe("0s");
+  // Windows' setting only stills UI transitions; the in-app switch stills races.
+  await openMenu(page);
+  await page.getByRole("button", { name: /Animate races/ }).click();
+  await page.locator("details.app-menu > summary").click();
   await startRecommendedRun(page);
   await expect(page.getByLabel("Live run status")).toBeVisible({
     timeout: 15_000,
