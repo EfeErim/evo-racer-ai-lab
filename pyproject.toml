@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==83.0.0"]
+requires = ["setuptools==84.2.1"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -32,7 +32,7 @@ testpaths = ["python/tests"]
 
 [tool.ruff]
 line-length = 100
-required-version = "==0.16.0"
+required-version = "==0.17.3"
 src = ["python/src", "python/tests", "python/tools"]
 target-version = "py313"
 
