@@ -57,7 +57,7 @@ try {
     Copy-Item -LiteralPath $pythonLicense.Trim() -Destination (Join-Path $licenseRoot "PYTHON-LICENSE.txt")
 
     $pyInstallerLicenseTarget = Join-Path $licenseRoot "PYINSTALLER-LICENSE.txt"
-    & $pythonPath -c "from importlib.metadata import distribution; from shutil import copyfile; import sys; dist=distribution('pyinstaller'); copyfile(dist.locate_file('pyinstaller-6.21.0.dist-info/licenses/COPYING.txt'), sys.argv[1])" $pyInstallerLicenseTarget
+    & $pythonPath -c "from importlib.metadata import distribution; from shutil import copyfile; import sys; dist=distribution('pyinstaller'); copyfile(dist.locate_file(f'pyinstaller-{dist.version}.dist-info/licenses/COPYING.txt'), sys.argv[1])" $pyInstallerLicenseTarget
     Assert-LastExitCode "PyInstaller license copy"
 
     $neatLicenseTarget = Join-Path $licenseRoot "NEAT-PYTHON-LICENSE.txt"
