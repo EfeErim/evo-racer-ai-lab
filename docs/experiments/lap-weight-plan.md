@@ -41,7 +41,7 @@ With three seeds per cell these counts are descriptive. They are not a significa
 
 ## Result, 2026-11-07
 
-Stage 1 ran all `72` runs in `16.5 min`. Raw per-run files are in commit `3c74218` under
+Stage 1 ran all `72` runs in `16.5 min`. Raw per-run files are in commit `cf9129b` under
 `contracts/lap-weight-dev/`; the
 [summary](../../contracts/lap-weight-dev-summary.json) is kept here.
 

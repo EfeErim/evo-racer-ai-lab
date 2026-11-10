@@ -3,8 +3,8 @@
 Recorded on `2026-11-05`. Physics, sensors, fitness, and evolution were not changed.
 The saved results are in
 [`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json). They
-describe physics v1, which the current code no longer runs (removed in `54ed4f2`); to
-reproduce them, check out `b669f5b` and run `npm run test:learning`. See
+describe physics v1, which the current code no longer runs (removed in `34ee670`); to
+reproduce them, check out `3410234` and run `npm run test:learning`. See
 [the physics v2 rerun](#rerun-under-physics-v2) for the fixture the current code checks.
 
 ## Pure Pursuit crashed on the cars it was compared with

@@ -2,7 +2,7 @@
 
 Every block below was produced by running the command, not written by hand. Runs were on
 2026-11-09, Windows 11, Python 3.13.5, Node.js 24.13.0, a 12-thread desktop CPU. Setup, source checks
-and browser flows ran on a fresh `git clone` of commit `16c440a`; the benchmark runs used
+and browser flows ran on a fresh `git clone` of commit `25e8256`; the benchmark runs used
 the working checkout at the same commit. Long passing listings are shortened where
 marked `[...]`; nothing else is edited.
 

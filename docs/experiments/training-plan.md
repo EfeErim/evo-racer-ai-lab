@@ -39,7 +39,7 @@ With three seeds per cell these counts are descriptive. They are not a significa
 
 Stage A ran all `54` paired cases with
 `scripts/run-python.ps1 python/tools/training_plan_study.py a` in `96.1` minutes, four at a
-time. Every case was saved in `contracts/training-plans-a/` (commit `e8e5e46`) and the table is
+time. Every case was saved in `contracts/training-plans-a/` (commit `919f3a3`) and the table is
 `contracts/training-plans-a-summary.json`. Each cell shows finished laps and wins over
 the control, out of three seeds. **Bold** marks the algorithm each plan ships with.
 
