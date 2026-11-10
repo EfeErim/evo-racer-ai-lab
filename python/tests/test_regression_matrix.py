@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import cast
 
-from hardening import build_regression_matrix
+from regression_matrix import build_regression_matrix
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "regression-matrix-v2.json"
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "id": "phase3-shared-oval",
-  "name": "Phase 3 Shared Oval",
+  "id": "shared-oval",
+  "name": "Shared Oval",
   "roadWidth": 10,
   "pieces": [
     {

@@ -20,7 +20,7 @@ describe("Deterministic regression contract", () => {
     const cases = (matrix.cases as unknown[]).map(record);
 
     expect(matrix.contractVersion).toBe(1);
-    expect(matrix.kind).toBe("phase10-deterministic-regression");
+    expect(matrix.kind).toBe("deterministic-regression");
     expect(configuration.seeds).toEqual([19, 73, 211]);
     expect(configuration.presets).toEqual([
       "easy-oval",

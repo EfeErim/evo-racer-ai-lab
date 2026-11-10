@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "kind": "evo-racer-run",
-  "runId": "run-phase8-shared",
+  "runId": "run-shared-oval",
   "trackSchemaVersion": 1,
   "track": {
     "schemaVersion": 1,
-    "id": "phase8-shared-oval",
-    "name": "Phase 8 Shared Oval",
+    "id": "shared-oval",
+    "name": "Shared Oval",
     "roadWidth": 10,
     "pieces": [
       {
@@ -47,7 +47,7 @@
     "status": "paused",
     "snapshot": {
       "contractVersion": 1,
-      "runId": "run-phase8-shared",
+      "runId": "run-shared-oval",
       "status": "paused",
       "generation": 0,
       "totalGenerations": 2,
@@ -59,6 +59,6 @@
       "simulationContractVersion": 2,
       "generationTrails": []
     },
-    "sha256": "29d2114e7f8499115e6440e87520aa87d0b517cf06a71848f66d9ff3c39ce857"
+    "sha256": "c32f7c0314d46f643eebfa85909f20c4470ee0837c8feb95878975de233c8674"
   }
 }

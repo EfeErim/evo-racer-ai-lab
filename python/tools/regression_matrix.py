@@ -18,7 +18,7 @@ from evo_racer.onboarding import validate_setup
 from evo_racer.simulation import SIMULATION_CONTRACT_VERSION
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
-PHASE10_CONTRACT_VERSION: Final = 1
+MATRIX_CONTRACT_VERSION: Final = 1
 SMOKE_SEEDS: Final = (19, 73, 211)
 SMOKE_ALGORITHMS: Final = ("fixed-ga", "neat")
 SMOKE_POPULATION_SIZE: Final = 10
@@ -42,8 +42,8 @@ def build_regression_matrix() -> dict[str, object]:
                     )
                 )
     return {
-        "contractVersion": PHASE10_CONTRACT_VERSION,
-        "kind": "phase10-deterministic-regression",
+        "contractVersion": MATRIX_CONTRACT_VERSION,
+        "kind": "deterministic-regression",
         "configuration": {
             "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
             "seeds": list(SMOKE_SEEDS),
@@ -81,7 +81,7 @@ def _run_case(
     if validation["valid"] is not True:
         raise RuntimeError("A regression-matrix case is outside the product setup contract.")
     session = RunSession(
-        run_id=f"phase10-{preset_id}-{algorithm}-{seed}",
+        run_id=f"regression-{preset_id}-{algorithm}-{seed}",
         compiled_track=compiled_track,
         settings=RunSettings(
             algorithm=cast(Literal["fixed-ga", "neat"], algorithm),

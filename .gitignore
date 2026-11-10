@@ -27,13 +27,5 @@ __pycache__/
 Thumbs.db
 Desktop.ini
 
-# Personal notes, agent configuration and working files
+# Local working files
 .local/
-.agents/
-.claude/
-AGENTS.md
-CLAUDE.md
-PROJECT_STATE.md
-
-# Local interview preparation, never committed
-INTERVIEW_NOTES.md

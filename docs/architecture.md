@@ -180,7 +180,7 @@ child Node.js or Python process.
 
 ## Verification
 
-`python/tools/hardening.py` runs 18 small cases (three seeds, three presets, both
+`python/tools/regression_matrix.py` runs 18 small cases (three seeds, three presets, both
 algorithms) through the public `RunSession` and pins their result hashes in
 `contracts/regression-matrix-v2.json`. `python/tests/test_regression_matrix.py` reruns
 them and requires exact equality; the TypeScript suite checks the same file's shape.

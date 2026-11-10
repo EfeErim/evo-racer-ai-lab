@@ -85,7 +85,7 @@ describe("Sequential editor and JSON document UI", () => {
       new URL("../contracts/track-document.json", import.meta.url),
     );
     const source = readFileSync(fixturePath, "utf8");
-    expect(parseTrackDocument(source).id).toBe("phase3-shared-oval");
+    expect(parseTrackDocument(source).id).toBe("shared-oval");
   });
 
   it("rejects contradictory Python command validity and errors", () => {
