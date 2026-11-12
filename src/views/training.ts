@@ -115,6 +115,7 @@ export function renderTraining(
       <div class="training-layout">
         <div class="training-main">${race}</div>
         <aside class="training-side">
+          <div class="insight-host" data-insight-host="training"></div>
           ${renderRunOverview(snapshot)}
           ${renderRunControls(simulation)}
         </aside>

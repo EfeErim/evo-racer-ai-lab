@@ -133,6 +133,12 @@ describe("Observation and results contract", () => {
           ...car,
           poses: Array.from(car.poses),
         })),
+        leaderNetwork: parsed.generationRace.leaderNetwork && {
+          ...parsed.generationRace.leaderNetwork,
+          activations: Array.from(
+            parsed.generationRace.leaderNetwork.activations,
+          ),
+        },
       },
     }).toEqual(observationFixture);
   });

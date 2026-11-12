@@ -7,6 +7,7 @@ import {
   type RaceLine,
   raceCanvas,
 } from "../race-canvas";
+import { raceInsight } from "../race-insight";
 import {
   type MotionPath,
   pathEnd,
@@ -246,6 +247,8 @@ export function createRacePlayback(context: AppContext) {
       return { frame: { cars: [], lines: [] }, animating: false };
     }
     const showing = advanceRace(now);
+    const insight = raceInsight();
+    insight.setRace(showing?.race);
     if (showing !== undefined) {
       const leader = showing.race.cars.findIndex((car) => car.rank === 1);
       canvas.setStaticLines(
@@ -253,6 +256,7 @@ export function createRacePlayback(context: AppContext) {
         `race:${showing.runId}:${String(showing.race.generation)}:${String(store.generationTrails.length)}`,
       );
       if (reduced()) {
+        insight.show(showing.duration);
         return {
           frame: { cars: raceCars(showing, showing.duration), lines: [] },
           animating: false,
@@ -262,6 +266,7 @@ export function createRacePlayback(context: AppContext) {
         raceElapsed(showing, now, store.raceSpeed),
         showing.duration,
       );
+      insight.show(elapsed);
       const leaderPath = showing.paths[leader];
       const lines: RaceLine[] =
         leaderPath === undefined

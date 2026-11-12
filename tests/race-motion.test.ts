@@ -99,6 +99,7 @@ describe("generation race playback", () => {
         fitness: 10,
         termination: "timeout",
         progress: 0.5,
+        lapSeconds: null,
         poses: circlePoses(0.05, 4),
       },
       {
@@ -107,9 +108,17 @@ describe("generation race playback", () => {
         fitness: 5,
         termination: "collision",
         progress: 0.1,
+        lapSeconds: null,
         poses: circlePoses(0.05, 1),
       },
     ],
+    leaderNetwork: null,
+    lap: {
+      targetSeconds: null,
+      targetMethod: "reference-line-speed-profile-v1",
+      record: null,
+      history: [],
+    },
   });
 
   it("rejects malformed pose arrays", () => {

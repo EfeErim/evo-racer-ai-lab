@@ -9,6 +9,7 @@ import { installActions } from "./bind-actions";
 import { patchHtml } from "./dom-patch";
 import { createRacePlayback } from "./controllers/race-playback";
 import { attachRaceCanvases } from "./race-canvas";
+import { attachRaceInsight } from "./race-insight";
 import { createRunLibraryController } from "./controllers/run-library";
 import { createRunSession } from "./controllers/run-session";
 import {
@@ -303,6 +304,7 @@ export function mountApp(root: HTMLElement): AppController {
       ),
     );
     attachRaceCanvases(root);
+    attachRaceInsight(root);
     syncRacePlayback();
 
     if (focusHeading) {

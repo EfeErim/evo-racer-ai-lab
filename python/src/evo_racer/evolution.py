@@ -51,6 +51,17 @@ class FeedForwardNetwork:
 
     def activate(self, features: Sequence[float]) -> Controls:
         """Execute the fixed 10-6-3 feed-forward topology."""
+        _, outputs = self.layer_values(features)
+        return Controls(
+            steering=math.tanh(outputs[0]),
+            throttle=sigmoid(outputs[1]),
+            brake=sigmoid(outputs[2]),
+        )
+
+    def layer_values(
+        self, features: Sequence[float]
+    ) -> tuple[tuple[float, ...], tuple[float, ...]]:
+        """Return hidden activations and raw outputs for one input vector."""
         if len(features) != NETWORK_INPUT_COUNT:
             raise ValueError(f"Network requires exactly {NETWORK_INPUT_COUNT} input features.")
         if any(not math.isfinite(feature) for feature in features):
@@ -86,11 +97,7 @@ class FeedForwardNetwork:
             )
             outputs.append(total)
 
-        return Controls(
-            steering=math.tanh(outputs[0]),
-            throttle=sigmoid(outputs[1]),
-            brake=sigmoid(outputs[2]),
-        )
+        return tuple(hidden), tuple(outputs)
 
     def to_payload(self) -> dict[str, object]:
         """Serialize the network without Python-specific implementation details."""

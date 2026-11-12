@@ -75,7 +75,34 @@ export interface GenerationRaceCarV1 {
   fitness: number;
   termination: RaceTerminationV1;
   progress: number;
+  /** Simulated seconds of a finished lap, else null. */
+  lapSeconds: number | null;
   poses: Float64Array;
+}
+
+export interface RaceNetworkNodeV1 {
+  kind: "input" | "hidden" | "output";
+  label: string;
+  layer: number;
+}
+
+/**
+ * The race leader's network. `activations` holds one row of node values per
+ * leader pose, in node order: inputs, hidden values, then the final controls.
+ */
+export interface RaceNetworkV1 {
+  candidateId: string;
+  nodes: RaceNetworkNodeV1[];
+  links: { from: number; to: number; weight: number }[];
+  activations: Float64Array;
+}
+
+export interface RaceLapV1 {
+  /** Python's speed-profile estimate for the leader's setup; not a bound. */
+  targetSeconds: number | null;
+  targetMethod: string;
+  record: { seconds: number; generation: number; candidateId: string } | null;
+  history: { generation: number; bestLapSeconds: number | null }[];
 }
 
 /** Presentation-only race of the best cars of one finished generation. */
@@ -83,6 +110,8 @@ export interface GenerationRaceV1 {
   generation: number;
   populationSize: number;
   cars: GenerationRaceCarV1[];
+  leaderNetwork: RaceNetworkV1 | null;
+  lap: RaceLapV1;
 }
 
 export interface GenerationTrailV1 {
@@ -584,13 +613,133 @@ export function parseGenerationRace(value: unknown): GenerationRaceV1 {
       fitness: finiteNumber(car.fitness, "generationRace.fitness"),
       termination: termination as RaceTerminationV1,
       progress: finiteNumber(car.progress, "generationRace.progress"),
+      lapSeconds: nullableFiniteNumber(
+        car.lapSeconds,
+        "generationRace.lapSeconds",
+      ),
       poses,
     };
   });
   if (cars.length === 0) {
     throw new Error("Generation race has no cars.");
   }
-  return { generation, populationSize, cars };
+  const leader = cars.find((car) => car.rank === 1);
+  const leaderNetwork =
+    race.leaderNetwork === null
+      ? null
+      : parseRaceNetwork(race.leaderNetwork, (leader?.poses.length ?? 0) / 5);
+  return {
+    generation,
+    populationSize,
+    cars,
+    leaderNetwork,
+    lap: parseRaceLap(race.lap),
+  };
+}
+
+const NETWORK_NODE_KINDS = new Set(["input", "hidden", "output"]);
+
+function parseRaceNetwork(value: unknown, poseCount: number): RaceNetworkV1 {
+  const network = asRecord(value, "generationRace.leaderNetwork");
+  if (
+    !Array.isArray(network.nodes) ||
+    !Array.isArray(network.links) ||
+    !Array.isArray(network.activations)
+  ) {
+    throw new Error("Race network needs nodes, links and activations.");
+  }
+  const nodes = network.nodes.map((entry: unknown): RaceNetworkNodeV1 => {
+    const node = asRecord(entry, "leaderNetwork.nodes[]");
+    const kind = requiredString(node.kind, "leaderNetwork.nodes.kind");
+    if (!NETWORK_NODE_KINDS.has(kind)) {
+      throw new Error("Race network node has an unknown kind.");
+    }
+    return {
+      kind: kind as RaceNetworkNodeV1["kind"],
+      label: requiredString(node.label, "leaderNetwork.nodes.label"),
+      layer: nonNegativeInteger(node.layer, "leaderNetwork.nodes.layer"),
+    };
+  });
+  const links = network.links.map((entry: unknown) => {
+    const link = asRecord(entry, "leaderNetwork.links[]");
+    const from = nonNegativeInteger(link.from, "leaderNetwork.links.from");
+    const to = nonNegativeInteger(link.to, "leaderNetwork.links.to");
+    if (from >= nodes.length || to >= nodes.length) {
+      throw new Error("Race network link points outside its nodes.");
+    }
+    return {
+      from,
+      to,
+      weight: finiteNumber(link.weight, "leaderNetwork.links.weight"),
+    };
+  });
+  if (
+    nodes.length === 0 ||
+    network.activations.length !== nodes.length * poseCount
+  ) {
+    throw new Error("Race network needs one activation row per leader pose.");
+  }
+  const activations = Float64Array.from(
+    network.activations as unknown[],
+    (item) => finiteNumber(item, "leaderNetwork.activations"),
+  );
+  return {
+    candidateId: requiredString(
+      network.candidateId,
+      "leaderNetwork.candidateId",
+    ),
+    nodes,
+    links,
+    activations,
+  };
+}
+
+function parseRaceLap(value: unknown): RaceLapV1 {
+  const lap = asRecord(value, "generationRace.lap");
+  if (!Array.isArray(lap.history)) {
+    throw new Error("Race lap history must be an array.");
+  }
+  const record =
+    lap.record === null
+      ? null
+      : (() => {
+          const entry = asRecord(lap.record, "generationRace.lap.record");
+          return {
+            seconds: finiteNumber(entry.seconds, "lap.record.seconds"),
+            generation: nonNegativeInteger(
+              entry.generation,
+              "lap.record.generation",
+            ),
+            candidateId: requiredString(
+              entry.candidateId,
+              "lap.record.candidateId",
+            ),
+          };
+        })();
+  return {
+    targetSeconds: nullableFiniteNumber(
+      lap.targetSeconds,
+      "generationRace.lap.targetSeconds",
+    ),
+    targetMethod: requiredString(
+      lap.targetMethod,
+      "generationRace.lap.targetMethod",
+    ),
+    record,
+    history: lap.history.map((entry: unknown) => {
+      const point = asRecord(entry, "generationRace.lap.history[]");
+      return {
+        generation: nonNegativeInteger(
+          point.generation,
+          "lap.history.generation",
+        ),
+        bestLapSeconds: nullableFiniteNumber(
+          point.bestLapSeconds,
+          "lap.history.bestLapSeconds",
+        ),
+      };
+    }),
+  };
 }
 
 function parseGenerationReport(value: unknown): GenerationReportV1 {

@@ -20,6 +20,7 @@
       {
         "candidateId": "g0001-c0000",
         "fitness": 0.12198889,
+        "lapSeconds": null,
         "poses": [
           0.0,
           5.0,
@@ -54,6 +55,7 @@
       {
         "candidateId": "g0001-c0001",
         "fitness": 0.07970618,
+        "lapSeconds": null,
         "poses": [
           0.0,
           5.0,
@@ -88,6 +90,7 @@
       {
         "candidateId": "g0001-c0002",
         "fitness": 0.02328439,
+        "lapSeconds": null,
         "poses": [
           0.0,
           5.0,
@@ -122,6 +125,7 @@
       {
         "candidateId": "g0001-c0003",
         "fitness": 0.0,
+        "lapSeconds": null,
         "poses": [
           0.0,
           5.0,
@@ -155,6 +159,610 @@
       }
     ],
     "generation": 2,
+    "lap": {
+      "history": [
+        {
+          "bestLapSeconds": null,
+          "generation": 0
+        },
+        {
+          "bestLapSeconds": null,
+          "generation": 1
+        }
+      ],
+      "record": null,
+      "targetMethod": "reference-line-speed-profile-v1",
+      "targetSeconds": 17.78
+    },
+    "leaderNetwork": {
+      "activations": [
+        0.0,
+        0.0,
+        0.0,
+        0.173,
+        0.236,
+        0.436,
+        1.0,
+        0.436,
+        0.236,
+        0.173,
+        0.149,
+        0.785,
+        -0.42,
+        -0.759,
+        -0.53,
+        -0.622,
+        -0.156,
+        0.649,
+        0.524,
+        0.001,
+        0.0,
+        0.0,
+        0.172,
+        0.236,
+        0.435,
+        1.0,
+        0.436,
+        0.236,
+        0.173,
+        0.148,
+        0.785,
+        -0.42,
+        -0.759,
+        -0.531,
+        -0.622,
+        -0.156,
+        0.649,
+        0.524,
+        0.002,
+        0.0,
+        0.001,
+        0.172,
+        0.235,
+        0.434,
+        1.0,
+        0.437,
+        0.236,
+        0.173,
+        0.146,
+        0.786,
+        -0.42,
+        -0.759,
+        -0.531,
+        -0.621,
+        -0.155,
+        0.65,
+        0.524,
+        0.004,
+        0.0,
+        0.001,
+        0.172,
+        0.235,
+        0.433,
+        1.0,
+        0.438,
+        0.236,
+        0.173,
+        0.145,
+        0.787,
+        -0.421,
+        -0.759,
+        -0.532,
+        -0.621,
+        -0.155,
+        0.65,
+        0.524,
+        0.005,
+        0.0,
+        0.001,
+        0.172,
+        0.235,
+        0.432,
+        1.0,
+        0.439,
+        0.237,
+        0.173,
+        0.144,
+        0.787,
+        -0.421,
+        -0.759,
+        -0.533,
+        -0.62,
+        -0.155,
+        0.65,
+        0.524
+      ],
+      "candidateId": "g0001-c0000",
+      "links": [
+        {
+          "from": 0,
+          "to": 10,
+          "weight": -0.44
+        },
+        {
+          "from": 1,
+          "to": 10,
+          "weight": 0.004
+        },
+        {
+          "from": 2,
+          "to": 10,
+          "weight": 0.128
+        },
+        {
+          "from": 3,
+          "to": 10,
+          "weight": -0.078
+        },
+        {
+          "from": 4,
+          "to": 10,
+          "weight": 0.173
+        },
+        {
+          "from": 5,
+          "to": 10,
+          "weight": -0.026
+        },
+        {
+          "from": 6,
+          "to": 10,
+          "weight": 0.036
+        },
+        {
+          "from": 7,
+          "to": 10,
+          "weight": -0.596
+        },
+        {
+          "from": 8,
+          "to": 10,
+          "weight": -0.779
+        },
+        {
+          "from": 9,
+          "to": 10,
+          "weight": -0.49
+        },
+        {
+          "from": 0,
+          "to": 11,
+          "weight": 0.56
+        },
+        {
+          "from": 1,
+          "to": 11,
+          "weight": -0.949
+        },
+        {
+          "from": 2,
+          "to": 11,
+          "weight": -0.296
+        },
+        {
+          "from": 3,
+          "to": 11,
+          "weight": -0.155
+        },
+        {
+          "from": 4,
+          "to": 11,
+          "weight": 0.106
+        },
+        {
+          "from": 5,
+          "to": 11,
+          "weight": -0.133
+        },
+        {
+          "from": 6,
+          "to": 11,
+          "weight": 0.711
+        },
+        {
+          "from": 7,
+          "to": 11,
+          "weight": 0.875
+        },
+        {
+          "from": 8,
+          "to": 11,
+          "weight": 0.137
+        },
+        {
+          "from": 9,
+          "to": 11,
+          "weight": -0.595
+        },
+        {
+          "from": 0,
+          "to": 12,
+          "weight": 0.75
+        },
+        {
+          "from": 1,
+          "to": 12,
+          "weight": 0.711
+        },
+        {
+          "from": 2,
+          "to": 12,
+          "weight": -0.071
+        },
+        {
+          "from": 3,
+          "to": 12,
+          "weight": 0.596
+        },
+        {
+          "from": 4,
+          "to": 12,
+          "weight": 0.769
+        },
+        {
+          "from": 5,
+          "to": 12,
+          "weight": 0.902
+        },
+        {
+          "from": 6,
+          "to": 12,
+          "weight": -0.542
+        },
+        {
+          "from": 7,
+          "to": 12,
+          "weight": -0.565
+        },
+        {
+          "from": 8,
+          "to": 12,
+          "weight": 0.605
+        },
+        {
+          "from": 9,
+          "to": 12,
+          "weight": -0.458
+        },
+        {
+          "from": 0,
+          "to": 13,
+          "weight": -0.451
+        },
+        {
+          "from": 1,
+          "to": 13,
+          "weight": -0.902
+        },
+        {
+          "from": 2,
+          "to": 13,
+          "weight": 0.524
+        },
+        {
+          "from": 3,
+          "to": 13,
+          "weight": -0.526
+        },
+        {
+          "from": 4,
+          "to": 13,
+          "weight": -0.66
+        },
+        {
+          "from": 5,
+          "to": 13,
+          "weight": 0.227
+        },
+        {
+          "from": 6,
+          "to": 13,
+          "weight": -0.831
+        },
+        {
+          "from": 7,
+          "to": 13,
+          "weight": 0.569
+        },
+        {
+          "from": 8,
+          "to": 13,
+          "weight": -0.836
+        },
+        {
+          "from": 9,
+          "to": 13,
+          "weight": 0.944
+        },
+        {
+          "from": 0,
+          "to": 14,
+          "weight": -0.736
+        },
+        {
+          "from": 1,
+          "to": 14,
+          "weight": -0.715
+        },
+        {
+          "from": 2,
+          "to": 14,
+          "weight": -0.075
+        },
+        {
+          "from": 3,
+          "to": 14,
+          "weight": 0.532
+        },
+        {
+          "from": 4,
+          "to": 14,
+          "weight": -0.026
+        },
+        {
+          "from": 5,
+          "to": 14,
+          "weight": 0.417
+        },
+        {
+          "from": 6,
+          "to": 14,
+          "weight": -0.516
+        },
+        {
+          "from": 7,
+          "to": 14,
+          "weight": 0.716
+        },
+        {
+          "from": 8,
+          "to": 14,
+          "weight": -0.594
+        },
+        {
+          "from": 9,
+          "to": 14,
+          "weight": -0.18
+        },
+        {
+          "from": 0,
+          "to": 15,
+          "weight": 0.606
+        },
+        {
+          "from": 1,
+          "to": 15,
+          "weight": -0.215
+        },
+        {
+          "from": 2,
+          "to": 15,
+          "weight": -0.882
+        },
+        {
+          "from": 3,
+          "to": 15,
+          "weight": 0.438
+        },
+        {
+          "from": 4,
+          "to": 15,
+          "weight": -0.82
+        },
+        {
+          "from": 5,
+          "to": 15,
+          "weight": -0.179
+        },
+        {
+          "from": 6,
+          "to": 15,
+          "weight": -0.314
+        },
+        {
+          "from": 7,
+          "to": 15,
+          "weight": -0.021
+        },
+        {
+          "from": 8,
+          "to": 15,
+          "weight": -0.727
+        },
+        {
+          "from": 9,
+          "to": 15,
+          "weight": 0.848
+        },
+        {
+          "from": 10,
+          "to": 16,
+          "weight": -0.023
+        },
+        {
+          "from": 11,
+          "to": 16,
+          "weight": 0.498
+        },
+        {
+          "from": 12,
+          "to": 16,
+          "weight": -0.809
+        },
+        {
+          "from": 13,
+          "to": 16,
+          "weight": 0.866
+        },
+        {
+          "from": 14,
+          "to": 16,
+          "weight": 0.795
+        },
+        {
+          "from": 15,
+          "to": 16,
+          "weight": 0.07
+        },
+        {
+          "from": 10,
+          "to": 17,
+          "weight": 0.095
+        },
+        {
+          "from": 11,
+          "to": 17,
+          "weight": -0.819
+        },
+        {
+          "from": 12,
+          "to": 17,
+          "weight": -0.563
+        },
+        {
+          "from": 13,
+          "to": 17,
+          "weight": -0.91
+        },
+        {
+          "from": 14,
+          "to": 17,
+          "weight": -0.781
+        },
+        {
+          "from": 15,
+          "to": 17,
+          "weight": 0.445
+        },
+        {
+          "from": 10,
+          "to": 18,
+          "weight": -0.604
+        },
+        {
+          "from": 11,
+          "to": 18,
+          "weight": 0.39
+        },
+        {
+          "from": 12,
+          "to": 18,
+          "weight": 0.557
+        },
+        {
+          "from": 13,
+          "to": 18,
+          "weight": -0.17
+        },
+        {
+          "from": 14,
+          "to": 18,
+          "weight": 0.36
+        },
+        {
+          "from": 15,
+          "to": 18,
+          "weight": 0.181
+        }
+      ],
+      "nodes": [
+        {
+          "kind": "input",
+          "label": "Speed",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Side slip",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Heading error",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray -75\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray -45\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray -22\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray +0\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray +22\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray +45\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "input",
+          "label": "Ray +75\u00b0",
+          "layer": 0
+        },
+        {
+          "kind": "hidden",
+          "label": "H1",
+          "layer": 1
+        },
+        {
+          "kind": "hidden",
+          "label": "H2",
+          "layer": 1
+        },
+        {
+          "kind": "hidden",
+          "label": "H3",
+          "layer": 1
+        },
+        {
+          "kind": "hidden",
+          "label": "H4",
+          "layer": 1
+        },
+        {
+          "kind": "hidden",
+          "label": "H5",
+          "layer": 1
+        },
+        {
+          "kind": "hidden",
+          "label": "H6",
+          "layer": 1
+        },
+        {
+          "kind": "output",
+          "label": "Steering",
+          "layer": 2
+        },
+        {
+          "kind": "output",
+          "label": "Throttle",
+          "layer": 2
+        },
+        {
+          "kind": "output",
+          "label": "Brake",
+          "layer": 2
+        }
+      ]
+    },
     "populationSize": 4
   },
   "generationReplay": {

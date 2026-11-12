@@ -32,6 +32,13 @@ from evo_racer.neat_evolution import (
     score_neat_generation,
 )
 from evo_racer.onboarding import validate_setup
+from evo_racer.race_insight import (
+    TARGET_LAP_METHOD,
+    lap_record_payload,
+    lap_seconds,
+    leader_network_payload,
+    target_lap_seconds,
+)
 from evo_racer.racing_line import compare_with_reference, minimum_curvature_reference
 from evo_racer.run_library import (
     RUN_DOCUMENT_KIND,
@@ -111,6 +118,7 @@ class RunSession:
         self._active_candidate_index: int | None = None
         self._live_telemetry: TelemetrySnapshot | None = None
         self._generation_race: dict[str, object] | None = None
+        self._reference_line: tuple[tuple[float, float], ...] | None = None
         self._pending_command: Literal["pause", "stop"] | None = None
         self._fixed_ga: FixedGA | None = None
         self._neat_population: Any | None = None
@@ -156,14 +164,13 @@ class RunSession:
             with self._lock:
                 self._clear_live_progress()
             raise
+        ranked_results = _ranked(report.results)
+        race = self._race_with_insight(report, ranked_results, episodes)
         with self._lock:
             self.reports.append(report)
-            ranked_results = _ranked(report.results)
             champion = ranked_results[0]
             self.current_episode = episodes[champion.candidate.candidate_id]
-            self._generation_race = _generation_race_payload(
-                len(self.reports), ranked_results, episodes, self.settings.population_size
-            )
+            self._generation_race = race
             self._generation_trails.append(
                 {
                     "runId": self.run_id,
@@ -184,6 +191,44 @@ class RunSession:
                 self._finalize("completed")
             elif pending_command is not None:
                 self._apply_command(pending_command)
+
+    def _race_with_insight(
+        self,
+        report: GenerationReportValue,
+        ranked: Sequence[ScoredCandidateValue],
+        episodes: dict[str, EpisodeResult],
+    ) -> dict[str, object]:
+        """Build the presentation-only race, its leader's neurons and lap times.
+
+        Runs outside the lock: only this generation's own objects are read, and
+        ``self.reports`` changes nowhere else while a generation is advancing.
+        """
+        race = _generation_race_payload(
+            len(self.reports) + 1, ranked, episodes, self.settings.population_size
+        )
+        leader = ranked[0]
+        race["leaderNetwork"] = leader_network_payload(
+            self.geometry,
+            leader.candidate,
+            episodes[leader.candidate.candidate_id],
+            max_seconds=self.settings.episode_seconds,
+            trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
+        )
+        if self._reference_line is None:
+            self._reference_line = minimum_curvature_reference(
+                self.geometry.centerline, self.geometry.road_width
+            )
+        laps = lap_record_payload(
+            [(previous.generation, previous.results) for previous in (*self.reports, report)]
+        )
+        race["lap"] = {
+            **laps,
+            "targetSeconds": target_lap_seconds(
+                self.geometry, leader.candidate.setup, self._reference_line
+            ),
+            "targetMethod": TARGET_LAP_METHOD,
+        }
+        return race
 
     def command(self, command: str) -> None:
         """Apply pause, resume, or stop only at deterministic batch boundaries."""
@@ -962,6 +1007,7 @@ def _generation_race_payload(
                 "fitness": _rounded(scored.evaluation.fitness),
                 "termination": episode.termination,
                 "progress": _rounded(episode.progress_fraction),
+                "lapSeconds": lap_seconds(episode.steps, episode.finished),
                 "poses": poses,
             }
         )

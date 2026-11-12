@@ -12,6 +12,7 @@ function nodeKey(node: Node): string | undefined {
   }
   const key =
     node.getAttribute("data-race-host") ??
+    node.getAttribute("data-insight-host") ??
     node.getAttribute("data-focus-key") ??
     (node.id === "" ? null : node.id);
   return key === null ? undefined : `${node.tagName}#${key}`;
@@ -31,7 +32,9 @@ function sameKind(current: Node, next: Node): boolean {
 
 function isPreserved(node: Node): boolean {
   return (
-    node instanceof HTMLCanvasElement && node.classList.contains("race-canvas")
+    (node instanceof HTMLCanvasElement &&
+      node.classList.contains("race-canvas")) ||
+    (node instanceof HTMLElement && node.classList.contains("race-insight"))
   );
 }
 

@@ -236,6 +236,11 @@ class CompiledNEATNetwork:
         return tuple(values)
 
     def activate(self, features: Sequence[float]) -> tuple[float, ...]:
+        values = self.node_values(features)
+        return tuple(values[key] for key in self.output_keys)
+
+    def node_values(self, features: Sequence[float]) -> dict[int, float]:
+        """Return the value of every input and evaluated node for one input vector."""
         if len(features) != len(self.input_keys):
             raise ValueError(f"NEAT network requires {len(self.input_keys)} input features.")
         if any(not math.isfinite(feature) for feature in features):
@@ -245,7 +250,7 @@ class CompiledNEATNetwork:
             total = sum(values[link.source] * link.weight for link in node.links)
             raw = node.bias + node.response * total
             values[node.key] = raw if node.activation == "identity" else math.tanh(raw)
-        return tuple(values[key] for key in self.output_keys)
+        return values
 
     def to_payload(self) -> dict[str, object]:
         return {
