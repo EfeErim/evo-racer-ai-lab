@@ -13,7 +13,7 @@ evaluations with no selection in `25 / 30` runs (3 tracks × 2 algorithms × 5 s
 and its champions finished `14 / 30` laps against `2 / 30` for the control. On seeds and
 a track held out from physics tuning it beat the control in `84 / 96` pairs.
 
-![Results screen after a Quick check run on Easy Oval](docs/media/results.png)
+![Generation 10 of a Quick check run on Easy Oval: the cars race while the leader's neurons and lap time update beside the track](docs/media/race.gif)
 
 ## Quickstart
 
@@ -41,6 +41,8 @@ ZIP and open `EvoRacer\EvoRacer.exe`. Builds are not code-signed.
 
 All numbers come from saved JSON in [`docs/experiments/data/`](docs/experiments/data/). Each run trains and is scored on the
 same track. A run is `16` cars × `10` generations × `30 s` episodes unless noted.
+
+![Results screen after a Quick check run on Easy Oval](docs/media/results.png)
 
 | Comparison                                             | Fixed GA  | NEAT      | Source                                                                        |
 | ------------------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------------- |
