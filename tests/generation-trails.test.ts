@@ -7,7 +7,7 @@ import {
 import type {
   GenerationTrailV1,
   ObservationSnapshotV1,
-} from "../src/simulation";
+} from "../src/contracts";
 
 function trail(runId: string, candidateId: string): GenerationTrailV1 {
   return {

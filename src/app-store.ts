@@ -10,7 +10,7 @@ import type {
   GenerationRaceV1,
   ObservationSnapshotV1,
   RunLibraryResponseV1,
-} from "./simulation";
+} from "./contracts";
 import {
   createTrackWorkspaceState,
   type TrackWorkspaceState,

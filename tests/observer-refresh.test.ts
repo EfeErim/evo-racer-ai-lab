@@ -13,7 +13,7 @@ import {
 import type {
   GenerationReplayV1,
   ObservationSnapshotV1,
-} from "../src/simulation";
+} from "../src/contracts";
 
 const observationFixturePath = fileURLToPath(
   new URL("../contracts/observation.json", import.meta.url),

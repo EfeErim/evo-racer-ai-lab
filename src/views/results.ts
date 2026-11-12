@@ -5,7 +5,7 @@ import type {
   ObservationSnapshotV1,
   ReplayFrameV1,
   RunResultV1,
-} from "../simulation";
+} from "../contracts";
 import type { CompiledTrackV1 } from "../track-renderer";
 import { pageHeader } from "./shared";
 import type { ReplayPresentation } from "./shell";

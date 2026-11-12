@@ -12,7 +12,7 @@ import {
   runControls,
   runProgress,
 } from "../src/run-presentation";
-import type { ObservationSnapshotV1 } from "../src/simulation";
+import type { ObservationSnapshotV1 } from "../src/contracts";
 
 function snapshot(
   overrides: Partial<ObservationSnapshotV1> = {},

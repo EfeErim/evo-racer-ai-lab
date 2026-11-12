@@ -1,4 +1,4 @@
-import type { ObservationSnapshotV1 } from "./simulation";
+import type { ObservationSnapshotV1 } from "./contracts";
 
 export interface RunProgressPresentation {
   fraction: number;

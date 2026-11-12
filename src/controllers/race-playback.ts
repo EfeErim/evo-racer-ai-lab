@@ -21,7 +21,7 @@ import type {
   GenerationRaceV1,
   GenerationReplayV1,
   RunResultV1,
-} from "../simulation";
+} from "../contracts";
 import type { CompiledTrackV1 } from "../track-renderer";
 
 /** Real seconds a finished race stays on screen before the next one starts. */

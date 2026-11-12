@@ -2,7 +2,7 @@ import type {
   GenerationRaceCarV1,
   GenerationRaceV1,
   RaceNetworkV1,
-} from "./simulation";
+} from "./contracts";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 const NODE_RADIUS = 5.5;

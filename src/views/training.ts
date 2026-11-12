@@ -9,7 +9,7 @@ import { runCompletion, runControls, runProgress } from "../run-presentation";
 import type {
   ObservationSnapshotV1,
   SelectedCarTelemetryV1,
-} from "../simulation";
+} from "../contracts";
 import type { CompiledTrackV1 } from "../track-renderer";
 
 const RUN_STATUS_LABELS: Record<string, string> = {

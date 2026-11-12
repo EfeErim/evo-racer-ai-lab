@@ -1,4 +1,4 @@
-import type { GenerationTrailV1, ObservationSnapshotV1 } from "./simulation";
+import type { GenerationTrailV1, ObservationSnapshotV1 } from "./contracts";
 
 const MAX_VISIBLE_PRIOR_TRAILS = 7;
 

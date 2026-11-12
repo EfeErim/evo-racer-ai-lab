@@ -4,7 +4,7 @@ import {
   startFailurePresentation,
   transition,
 } from "../src/onboarding";
-import type { RunResultV1 } from "../src/simulation";
+import type { RunResultV1 } from "../src/contracts";
 import { type CompiledTrackV1, trackLengthMeters } from "../src/track-renderer";
 import {
   compareAnswer,

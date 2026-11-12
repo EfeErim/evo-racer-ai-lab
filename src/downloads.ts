@@ -1,4 +1,4 @@
-import type { RunDocumentV1 } from "./simulation";
+import type { RunDocumentV1 } from "./contracts";
 import type { CompiledTrackV1 } from "./track-renderer";
 import { serializeTrackDocument } from "./track-workbench";
 

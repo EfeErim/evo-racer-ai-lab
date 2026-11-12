@@ -13,7 +13,7 @@ import {
   pathPoints,
   poseAt,
 } from "../src/race-motion";
-import { parseGenerationRace, type ReplayFrameV1 } from "../src/simulation";
+import { parseGenerationRace, type ReplayFrameV1 } from "../src/contracts";
 
 /** A car circling the origin at radius 10 and 5 m/s, sampled every `step` s. */
 function circlePoses(step: number, seconds: number): number[] {

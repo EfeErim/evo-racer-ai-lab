@@ -27,6 +27,10 @@ one runtime dependency, `neat-python 2.0.0`.
   results and error codes; it never re-decides a domain rule.
 - Messages carry explicit contract versions. Fixtures under `contracts/` are parsed by
   both test suites.
+- `src/contracts.ts` holds the TypeScript contract types and their runtime parsers. The
+  parsers are written by hand instead of with a schema library: the client stays free of
+  runtime dependencies, and Vitest runs them against the same `contracts/*.json`
+  fixtures that pytest checks are exactly what Python sends.
 - Rendering cadence is independent of Python's fixed simulation step.
 
 One canonical language for the computational parts keeps Fixed GA and NEAT on the same

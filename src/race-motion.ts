@@ -1,4 +1,4 @@
-import type { ReplayFrameV1 } from "./simulation";
+import type { ReplayFrameV1 } from "./contracts";
 import type { TrackPoint } from "./track-renderer";
 
 /**

@@ -9,7 +9,7 @@ import {
   parseRunLibraryResponse,
   parseRunResponse,
   parseSelectedCarTelemetry,
-} from "../src/simulation";
+} from "../src/contracts";
 
 const fixturePath = fileURLToPath(
   new URL("../contracts/telemetry.json", import.meta.url),

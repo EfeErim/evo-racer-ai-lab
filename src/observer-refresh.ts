@@ -1,4 +1,4 @@
-import type { ObservationSnapshotV1 } from "./simulation";
+import type { ObservationSnapshotV1 } from "./contracts";
 
 export const VISIBLE_OBSERVATION_POLL_MS = 250;
 export const HIDDEN_OBSERVATION_POLL_MS = 1000;

@@ -9,7 +9,7 @@ import {
 import {
   type GenerationRaceCarV1,
   parseGenerationRace,
-} from "../src/simulation";
+} from "../src/contracts";
 
 const poses = Float64Array.from([
   0, 0, 0, 0, 0, 0.05, 1, 0, 0, 1, 0.1, 2, 0, 0, 2, 0.15, 3, 0, 0, 3,
