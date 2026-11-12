@@ -1930,11 +1930,17 @@ thead th {
   position: relative;
 }
 
+/*
+ * Pinned to the stage: as a grid item, `height: 100%` did not resolve, so the
+ * canvas took the aspect ratio of its backing store, grew past the stage and
+ * had the bottom of the fitted track clipped.
+ */
 .race-canvas {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  grid-area: 1 / 1;
 }
 
 .race-overlay {

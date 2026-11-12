@@ -118,6 +118,16 @@ test("Training races a whole generation together on one smooth canvas", async ({
   ).toBeVisible({ timeout: 60_000 });
   const canvas = raceStage(page).locator("canvas.race-canvas");
   await expect(canvas).toBeVisible();
+  // The canvas must fill the stage exactly; taller, the stage clipped the track.
+  const stageBox = await raceStage(page).boundingBox();
+  const canvasBox = await canvas.boundingBox();
+  expect(canvasBox?.height).toBeCloseTo(stageBox?.height ?? -1, 0);
+  expect(canvasBox?.width).toBeCloseTo(stageBox?.width ?? -1, 0);
+  await expect(
+    page
+      .locator(".race-insight")
+      .getByRole("img", { name: /Network of the leading car/ }),
+  ).toBeVisible();
   await expect(
     page.locator(".live-race-panel").getByText("Best car", { exact: true }),
   ).toBeVisible();
