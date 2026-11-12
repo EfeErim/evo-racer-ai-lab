@@ -1,9 +1,6 @@
 import type { AppContext } from "../app-store";
-import type { EditorDragPayload } from "../bind-actions";
 import { downloadTrack } from "../downloads";
 import {
-  assistTrackClosure,
-  compileTrack,
   deleteTrack,
   generateTrack,
   loadPresetTracks,
@@ -17,43 +14,14 @@ import {
   type TrackWorkspaceState,
 } from "../track-builder";
 import type { CompiledTrackV1 } from "../track-renderer";
-import {
-  addEditorPiece,
-  deleteEditorPiece,
-  duplicateEditorPiece,
-  type EditorState,
-  editorTrack,
-  insertEditorPiece,
-  moveEditorPiece,
-  moveEditorPieceToIndex,
-  parseTrackDocument,
-  redoEditor,
-  replaceEditorTrack,
-  resetEditor,
-  type SegmentKind,
-  type TrackCommandResponse,
-  undoEditor,
-} from "../track-workbench";
+import { replaceEditorTrack } from "../track-workbench";
+import { createTrackEditing } from "./track-editing";
+import { createTrackValidation } from "./track-validation";
 
 export const TRACK_LIBRARY_REFRESHED_NOTICE: TrackWorkspaceState["notice"] = {
   tone: "success",
   message: "Local track library refreshed.",
 };
-
-function closureRepairMessage(response: TrackCommandResponse): string {
-  const added = response.addedPieces?.length ?? 0;
-  const removed = response.removedPieces ?? 0;
-  if (removed > 0 && added > 0) {
-    return `Removed ${String(removed)} trailing piece(s), added ${String(added)}, and checked the repaired loop.`;
-  }
-  if (removed > 0) {
-    return `Removed ${String(removed)} trailing piece(s) and restored the last valid loop.`;
-  }
-  if (added > 0) {
-    return `Added ${String(added)} piece(s) and checked the closed loop.`;
-  }
-  return "The loop was already valid; no repair was needed.";
-}
 
 export function dismissedTrackResponseMessage(
   pending: Exclude<TrackBuilderPending, null>,
@@ -209,110 +177,10 @@ export function createTrackCommands(context: AppContext) {
     dispatch({ type: "select-custom-track", track: compiled.track });
   };
 
-  const setEditorDraft = (editor: EditorState, message: string): void => {
-    store.trackWorkspace = {
-      ...store.trackWorkspace,
-      editor,
-      editorPreview: undefined,
-      editorValidation: { status: "checking", errors: [] },
-      notice: { tone: "info", message },
-    };
-    render();
-    void validateEditorDraft();
-  };
-
-  const dropEditorPiece = (
-    payload: EditorDragPayload,
-    insertionIndex: number,
-  ): void => {
-    if (store.trackWorkspace.pending !== null) {
-      return;
-    }
-    const editor =
-      payload.source === "palette"
-        ? insertEditorPiece(
-            store.trackWorkspace.editor,
-            payload.kind,
-            insertionIndex,
-          )
-        : moveEditorPieceToIndex(
-            store.trackWorkspace.editor,
-            payload.pieceIndex,
-            insertionIndex,
-          );
-    if (editor === store.trackWorkspace.editor) {
-      return;
-    }
-    setEditorDraft(
-      editor,
-      payload.source === "palette"
-        ? "Piece snapped into the circuit. Checking the new sequence."
-        : "Pieces reconnected. Checking the new sequence.",
-    );
-  };
-
-  const validateEditorDraft = async (): Promise<void> => {
-    const requestId = ++store.trackValidationRequest;
-    const draft = editorTrack(store.trackWorkspace.editor);
-    store.trackWorkspace = {
-      ...store.trackWorkspace,
-      pending: "validate",
-      editorValidation: { status: "checking", errors: [] },
-    };
-    render();
-    try {
-      const response = await compileTrack(draft);
-      if (requestId !== store.trackValidationRequest) {
-        return;
-      }
-      if (response.valid && response.compiled !== undefined) {
-        store.trackWorkspace = {
-          ...store.trackWorkspace,
-          pending: null,
-          editorPreview: response.compiled,
-          editorValidation: { status: "valid", errors: [] },
-          notice: {
-            tone: "success",
-            message: "Draft geometry is valid and ready to use.",
-          },
-        };
-      } else {
-        store.trackWorkspace = {
-          ...store.trackWorkspace,
-          pending: null,
-          editorPreview: response.preview,
-          editorValidation: {
-            status: "invalid",
-            errors: response.errors,
-          },
-          notice: {
-            tone: "warning",
-            message:
-              response.errors[0]?.message ??
-              "The draft needs changes before it can be used.",
-          },
-        };
-      }
-    } catch (error) {
-      if (requestId !== store.trackValidationRequest) {
-        return;
-      }
-      store.trackWorkspace = {
-        ...store.trackWorkspace,
-        pending: null,
-        editorPreview: undefined,
-        editorValidation: { status: "invalid", errors: [] },
-        notice: {
-          tone: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "No response yet while checking this draft. Try again.",
-        },
-      };
-    }
-    render();
-  };
+  const { assistEditorClosure, importTrack, validateEditorDraft } =
+    createTrackValidation(context, isCurrentTrackCommand);
+  const { dropEditorPiece, handleEditorAction, setEditorDraft } =
+    createTrackEditing(context, validateEditorDraft);
 
   const saveCompiledTrack = async (
     compiled: CompiledTrackV1,
@@ -363,6 +231,9 @@ export function createTrackCommands(context: AppContext) {
       ? store.trackCommandRequestVersion
       : ++store.trackCommandRequestVersion;
     try {
+      if (handleEditorAction(action, element)) {
+        return;
+      }
       switch (action) {
         case "refresh-library":
           store.trackWorkspace = {
@@ -504,124 +375,9 @@ export function createTrackCommands(context: AppContext) {
           }
           return;
         }
-        case "editor-add": {
-          const kind = element.dataset.segmentKind as SegmentKind | undefined;
-          if (kind !== undefined) {
-            setEditorDraft(
-              addEditorPiece(store.trackWorkspace.editor, kind),
-              "Piece added. Checking the new sequence.",
-            );
-          }
+        case "editor-assist":
+          await assistEditorClosure(requestVersion);
           return;
-        }
-        case "editor-delete": {
-          const index = Number(element.dataset.pieceIndex);
-          setEditorDraft(
-            deleteEditorPiece(store.trackWorkspace.editor, index),
-            "Piece removed. Checking the new sequence.",
-          );
-          return;
-        }
-        case "editor-duplicate": {
-          const index = Number(element.dataset.pieceIndex);
-          setEditorDraft(
-            duplicateEditorPiece(store.trackWorkspace.editor, index),
-            "Piece duplicated. Checking the new sequence.",
-          );
-          return;
-        }
-        case "editor-move": {
-          const index = Number(element.dataset.pieceIndex);
-          const direction = Number(element.dataset.direction) === -1 ? -1 : 1;
-          setEditorDraft(
-            moveEditorPiece(store.trackWorkspace.editor, index, direction),
-            "Piece order changed. Checking the new sequence.",
-          );
-          return;
-        }
-        case "editor-undo":
-          setEditorDraft(
-            undoEditor(store.trackWorkspace.editor),
-            "Change undone. Checking the restored sequence.",
-          );
-          return;
-        case "editor-redo":
-          setEditorDraft(
-            redoEditor(store.trackWorkspace.editor),
-            "Change restored. Checking the sequence.",
-          );
-          return;
-        case "editor-reset":
-          setEditorDraft(
-            resetEditor(store.trackWorkspace.editor),
-            "Editor reset to the starter loop. Checking it.",
-          );
-          return;
-        case "editor-assist": {
-          const requestId = ++store.trackValidationRequest;
-          const draft = editorTrack(store.trackWorkspace.editor);
-          store.trackWorkspace = {
-            ...store.trackWorkspace,
-            pending: "assist",
-            notice: {
-              tone: "info",
-              message: "Searching for a safe closing sequence.",
-            },
-          };
-          render();
-          let response: TrackCommandResponse;
-          try {
-            response = await assistTrackClosure(draft);
-          } catch (error) {
-            if (
-              requestId !== store.trackValidationRequest ||
-              !isCurrentTrackCommand(requestVersion, "assist")
-            ) {
-              return;
-            }
-            throw error;
-          }
-          if (
-            requestId !== store.trackValidationRequest ||
-            !isCurrentTrackCommand(requestVersion, "assist")
-          ) {
-            return;
-          }
-          if (response.valid && response.compiled !== undefined) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: null,
-              editor: replaceEditorTrack(
-                store.trackWorkspace.editor,
-                response.compiled.track,
-              ),
-              editorPreview: response.compiled,
-              editorValidation: { status: "valid", errors: [] },
-              notice: {
-                tone: "success",
-                message: closureRepairMessage(response),
-              },
-            };
-          } else {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: null,
-              editorPreview: undefined,
-              editorValidation: {
-                status: "invalid",
-                errors: response.errors,
-              },
-              notice: {
-                tone: "warning",
-                message:
-                  response.errors[0]?.message ??
-                  "No safe assisted closure was found.",
-              },
-            };
-          }
-          render();
-          return;
-        }
         case "use-editor":
           if (
             store.trackWorkspace.editorValidation.status === "valid" &&
@@ -886,74 +642,6 @@ export function createTrackCommands(context: AppContext) {
             error instanceof Error
               ? error.message
               : "No response yet from the local core. Try again.",
-        },
-      };
-      render();
-    }
-  };
-
-  const importTrack = async (file: File): Promise<void> => {
-    const requestId = ++store.trackImportRequestVersion;
-    store.trackWorkspace = {
-      ...store.trackWorkspace,
-      pending: "import",
-      notice: {
-        tone: "info",
-        message: "Reading the track file and checking it.",
-      },
-    };
-    render();
-    try {
-      const content = await file.text();
-      if (requestId !== store.trackImportRequestVersion) {
-        return;
-      }
-      const track = parseTrackDocument(content);
-      const response = await compileTrack(track);
-      if (requestId !== store.trackImportRequestVersion) {
-        return;
-      }
-      if (!response.valid || response.compiled === undefined) {
-        store.trackWorkspace = {
-          ...store.trackWorkspace,
-          pending: null,
-          notice: {
-            tone: "error",
-            message:
-              response.errors[0]?.message ?? "The imported track is invalid.",
-          },
-        };
-        render();
-        return;
-      }
-      store.trackWorkspace = {
-        ...store.trackWorkspace,
-        pending: null,
-        toolsOpen: true,
-        tab: "build",
-        editor: replaceEditorTrack(
-          store.trackWorkspace.editor,
-          response.compiled.track,
-        ),
-        editorPreview: response.compiled,
-        editorValidation: { status: "valid", errors: [] },
-        notice: {
-          tone: "success",
-          message: "Imported track checked and loaded into the editor.",
-        },
-      };
-      render();
-    } catch (error) {
-      if (requestId !== store.trackImportRequestVersion) {
-        return;
-      }
-      store.trackWorkspace = {
-        ...store.trackWorkspace,
-        pending: null,
-        notice: {
-          tone: "error",
-          message:
-            error instanceof Error ? error.message : "Track import failed.",
         },
       };
       render();
