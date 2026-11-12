@@ -31,7 +31,8 @@ def _advanced_race(algorithm: str, seed: int = 11) -> dict[str, Any]:
     session.advance()
     race = session.snapshot()["generationRace"]
     assert isinstance(race, dict)
-    return json.loads(json.dumps(race))
+    parsed: dict[str, Any] = json.loads(json.dumps(race))
+    return parsed
 
 
 @pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
