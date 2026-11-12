@@ -3,7 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const fixture: unknown = JSON.parse(
-  readFileSync(resolve("docs/experiments/data/regression-matrix-v2.json"), "utf8"),
+  readFileSync(
+    resolve("docs/experiments/data/regression-matrix-v2.json"),
+    "utf8",
+  ),
 );
 
 function record(value: unknown): Record<string, unknown> {

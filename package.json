@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc -b --pretty false && vite build",
     "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
-    "check": "npm run --silent format:check && npm run --silent check:docs && npm run --silent lint && npm run --silent typecheck && npm run --silent test && npm run --silent format:python:check && npm run --silent lint:python && npm run --silent typecheck:python && npm run --silent test:python && npm run --silent build",
+    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
     "check:docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-doc-links.ps1",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",

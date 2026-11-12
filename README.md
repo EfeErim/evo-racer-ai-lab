@@ -22,7 +22,7 @@ Requires Windows, Python 3.13 (the `py` launcher), Node.js 24 and npm 11.
 ```powershell
 ./scripts/setup.ps1        # .venv from requirements-dev.lock, npm ci
 npm run dev                # Python service on :8765, UI on http://127.0.0.1:5173
-npm run check              # format, lint, types, 121 Vitest + 166 pytest tests, build
+npm run check              # format, links, lint, types, Vitest, pytest, build (scripts/check.ps1)
 npm run test:learning      # rerun the 30-case benchmark and fail on any difference
 ```
 
