@@ -17,7 +17,7 @@ from evo_racer.simulation import (
 )
 from learning_benchmark import BenchmarkCase, run_case, summarize
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "learning-benchmark-v2.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "docs" / "experiments" / "data" / "learning-benchmark-v2.json"
 # An evolved setup that turns far less sharply than the default car.
 LOW_AGILITY_SETUP = VehicleSetup(
     max_speed=30.8,

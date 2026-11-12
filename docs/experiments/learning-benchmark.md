@@ -2,7 +2,7 @@
 
 Recorded on `2026-11-05`. Physics, sensors, fitness, and evolution were not changed.
 The saved results are in
-[`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json). They
+[`docs/experiments/data/learning-benchmark.json`](data/learning-benchmark.json). They
 describe physics v1, which the current code no longer runs (removed in `34ee670`); to
 reproduce them, check out `3410234` and run `npm run test:learning`. See
 [the physics v2 rerun](#rerun-under-physics-v2) for the fixture the current code checks.
@@ -98,9 +98,9 @@ What this supports, within this budget:
 ## Rerun under physics v2
 
 The results above are the historical physics v1 record and stay in
-[`contracts/learning-benchmark.json`](../../contracts/learning-benchmark.json).
+[`docs/experiments/data/learning-benchmark.json`](data/learning-benchmark.json).
 `npm run test:learning` now verifies
-[`contracts/learning-benchmark-v2.json`](../../contracts/learning-benchmark-v2.json), the
+[`docs/experiments/data/learning-benchmark-v2.json`](data/learning-benchmark-v2.json), the
 same `30` cases under [physics v2](physics-v2.md). These seeds informed that physics
 work, so this is development evidence; the held-out results are in that document.
 

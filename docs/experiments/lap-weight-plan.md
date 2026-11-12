@@ -43,7 +43,7 @@ With three seeds per cell these counts are descriptive. They are not a significa
 
 Stage 1 ran all `72` runs in `16.5 min`. Raw per-run files are in commit `cf9129b` under
 `contracts/lap-weight-dev/`; the
-[summary](../../contracts/lap-weight-dev-summary.json) is kept here.
+[summary](data/lap-weight-dev-summary.json) is kept here.
 
 | `W`  | Finished | Need brakes | Need varied brake | Median lap, paired finishes |
 | ---- | -------: | ----------: | ----------------: | --------------------------: |

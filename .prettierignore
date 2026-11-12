@@ -1,5 +1,6 @@
 .venv/
 contracts/
+docs/experiments/data/
 coverage/
 dist/
 docs/media/

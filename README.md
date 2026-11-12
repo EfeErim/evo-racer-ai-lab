@@ -39,12 +39,12 @@ Set up, Race and Results screens shown here. Builds are not code-signed.
 
 ## Results
 
-All numbers come from saved JSON in `contracts/`. Each run trains and is scored on the
+All numbers come from saved JSON in [`docs/experiments/data/`](docs/experiments/data/). Each run trains and is scored on the
 same track. A run is `16` cars × `10` generations × `30 s` episodes unless noted.
 
 | Comparison                                             | Fixed GA  | NEAT      | Source                                                                        |
 | ------------------------------------------------------ | --------- | --------- | ----------------------------------------------------------------------------- |
-| Beat the same-budget control, development seeds        | `12 / 15` | `13 / 15` | `npm run test:learning`, `contracts/learning-benchmark-v2.json`               |
+| Beat the same-budget control, development seeds        | `12 / 15` | `13 / 15` | `npm run test:learning`, `docs/experiments/data/learning-benchmark-v2.json`   |
 | Champion finished a lap, development seeds             | `5 / 15`  | `9 / 15`  | same                                                                          |
 | Beat the same-budget control, held-out seeds and track | `41 / 48` | `43 / 48` | [physics v2: held-out matrix](docs/experiments/physics-v2.md#held-out-matrix) |
 | Champion finished a lap, held-out seeds and track      | `23 / 48` | `32 / 48` | same                                                                          |
@@ -146,8 +146,9 @@ python/tools/          learning benchmark and regression matrix
 python/tests/          pytest
 src/                   TypeScript UI: views, controllers, canvas rendering, IPC client
 tests/, e2e/           Vitest and Playwright (with an axe accessibility scan)
-contracts/             JSON fixtures and saved results shared by both test suites
+contracts/             versioned JSON contract fixtures read by both test suites
 docs/                  architecture, user guide, experiments
+docs/experiments/data/ saved benchmark, regression and study results
 packaging/             PyInstaller spec and third-party notices
 ```
 

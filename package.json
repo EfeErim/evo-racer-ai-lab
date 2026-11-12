@@ -29,7 +29,7 @@
     "lint:python": ".venv\\Scripts\\python -m ruff check python",
     "test": "vitest run tests",
     "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e.ps1",
-    "test:learning": ".venv\\Scripts\\python python/tools/learning_benchmark.py --fixture contracts/learning-benchmark-v2.json",
+    "test:learning": ".venv\\Scripts\\python python/tools/learning_benchmark.py --fixture docs/experiments/data/learning-benchmark-v2.json",
     "test:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-release.ps1",
     "test:python": ".venv\\Scripts\\python -m pytest",
     "typecheck": "tsc -b --pretty false",

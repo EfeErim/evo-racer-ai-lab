@@ -14,7 +14,7 @@ with its results in `0be9225`, so git history does not prove it came first.
 ## Reproduce
 
 The study scripts and per-run files were removed from the current tree in `ed57b56` to
-keep the repository small. Only the summary JSON files remain in `contracts/`. Each
+keep the repository small. Only the summary JSON files remain, now in [`data/`](data/); the scripts wrote them to `contracts/` at the time. Each
 summary is reproduced by checking out the commit that recorded it and running its script
 from the repository root after `./scripts/setup.ps1`:
 
@@ -27,14 +27,14 @@ from the repository root after `./scripts/setup.ps1`:
 | `lap-weight-dev-summary.json`   | `cf9129b` | `.venv\Scripts\python python/tools/lap_weight_study.py dev`                          |
 | `training-plans-a-summary.json` | `919f3a3` | `.venv\Scripts\python python/tools/training_plan_study.py a`                         |
 
-The regression fixture `contracts/regression-matrix-v2.json` is byte-identical to its
+The regression fixture `docs/experiments/data/regression-matrix-v2.json` is byte-identical to its
 `0be9225` version and `python/tests/test_regression_matrix.py` still reproduces it at
 the current commit, so the simulation these studies ran on has not changed. The runs take from minutes to about `100` minutes on a desktop
 CPU and were not rerun for this page.
 
 ## Brake factorial experiment
 
-Recorded cells: [48 cells](../../contracts/braking-study-v2.json).
+Recorded cells: [48 cells](data/braking-study-v2.json).
 Every cell was executed twice and complete episode objects compared equal.
 The experiment uses the same default vehicle, spawn and fixed-speed Pure Pursuit
 parameters in every cell. It varies drag (0.018 / 0.004), corner cap (off / on),
@@ -86,7 +86,7 @@ The design was fixed before the matrix ran: evolution seeds `31013`, `51031` and
 (`16 × 10 × 30 s`) and Balanced (`24 × 20 × 30 s`); Fixed GA and NEAT, each paired with a
 single random generation of the same candidate count and seed. Each run was repeated
 with the vehicle genes fixed at a balanced setup. Summary:
-[32 cells](../../contracts/heldout-v2-summary.json).
+[32 cells](data/heldout-v2-summary.json).
 
 Outcome columns read finished / collided / timed out, counted over `3` seeds.
 **Difference** is evolved minus same-candidate control champion fitness; the interval is
@@ -169,7 +169,7 @@ intervals cannot support population claims.
 
 This analysis is exploratory. It was added after the held-out matrix ran and is not one
 of its planned cells. Recorded results:
-[96 replayed champions](../../contracts/heldout-v2-brake-use.json).
+[96 replayed champions](data/heldout-v2-brake-use.json).
 
 Each saved champion was rebuilt from its genome and driven three ways with its steering
 and throttle policy unchanged: as evolved, with brake output zeroed, and with brake held
@@ -205,7 +205,7 @@ this matrix is now development evidence.
 
 ## Why a constant brake is enough
 
-Also exploratory. Recorded results: [brake value study](../../contracts/brake-value-v2.json).
+Also exploratory. Recorded results: [brake value study](data/brake-value-v2.json).
 It asks how much
 lap time varying the brake can buy at all, separately from what evolution finds.
 
@@ -255,7 +255,7 @@ median paired lap.
 
 Balanced budget, Fixed GA and NEAT, seeds `6007`, `8009`, `9011`, the three presets and
 generator v5 seed `52021`: `72` runs. Summary:
-[lap-weight-dev-summary.json](../../contracts/lap-weight-dev-summary.json).
+[lap-weight-dev-summary.json](data/lap-weight-dev-summary.json).
 
 | `W`  | Finished | Need brakes | Need varied brake | Median lap, paired finishes |
 | ---- | -------: | ----------: | ----------------: | --------------------------: |
@@ -278,7 +278,7 @@ Balanced (`24 × 20 × 30 s`) and Thorough (`48 × 40 × 60 s`), each with both 
 on the three presets with seeds `20011`, `22013`, `24019`, each paired with a
 same-candidate random control. A plan **works** on a preset when at least `2 / 3` evolved
 runs finish a lap and at least `2 / 3` beat their control. Summary:
-[training-plans-a-summary.json](../../contracts/training-plans-a-summary.json).
+[training-plans-a-summary.json](data/training-plans-a-summary.json).
 
 Each cell shows finished laps and wins over the control, out of three seeds. **Bold**
 marks the algorithm each plan ships with. Wall clock was measured four runs at a time.

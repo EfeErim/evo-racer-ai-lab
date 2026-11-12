@@ -58,4 +58,4 @@ algorithms.
   learning-performance claims.
 
 The reviewed raw regression values are in
-[`contracts/regression-matrix-v2.json`](../contracts/regression-matrix-v2.json).
+[`docs/experiments/data/regression-matrix-v2.json`](experiments/data/regression-matrix-v2.json).

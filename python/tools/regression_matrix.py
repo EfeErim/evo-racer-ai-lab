@@ -1,7 +1,7 @@
 """Deterministic regression matrix: 18 small runs whose result hashes are pinned.
 
 `python/tests/test_regression_matrix.py` compares a fresh run with
-`contracts/regression-matrix-v2.json`. After an intended simulation change, regenerate
+`docs/experiments/data/regression-matrix-v2.json`. After an intended simulation change, regenerate
 that fixture with `--print-fixture`.
 """
 

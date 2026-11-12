@@ -72,7 +72,7 @@ compared with the saved file value by value.
 
 ```text
 > npm run test:learning
-> .venv\Scripts\python python/tools/learning_benchmark.py --fixture contracts/learning-benchmark-v2.json
+> .venv\Scripts\python python/tools/learning_benchmark.py --fixture docs/experiments/data/learning-benchmark-v2.json
 
 Verified 30 deterministic cases.
 
@@ -106,7 +106,7 @@ real    1m13.133s
 ```
 
 These values equal the saved entry for that case in
-[`contracts/learning-benchmark-v2.json`](../contracts/learning-benchmark-v2.json).
+[`docs/experiments/data/learning-benchmark-v2.json`](experiments/data/learning-benchmark-v2.json).
 
 ## The app
 

@@ -6,7 +6,7 @@ from typing import cast
 
 from regression_matrix import build_regression_matrix
 
-CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "regression-matrix-v2.json"
+CONTRACT_PATH = Path(__file__).parents[2] / "docs" / "experiments" / "data" / "regression-matrix-v2.json"
 
 
 def test_three_seed_three_preset_algorithm_matrix_matches_reviewed_fixture() -> None:
