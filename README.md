@@ -32,10 +32,10 @@ test:learning` 3 min with one process per core.
 [docs/demo.md](docs/demo.md) has the captured output.
 
 `npm run build:release` produces a self-contained `release\EvoRacer\EvoRacer.exe` with
-Python bundled; `npm run test:release` runs it with no Node.js or Python on `PATH`. The
-latest published binary,
-[v1.1.0](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.1.0), predates the
-Set up, Race and Results screens shown here. Builds are not code-signed.
+Python bundled; `npm run test:release` runs it with no Node.js or Python on `PATH`. To
+try it without building, download
+[v1.2.0](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.2.0), extract the
+ZIP and open `EvoRacer\EvoRacer.exe`. Builds are not code-signed.
 
 ## Results
 
