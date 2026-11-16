@@ -94,24 +94,24 @@ export function createTrackCommands(context: AppContext) {
   const { root, store, render, dispatch } = context;
 
   const isCurrentTrackCommand = (
-    requestVersion: number,
+    isCurrentRequest: () => boolean,
     pending: Exclude<TrackBuilderPending, null>,
   ): boolean =>
-    requestVersion === store.trackCommandRequestVersion &&
+    isCurrentRequest() &&
     store.state.route === "track" &&
     store.trackWorkspace.toolsOpen &&
     store.trackWorkspace.pending === pending;
 
   async function refreshPresetGeometry(): Promise<void> {
-    const requestVersion = ++store.presetGeometryRequestVersion;
+    const isCurrentRequest = store.requests.presetGeometry.begin();
     try {
       const response = await loadPresetTracks();
-      if (requestVersion !== store.presetGeometryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.presetGeometry = { status: "ready", presets: response.presets };
     } catch (error) {
-      if (requestVersion !== store.presetGeometryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.presetGeometry = {
@@ -128,10 +128,10 @@ export function createTrackCommands(context: AppContext) {
   async function refreshLibrary(
     successNotice?: TrackWorkspaceState["notice"],
   ): Promise<void> {
-    const requestVersion = ++store.trackLibraryRequestVersion;
+    const isCurrentRequest = store.requests.trackLibrary.begin();
     try {
       const library = await loadTrackLibrary();
-      if (requestVersion !== store.trackLibraryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.trackWorkspace = {
@@ -142,7 +142,7 @@ export function createTrackCommands(context: AppContext) {
         notice: successNotice ?? store.trackWorkspace.notice,
       };
     } catch (error) {
-      if (requestVersion !== store.trackLibraryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       const message =
@@ -184,7 +184,7 @@ export function createTrackCommands(context: AppContext) {
 
   const saveCompiledTrack = async (
     compiled: CompiledTrackV1,
-    requestVersion: number,
+    isCurrentRequest: () => boolean,
   ): Promise<void> => {
     store.trackWorkspace = {
       ...store.trackWorkspace,
@@ -196,7 +196,7 @@ export function createTrackCommands(context: AppContext) {
     };
     render();
     const result = await saveTrack(compiled.track);
-    if (!isCurrentTrackCommand(requestVersion, "save")) {
+    if (!isCurrentTrackCommand(isCurrentRequest, "save")) {
       await refreshLibrary();
       return;
     }
@@ -227,9 +227,10 @@ export function createTrackCommands(context: AppContext) {
     const repeatsActiveTab =
       action === "builder-tab" &&
       element.dataset.builderTab === store.trackWorkspace.tab;
-    const requestVersion = repeatsActiveTab
-      ? store.trackCommandRequestVersion
-      : ++store.trackCommandRequestVersion;
+    // Re-selecting the open tab keeps the command already in flight.
+    const isCurrentRequest = repeatsActiveTab
+      ? store.requests.trackCommand.current()
+      : store.requests.trackCommand.begin();
     try {
       if (handleEditorAction(action, element)) {
         return;
@@ -295,13 +296,13 @@ export function createTrackCommands(context: AppContext) {
         case "close-builder": {
           const canceledTrackCommand = store.trackWorkspace.pending;
           if (canceledTrackCommand === "import") {
-            store.trackImportRequestVersion += 1;
+            store.requests.trackImport.cancel();
           }
           if (
             canceledTrackCommand === "validate" ||
             canceledTrackCommand === "assist"
           ) {
-            store.trackValidationRequest += 1;
+            store.requests.trackValidation.cancel();
           }
           store.trackWorkspace = {
             ...store.trackWorkspace,
@@ -335,10 +336,10 @@ export function createTrackCommands(context: AppContext) {
               canceledTrackCommand === "validate" ||
               canceledTrackCommand === "assist"
             ) {
-              ++store.trackValidationRequest;
+              store.requests.trackValidation.cancel();
             }
             if (canceledTrackCommand === "import") {
-              ++store.trackImportRequestVersion;
+              store.requests.trackImport.cancel();
             }
             const messages: Record<TrackBuilderTab, string> = {
               build: "Edit the pieces. Every change is previewed and checked.",
@@ -376,7 +377,7 @@ export function createTrackCommands(context: AppContext) {
           return;
         }
         case "editor-assist":
-          await assistEditorClosure(requestVersion);
+          await assistEditorClosure(isCurrentRequest);
           return;
         case "use-editor":
           if (
@@ -442,7 +443,7 @@ export function createTrackCommands(context: AppContext) {
           const response = await generateTrack({
             ...generator,
           });
-          if (!isCurrentTrackCommand(requestVersion, "generate")) {
+          if (!isCurrentTrackCommand(isCurrentRequest, "generate")) {
             return;
           }
           if (response.valid && response.compiled !== undefined) {
@@ -518,7 +519,7 @@ export function createTrackCommands(context: AppContext) {
           ) {
             await saveCompiledTrack(
               store.trackWorkspace.editorPreview,
-              requestVersion,
+              isCurrentRequest,
             );
           }
           return;
@@ -526,7 +527,7 @@ export function createTrackCommands(context: AppContext) {
           if (store.trackWorkspace.generatedPreview !== undefined) {
             await saveCompiledTrack(
               store.trackWorkspace.generatedPreview,
-              requestVersion,
+              isCurrentRequest,
             );
           }
           return;
@@ -601,7 +602,7 @@ export function createTrackCommands(context: AppContext) {
             };
             render();
             await deleteTrack(trackId);
-            if (!isCurrentTrackCommand(requestVersion, "delete")) {
+            if (!isCurrentTrackCommand(isCurrentRequest, "delete")) {
               await refreshLibrary();
               return;
             }
@@ -620,7 +621,7 @@ export function createTrackCommands(context: AppContext) {
       }
     } catch (error) {
       if (
-        requestVersion !== store.trackCommandRequestVersion ||
+        !isCurrentRequest() ||
         store.state.route !== "track" ||
         !store.trackWorkspace.toolsOpen
       ) {

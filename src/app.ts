@@ -74,7 +74,7 @@ export function mountApp(root: HTMLElement): AppController {
     createRunLibraryController(context, applyRunResponse);
 
   const resetRunPresentation = (): void => {
-    store.runRequestVersion += 1;
+    store.requests.run.cancel();
     if (store.observationTimer !== undefined) {
       window.clearTimeout(store.observationTimer);
       store.observationTimer = undefined;
@@ -117,7 +117,7 @@ export function mountApp(root: HTMLElement): AppController {
       store.state.route !== "setup" &&
       validationWasChecking
     ) {
-      store.setupValidationRequestVersion += 1;
+      store.requests.setupValidation.cancel();
     }
     if (
       previousRoute === "track" &&
@@ -125,15 +125,15 @@ export function mountApp(root: HTMLElement): AppController {
       store.trackWorkspace.pending !== null
     ) {
       const canceledTrackCommand = store.trackWorkspace.pending;
-      store.trackCommandRequestVersion += 1;
+      store.requests.trackCommand.cancel();
       if (canceledTrackCommand === "import") {
-        store.trackImportRequestVersion += 1;
+        store.requests.trackImport.cancel();
       }
       if (
         canceledTrackCommand === "validate" ||
         canceledTrackCommand === "assist"
       ) {
-        store.trackValidationRequest += 1;
+        store.requests.trackValidation.cancel();
       }
       store.trackWorkspace = {
         ...store.trackWorkspace,
@@ -153,7 +153,7 @@ export function mountApp(root: HTMLElement): AppController {
       store.runLibrary.pending !== undefined
     ) {
       const canceledAction = store.runLibrary.pending.action;
-      store.runLibraryActionVersion += 1;
+      store.requests.runLibraryAction.cancel();
       store.runLibrary = {
         ...store.runLibrary,
         pending: undefined,

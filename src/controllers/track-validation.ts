@@ -10,7 +10,7 @@ import {
 
 /** Whether a Track Builder response still belongs to the request on screen. */
 export type TrackCommandGuard = (
-  requestVersion: number,
+  isCurrentCommand: () => boolean,
   pending: Exclude<TrackBuilderPending, null>,
 ) => boolean;
 
@@ -40,7 +40,7 @@ export function createTrackValidation(
   const { store, render } = context;
 
   const validateEditorDraft = async (): Promise<void> => {
-    const requestId = ++store.trackValidationRequest;
+    const isCurrentRequest = store.requests.trackValidation.begin();
     const draft = editorTrack(store.trackWorkspace.editor);
     store.trackWorkspace = {
       ...store.trackWorkspace,
@@ -50,7 +50,7 @@ export function createTrackValidation(
     render();
     try {
       const response = await compileTrack(draft);
-      if (requestId !== store.trackValidationRequest) {
+      if (!isCurrentRequest()) {
         return;
       }
       if (response.valid && response.compiled !== undefined) {
@@ -82,7 +82,7 @@ export function createTrackValidation(
         };
       }
     } catch (error) {
-      if (requestId !== store.trackValidationRequest) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.trackWorkspace = {
@@ -103,8 +103,10 @@ export function createTrackValidation(
   };
 
   /** Closes the editor's loop; errors propagate to the command handler. */
-  const assistEditorClosure = async (requestVersion: number): Promise<void> => {
-    const requestId = ++store.trackValidationRequest;
+  const assistEditorClosure = async (
+    isCurrentCommand: () => boolean,
+  ): Promise<void> => {
+    const isCurrentRequest = store.requests.trackValidation.begin();
     const draft = editorTrack(store.trackWorkspace.editor);
     store.trackWorkspace = {
       ...store.trackWorkspace,
@@ -116,8 +118,7 @@ export function createTrackValidation(
     };
     render();
     const stillCurrent = (): boolean =>
-      requestId === store.trackValidationRequest &&
-      isCurrentTrackCommand(requestVersion, "assist");
+      isCurrentRequest() && isCurrentTrackCommand(isCurrentCommand, "assist");
     let response: TrackCommandResponse;
     try {
       response = await assistTrackClosure(draft);
@@ -166,7 +167,7 @@ export function createTrackValidation(
   };
 
   const importTrack = async (file: File): Promise<void> => {
-    const requestId = ++store.trackImportRequestVersion;
+    const isCurrentRequest = store.requests.trackImport.begin();
     store.trackWorkspace = {
       ...store.trackWorkspace,
       pending: "import",
@@ -178,12 +179,12 @@ export function createTrackValidation(
     render();
     try {
       const content = await file.text();
-      if (requestId !== store.trackImportRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       const track = parseTrackDocument(content);
       const response = await compileTrack(track);
-      if (requestId !== store.trackImportRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       if (!response.valid || response.compiled === undefined) {
@@ -217,7 +218,7 @@ export function createTrackValidation(
       };
       render();
     } catch (error) {
-      if (requestId !== store.trackImportRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.trackWorkspace = {

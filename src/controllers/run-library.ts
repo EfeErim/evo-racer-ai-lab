@@ -27,10 +27,10 @@ export function createRunLibraryController(
       message: "Run files are stored atomically by the local Python core.",
     },
   ): Promise<void> {
-    const requestVersion = ++store.runLibraryRequestVersion;
+    const isCurrentRequest = store.requests.runLibrary.begin();
     try {
       const value = await loadRunLibrary();
-      if (requestVersion !== store.runLibraryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.runLibrary = {
@@ -39,7 +39,7 @@ export function createRunLibraryController(
         notice,
       };
     } catch (error) {
-      if (requestVersion !== store.runLibraryRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       const message =
@@ -80,9 +80,9 @@ export function createRunLibraryController(
       delete: "Deleting the selected local run.",
       export: "Preparing the selected run JSON.",
     };
-    const actionVersion = ++store.runLibraryActionVersion;
+    const isCurrentActionRequest = store.requests.runLibraryAction.begin();
     const isCurrentAction = (): boolean =>
-      actionVersion === store.runLibraryActionVersion &&
+      isCurrentActionRequest() &&
       store.runLibrary.status === "ready" &&
       store.runLibrary.pending?.action === action &&
       store.runLibrary.pending.runId === runId;
@@ -127,10 +127,10 @@ export function createRunLibraryController(
         return;
       }
       if (action === "open") {
-        const requestVersion = ++store.runRequestVersion;
+        const isCurrentRequest = store.requests.run.begin();
         store.simulation = { status: "loading" };
         const document = await openRun(runId);
-        if (!isCurrentAction() || requestVersion !== store.runRequestVersion) {
+        if (!isCurrentAction() || !isCurrentRequest()) {
           return;
         }
         const snapshot = document.checkpoint.snapshot;
@@ -143,7 +143,7 @@ export function createRunLibraryController(
           );
         }
         const compiled = await compileTrack(document.track);
-        if (!isCurrentAction() || requestVersion !== store.runRequestVersion) {
+        if (!isCurrentAction() || !isCurrentRequest()) {
           return;
         }
         if (!compiled.valid || compiled.compiled === undefined) {
@@ -178,7 +178,7 @@ export function createRunLibraryController(
         dispatch({ type: "restore-results", draft: restoredDraft });
         return;
       }
-      const requestVersion = ++store.runRequestVersion;
+      const isCurrentRequest = store.requests.run.begin();
       store.simulation = { status: "loading" };
       const response = await resumeRun(runId);
       if (!isCurrentAction()) {
@@ -188,7 +188,7 @@ export function createRunLibraryController(
         });
         return;
       }
-      if (requestVersion !== store.runRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       if (!response.valid || response.setup === undefined) {
@@ -210,7 +210,7 @@ export function createRunLibraryController(
       let restoredSetup = response.setup;
       if (response.setup.track !== null) {
         const compiled = await compileTrack(response.setup.track);
-        if (!isCurrentAction() || requestVersion !== store.runRequestVersion) {
+        if (!isCurrentAction() || !isCurrentRequest()) {
           return;
         }
         if (!compiled.valid || compiled.compiled === undefined) {

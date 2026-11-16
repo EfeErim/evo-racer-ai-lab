@@ -5,6 +5,7 @@ import {
   createInitialState,
 } from "./onboarding";
 import type { FocusSnapshot } from "./render-state";
+import { createRequestGates, type RequestGates } from "./request-gate";
 import type { RunCommand } from "./run-presentation";
 import type {
   GenerationRaceV1,
@@ -73,15 +74,8 @@ export interface AppStore {
   replayFrameIndex: number;
   replayPaused: boolean;
   runLibrary: RunLibraryState;
-  trackValidationRequest: number;
-  presetGeometryRequestVersion: number;
-  trackImportRequestVersion: number;
-  trackCommandRequestVersion: number;
-  setupValidationRequestVersion: number;
-  trackLibraryRequestVersion: number;
-  runLibraryRequestVersion: number;
-  runLibraryActionVersion: number;
-  runRequestVersion: number;
+  /** Latest-request-wins guards; see `src/request-gate.ts`. */
+  requests: RequestGates;
   deferredFocus: FocusSnapshot | undefined;
   trackWorkspace: TrackWorkspaceState;
 }
@@ -119,15 +113,7 @@ export function createAppStore(): AppStore {
     replayFrameIndex: 0,
     replayPaused: false,
     runLibrary: { status: "loading" },
-    trackValidationRequest: 0,
-    presetGeometryRequestVersion: 0,
-    trackImportRequestVersion: 0,
-    trackCommandRequestVersion: 0,
-    setupValidationRequestVersion: 0,
-    trackLibraryRequestVersion: 0,
-    runLibraryRequestVersion: 0,
-    runLibraryActionVersion: 0,
-    runRequestVersion: 0,
+    requests: createRequestGates(),
     deferredFocus: undefined,
     trackWorkspace: createTrackWorkspaceState(
       `custom-${Date.now().toString(36)}`,

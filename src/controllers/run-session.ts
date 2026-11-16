@@ -34,11 +34,11 @@ export function createRunSession(
     }
 
     const reviewedDraft = store.state.draft;
-    const requestVersion = ++store.setupValidationRequestVersion;
+    const isCurrentRequest = store.requests.setupValidation.begin();
     dispatch({ type: "validation-started", draft: reviewedDraft });
     try {
       const response = await validateSetup(reviewedDraft);
-      if (requestVersion !== store.setupValidationRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       dispatch({
@@ -47,7 +47,7 @@ export function createRunSession(
         response,
       });
     } catch (error) {
-      if (requestVersion !== store.setupValidationRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       dispatch({
@@ -78,8 +78,10 @@ export function createRunSession(
     store.simulation.status === "ready" &&
     store.simulation.snapshot.runId === runId;
 
-  const isLatestRunRequest = (runId: string, requestVersion: number): boolean =>
-    requestVersion === store.runRequestVersion && isCurrentRun(runId);
+  const isLatestRunRequest = (
+    runId: string,
+    isCurrentRequest: () => boolean,
+  ): boolean => isCurrentRequest() && isCurrentRun(runId);
 
   const setRunFailure = (message: string): void => {
     store.simulation =
@@ -133,7 +135,7 @@ export function createRunSession(
     }
     store.observationPending = true;
     const runId = store.simulation.snapshot.runId;
-    const requestVersion = ++store.runRequestVersion;
+    const isCurrentRequest = store.requests.run.begin();
     const knownReplayCandidateId =
       store.simulation.snapshot.generationReplay?.candidateId;
     const knownRace =
@@ -146,12 +148,12 @@ export function createRunSession(
         knownReplayCandidateId,
         knownRace,
       );
-      if (!isLatestRunRequest(runId, requestVersion)) {
+      if (!isLatestRunRequest(runId, isCurrentRequest)) {
         return;
       }
       applyRunResponse(response);
     } catch (error) {
-      if (!isLatestRunRequest(runId, requestVersion)) {
+      if (!isLatestRunRequest(runId, isCurrentRequest)) {
         return;
       }
       setRunFailure(
@@ -189,7 +191,7 @@ export function createRunSession(
       return;
     }
     const runId = store.simulation.snapshot.runId;
-    const requestVersion = ++store.runRequestVersion;
+    const isCurrentRequest = store.requests.run.begin();
     if (store.observationTimer !== undefined) {
       window.clearTimeout(store.observationTimer);
       store.observationTimer = undefined;
@@ -202,12 +204,12 @@ export function createRunSession(
     render();
     try {
       const response = await commandRun(runId, command);
-      if (!isLatestRunRequest(runId, requestVersion)) {
+      if (!isLatestRunRequest(runId, isCurrentRequest)) {
         return;
       }
       applyRunResponse(response);
     } catch (error) {
-      if (!isLatestRunRequest(runId, requestVersion)) {
+      if (!isLatestRunRequest(runId, isCurrentRequest)) {
         return;
       }
       setRunFailure(
@@ -283,7 +285,7 @@ export function createRunSession(
       return;
     }
     const frozenDraft = store.state.draft;
-    const requestVersion = ++store.runRequestVersion;
+    const isCurrentRequest = store.requests.run.begin();
     store.simulation = { status: "loading" };
     store.generationTrails = [];
     playback.resetRacePlayback();
@@ -291,7 +293,7 @@ export function createRunSession(
     dispatch({ type: "start-session" });
     try {
       const response = await startRun(frozenDraft);
-      if (requestVersion !== store.runRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       if (!response.valid) {
@@ -308,7 +310,7 @@ export function createRunSession(
       }
       applyRunResponse(response);
     } catch (error) {
-      if (requestVersion !== store.runRequestVersion) {
+      if (!isCurrentRequest()) {
         return;
       }
       store.simulation = { status: "idle" };
