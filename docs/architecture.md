@@ -121,10 +121,16 @@ are penalized.
 
 ## Observation and results
 
-`observer.py` owns run identity, frozen settings, algorithm state, generation
-advancement, snapshots, baselines, replays and persistence. The browser sends versioned
-start, observe, pause, resume and stop commands. Pause and resume only decide whether a
-later generation may start; they never change the seeded sequence.
+`observer.py` holds one deterministic `RunSession`: run identity, frozen settings,
+algorithm state, generation advancement, snapshots, baselines and replays. It starts no
+threads and writes no files. `run_manager.py` owns the lifecycle around it: Start,
+Resume, or a resume command starts the run's single training worker, which advances and
+saves one generation at a time until the run pauses, stops, completes, is deleted, or
+the app exits. Observe only reads a snapshot, so training finishes whether or not a
+browser is polling, and how often it polls cannot change the result. Pause and stop
+requested during a generation apply at its end; they never change the seeded sequence.
+A worker error is reported as `RUN_ADVANCE_FAILED`, including a failed save, and a
+deleted run is never written again.
 
 A full episode evaluates in roughly 50–130 ms, far faster than real time, so Race shows
 the most recently finished generation. The evaluator records a presentation-only pose
@@ -136,7 +142,9 @@ nothing predicted is sent back.
 
 Python also keeps the last eight champion paths (at most 64 points each) in the
 checkpoint. Observation polls every 250 ms while visible and 1000 ms while hidden, one
-request at a time; training runs at full speed either way.
+request at a time; training runs at full speed either way. In the browser each kind of
+request has a `RequestGate` (`src/request-gate.ts`): a late response applies only if no
+newer request of that kind started and the player has not left the page that asked.
 
 Results replays the champion and compares it with the random-network and Pure Pursuit
 baselines on the same track, budget and vehicle setup. `racing_line.py` builds a
@@ -147,11 +155,12 @@ path deviates from it. It is a geometric reference, not a lap-time optimum.
 
 Each run is one file, `%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`: the
 embedded `TrackV1`, frozen settings, and one checkpoint at a complete generation
-boundary with a SHA-256 of its snapshot. Every transition writes a temporary file,
+boundary with a SHA-256 of its snapshot. The training worker saves after every
+generation and a pause, resume or stop saves at once. Every write creates a temporary file,
 `fsync`s it and replaces `run.json` with `os.replace`. JSON uses sorted keys and rejects
 non-finite numbers.
 
-Startup never resumes training. The library validates each record independently and
+Startup, listing saved runs and opening saved results never train. The library validates each record independently and
 isolates corrupt ones. An explicit Resume rebuilds the run from its track, settings and
 seed, replays the completed generations deterministically, and fails if the result
 differs from the checkpoint. Nothing stores live Python or neat-python objects, so the
@@ -188,3 +197,13 @@ child Node.js or Python process.
 algorithms) through the public `RunSession` and pins their result hashes in
 `docs/experiments/data/regression-matrix-v2.json`. `python/tests/test_regression_matrix.py` reruns
 them and requires exact equality; the TypeScript suite checks the same file's shape.
+
+`python/tests/test_run_worker.py` checks the run lifecycle without fixed sleeps: both
+algorithms finish with no observe call, observe never starts a worker, no, sparse and
+constant polling give the same result, pause and resume match an uninterrupted run, and
+repeated resume, stop, delete, close and a failed save behave as described above.
+
+CI (`.github/workflows/ci.yml`) runs `npm run check` and `npm run test:e2e` on Windows
+for every push to `main` and every pull request into it. `npm run test:learning` and the
+release build and acceptance test (`npm run build:release`, `npm run test:release`) are
+run locally; none of them replaces running the package on a clean, offline machine.

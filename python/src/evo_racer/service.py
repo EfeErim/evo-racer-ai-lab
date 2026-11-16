@@ -14,8 +14,8 @@ from threading import Thread
 from typing import Final
 from urllib.parse import unquote, urlsplit
 
-from evo_racer.observer import RunManager
 from evo_racer.onboarding import validate_setup
+from evo_racer.run_manager import RunManager
 from evo_racer.track_generation import assist_track_closure_payload, generate_track_payload
 from evo_racer.track_library import delete_track, library_payload, save_track_payload
 from evo_racer.tracks import compiled_presets_payload, validate_track_payload
@@ -366,6 +366,7 @@ def run(port: int = DEFAULT_PORT) -> None:
     except KeyboardInterrupt:
         pass
     finally:
+        server.run_manager.close()
         server.server_close()
 
 

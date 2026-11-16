@@ -60,6 +60,7 @@ def run_launcher(
     try:
         server.serve_forever()
     finally:
+        server.run_manager.close()
         server.server_close()
 
 

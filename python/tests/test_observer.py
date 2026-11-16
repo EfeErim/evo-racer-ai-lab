@@ -5,17 +5,13 @@ import logging
 import random
 import time
 from pathlib import Path
-from threading import Thread
 from typing import Any, cast
 
 import pytest
 
 import evo_racer.observer as observer_module
-from evo_racer.observer import (
-    RunManager,
-    RunSession,
-    RunSettings,
-)
+from evo_racer.observer import RunSession, RunSettings
+from evo_racer.run_manager import RunManager
 from evo_racer.simulation import evaluate_episode as simulation_evaluate_episode
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
@@ -433,7 +429,7 @@ def test_worker_failure_logs_its_cause_and_returns_a_stable_code(
     assert isinstance(snapshot, dict)
     payload = {"contractVersion": 1, "runId": snapshot["runId"]}
 
-    with caplog.at_level(logging.ERROR, logger="evo_racer.observer"):
+    with caplog.at_level(logging.ERROR, logger="evo_racer.run_manager"):
         deadline = time.monotonic() + 5
         response = manager.observe(payload)
         while response["valid"] and time.monotonic() < deadline:
@@ -498,7 +494,7 @@ def test_concurrent_neat_runs_can_both_be_resumed_after_restart(tmp_path: Path) 
                 "settings": {
                     "algorithm": "neat",
                     "populationSize": 10,
-                    "generations": 4,
+                    "generations": 6,
                     "episodeSeconds": 15,
                     "seed": seed,
                 },
@@ -508,26 +504,25 @@ def test_concurrent_neat_runs_can_both_be_resumed_after_restart(tmp_path: Path) 
 
     run_ids = (start(7), start(8))
 
-    def drive(run_id: str) -> None:
-        while True:
-            response = manager.observe({"contractVersion": 1, "runId": run_id})
-            if cast(dict[str, Any], response["snapshot"])["generation"] >= 2:
-                return
-            time.sleep(0.01)
+    # Both runs train on their own workers at once. A pause asked for while a
+    # generation is in progress applies at its end, so neither run can finish.
+    def observed(run_id: str) -> dict[str, Any]:
+        response = manager.observe({"contractVersion": 1, "runId": run_id})
+        return cast(dict[str, Any], response["snapshot"])
 
-    workers = [Thread(target=drive, args=(run_id,)) for run_id in run_ids]
-    for worker in workers:
-        worker.start()
-    for worker in workers:
-        worker.join()
     for run_id in run_ids:
+        deadline = time.monotonic() + 120
+        while not (
+            observed(run_id)["generationInProgress"] and observed(run_id)["generation"] >= 1
+        ):
+            assert time.monotonic() < deadline
+            time.sleep(0.005)
         manager.command({"contractVersion": 1, "runId": run_id, "command": "pause"})
-    deadline = time.monotonic() + 60
-    while any(manager._sessions[run_id].is_advancing() for run_id in run_ids):
-        assert time.monotonic() < deadline
-        time.sleep(0.01)
     for run_id in run_ids:
-        manager._persist(manager._sessions[run_id])
+        assert manager.wait_until_idle(run_id, 120.0)
+        snapshot = observed(run_id)
+        assert snapshot["status"] == "paused"
+        assert 2 <= snapshot["generation"] < 6
 
     restarted = RunManager(tmp_path)
     for run_id in run_ids:

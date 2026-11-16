@@ -89,8 +89,9 @@ Browser UI (TypeScript, Vite, no framework)  ──JSON over 127.0.0.1──▶ 
   five ways and front/rear brake and drive bias. Nothing changes during an episode.
 - Fitness is `1200 × progress + 1000 if finished + 300 × unused share of the time limit
 if finished − 75 per collision`.
-- The UI polls a snapshot every 250 ms and replays the top 12 cars of each finished
-  generation from poses Python recorded during training.
+- After Start, Python trains on its own worker until the run completes, pauses or
+  stops. The UI only reads: it polls a snapshot every 250 ms and replays the top 12 cars
+  of each finished generation from poses Python recorded during training.
 
 More in [architecture](docs/architecture.md).
 

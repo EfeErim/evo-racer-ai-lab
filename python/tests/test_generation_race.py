@@ -6,7 +6,8 @@ from typing import Any, cast
 
 import pytest
 
-from evo_racer.observer import GENERATION_RACE_CAR_LIMIT, RunManager, RunSession, RunSettings
+from evo_racer.observer import GENERATION_RACE_CAR_LIMIT, RunSession, RunSettings
+from evo_racer.run_manager import RunManager
 from evo_racer.simulation import (
     FIXED_TIME_STEP,
     PurePursuitBaseline,

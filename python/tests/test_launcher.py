@@ -12,12 +12,21 @@ from evo_racer import launcher
 from evo_racer.service import create_server
 
 
+class _FakeRunManager:
+    def __init__(self) -> None:
+        self.closed = False
+
+    def close(self) -> None:
+        self.closed = True
+
+
 class _FakeServer:
     server_port = 8765
 
     def __init__(self) -> None:
         self.served = False
         self.closed = False
+        self.run_manager = _FakeRunManager()
 
     def serve_forever(self) -> None:
         self.served = True
@@ -49,6 +58,7 @@ def test_launcher_opens_production_frontend_and_closes_server(
     assert opened_urls == ["http://127.0.0.1:8765/"]
     assert fake_server.served
     assert fake_server.closed
+    assert fake_server.run_manager.closed
 
 
 def _static_root(tmp_path: Path) -> Path:

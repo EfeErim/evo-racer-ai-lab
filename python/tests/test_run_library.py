@@ -8,7 +8,7 @@ from typing import Any, cast
 
 import pytest
 
-from evo_racer.observer import RunManager, RunSession, RunSettings
+from evo_racer.observer import RunSession, RunSettings
 from evo_racer.run_library import (
     RunRecordError,
     checkpoint_sha256,
@@ -19,6 +19,7 @@ from evo_racer.run_library import (
     save_run_document,
     validate_run_document,
 )
+from evo_racer.run_manager import RunManager
 from evo_racer.track_library import library_payload, save_track_payload
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
