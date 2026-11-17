@@ -6,9 +6,9 @@ import math
 import random
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, Protocol
+from typing import Any, Final, Protocol, cast
 
-from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
+from evo_racer.numeric import clamp, rounded, sigmoid, signed_heading_delta
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 # Physics revision recorded on saved results. Version 2 lowered drag and added the corner limit.
@@ -171,25 +171,6 @@ class TelemetrySnapshot:
     progress_fraction: float
     sensor_distances: tuple[float, ...]
 
-    def __post_init__(self) -> None:
-        if not self.selected_car_id:
-            raise ValueError("Selected car id must be non-empty.")
-        if not math.isfinite(self.simulated_seconds) or self.simulated_seconds < 0.0:
-            raise ValueError("Telemetry time must be finite and non-negative.")
-        if not -1.0 <= self.controls.steering <= 1.0:
-            raise ValueError("Telemetry steering must stay in [-1,1].")
-        if not 0.0 <= self.controls.throttle <= 1.0:
-            raise ValueError("Telemetry throttle must stay in [0,1].")
-        if not 0.0 <= self.controls.brake <= 1.0:
-            raise ValueError("Telemetry brake must stay in [0,1].")
-        if not math.isfinite(self.progress_fraction) or not 0.0 <= self.progress_fraction <= 1.0:
-            raise ValueError("Telemetry progress must stay in [0,1].")
-        if len(self.sensor_distances) != len(SENSOR_ANGLES) or any(
-            not math.isfinite(distance) or not 0.0 <= distance <= SENSOR_RANGE
-            for distance in self.sensor_distances
-        ):
-            raise ValueError("Telemetry sensors must contain seven distances in range.")
-
     def to_payload(self) -> dict[str, object]:
         """Serialize telemetry for the TypeScript observer UI."""
         return {
@@ -224,21 +205,6 @@ class EpisodeResult:
     telemetry: tuple[TelemetrySnapshot, ...]
     trace: tuple[TracePose, ...] = ()
 
-    def to_payload(self) -> dict[str, object]:
-        """Serialize a compact baseline or preview result."""
-        selected = self.telemetry[-1]
-        return {
-            "controller": self.controller,
-            "termination": self.termination,
-            "finished": self.finished,
-            "steps": self.steps,
-            "simulatedSeconds": rounded(self.simulated_seconds),
-            "progress": rounded(self.progress_fraction),
-            "collisionCount": self.collision_count,
-            "vehicleSetup": self.setup.to_payload(),
-            "selectedCar": selected.to_payload(),
-        }
-
 
 class Controller(Protocol):
     """Episode controller whose parameters must remain immutable."""
@@ -263,17 +229,6 @@ class TrackGeometry:
         road_width: float,
         spawn: VehicleState,
     ) -> None:
-        if len(centerline) < 3 or centerline[0] != centerline[-1]:
-            raise ValueError("Simulation centerline must be a closed loop.")
-        if (
-            not isinstance(road_width, (int, float))
-            or isinstance(road_width, bool)
-            or not math.isfinite(float(road_width))
-            or road_width <= 0.0
-        ):
-            raise ValueError("Simulation road width must be finite and positive.")
-        if any(len(boundary) < 2 for boundary in (left_boundary, right_boundary)):
-            raise ValueError("Simulation boundaries must contain line segments.")
         self.centerline = centerline
         self.boundaries = (left_boundary, right_boundary)
         self.road_width = road_width
@@ -284,8 +239,6 @@ class TrackGeometry:
             segment_x = end[0] - start[0]
             segment_y = end[1] - start[1]
             length_squared = segment_x * segment_x + segment_y * segment_y
-            if length_squared <= 0.0:
-                raise ValueError("Simulation centerline cannot contain zero-length segments.")
             cumulative.append(cumulative[-1] + math.dist(start, end))
             centerline_segments.append(
                 (
@@ -318,42 +271,21 @@ class TrackGeometry:
 
     @classmethod
     def from_compiled(cls, compiled: dict[str, object]) -> TrackGeometry:
-        """Build from Python-owned compiler output."""
-        geometry_value = compiled.get("geometry")
-        track_value = compiled.get("track")
-        if not isinstance(geometry_value, dict) or not isinstance(track_value, dict):
-            raise ValueError("Compiled track geometry is missing.")
-        centerline_value = geometry_value.get("centerline")
-        left_boundary_value = geometry_value.get("leftBoundary")
-        right_boundary_value = geometry_value.get("rightBoundary")
-        spawn_value = geometry_value.get("spawnPose")
-        road_width_value = track_value.get("roadWidth")
-        if (
-            not isinstance(centerline_value, list)
-            or not isinstance(left_boundary_value, list)
-            or not isinstance(right_boundary_value, list)
-            or not isinstance(spawn_value, dict)
-            or not isinstance(road_width_value, (int, float))
-            or isinstance(road_width_value, bool)
-        ):
-            raise ValueError("Compiled track geometry has an invalid shape.")
-        centerline = tuple(_parse_point(point) for point in centerline_value)
-        left_boundary = tuple(_parse_point(point) for point in left_boundary_value)
-        right_boundary = tuple(_parse_point(point) for point in right_boundary_value)
-        x = finite_number(spawn_value.get("x"), "spawnPose.x")
-        y = finite_number(spawn_value.get("y"), "spawnPose.y")
-        heading = finite_number(spawn_value.get("heading"), "spawnPose.heading")
+        """Build from Python-owned compiler output, which is already validated."""
+        geometry = cast("dict[str, Any]", compiled["geometry"])
+        track = cast("dict[str, Any]", compiled["track"])
+        spawn = geometry["spawnPose"]
         return cls(
-            centerline=centerline,
-            left_boundary=left_boundary,
-            right_boundary=right_boundary,
-            road_width=float(road_width_value),
-            spawn=VehicleState(x=x, y=y, heading=heading),
+            centerline=tuple((float(x), float(y)) for x, y in geometry["centerline"]),
+            left_boundary=tuple((float(x), float(y)) for x, y in geometry["leftBoundary"]),
+            right_boundary=tuple((float(x), float(y)) for x, y in geometry["rightBoundary"]),
+            road_width=float(track["roadWidth"]),
+            spawn=VehicleState(x=spawn["x"], y=spawn["y"], heading=spawn["heading"]),
         )
 
     def project(self, point: Point) -> TrackProjection:
         """Project a point onto the closest closed centerline segment."""
-        best_point: Point | None = None
+        best_point = self.centerline[0]
         best_distance_squared = math.inf
         best_path_distance = 0.0
         best_tangent_heading = 0.0
@@ -366,8 +298,6 @@ class TrackGeometry:
             segment_length,
             tangent_heading,
         ) in enumerate(self.centerline_segments):
-            if length_squared == 0.0:
-                continue
             offset_x = point[0] - start_x
             offset_y = point[1] - start_y
             along = clamp(
@@ -384,8 +314,6 @@ class TrackGeometry:
                 best_distance_squared = distance_squared
                 best_path_distance = self.cumulative_distances[index] + segment_length * along
                 best_tangent_heading = tangent_heading
-        if best_point is None:
-            raise ValueError("Track contains no usable centerline segment.")
         return TrackProjection(
             point=best_point,
             distance=math.sqrt(best_distance_squared),
@@ -399,10 +327,7 @@ class TrackGeometry:
         for index, end_distance in enumerate(self.cumulative_distances[1:]):
             if wrapped <= end_distance:
                 start_distance = self.cumulative_distances[index]
-                segment_length = end_distance - start_distance
-                amount = (
-                    0.0 if segment_length == 0.0 else (wrapped - start_distance) / segment_length
-                )
+                amount = (wrapped - start_distance) / (end_distance - start_distance)
                 start = self.centerline[index]
                 end = self.centerline[index + 1]
                 return (
@@ -504,8 +429,8 @@ class TrackGeometry:
 class PurePursuitBaseline:
     """Lookahead path tracker based on Coulter's Pure Pursuit method."""
 
-    def __init__(self, lookahead_base: float = 5.0, lookahead_speed_gain: float = 0.3) -> None:
-        self._parameters: tuple[float, ...] = (lookahead_base, lookahead_speed_gain)
+    def __init__(self) -> None:
+        self._parameters: tuple[float, ...] = (5.0, 0.3)  # lookahead base (m), speed gain (s)
 
     @property
     def name(self) -> str:
@@ -522,7 +447,7 @@ class PurePursuitBaseline:
             target[1] - observation.state.y,
             target[0] - observation.state.x,
         )
-        heading_error = _signed_heading_delta(target_heading, observation.state.heading)
+        heading_error = signed_heading_delta(target_heading, observation.state.heading)
         steering = clamp(heading_error * 1.8, -1.0, 1.0)
         corner = abs(steering)
         target_speed = 10.0 + 18.0 * (1.0 - corner) ** 2
@@ -561,7 +486,7 @@ class SetupAwarePurePursuit(PurePursuitBaseline):
         speed = observation.state.forward_speed
         progress = observation.progress_distance
         target = geometry.point_at(progress + 5.0 + 0.3 * speed)
-        heading_error = _signed_heading_delta(
+        heading_error = signed_heading_delta(
             math.atan2(target[1] - observation.state.y, target[0] - observation.state.x),
             observation.state.heading,
         )
@@ -578,7 +503,7 @@ class SetupAwarePurePursuit(PurePursuitBaseline):
         while ahead < horizon:
             following = geometry.point_at(progress + ahead + 2.0 * sample)
             next_heading = math.atan2(following[1] - current[1], following[0] - current[0])
-            curvature = abs(_signed_heading_delta(next_heading, heading)) / sample
+            curvature = abs(signed_heading_delta(next_heading, heading)) / sample
             if curvature > 1e-4:
                 corner = max(2.5, self._corner_speed(curvature))
                 limit = min(limit, math.sqrt(corner * corner + 2.0 * braking * ahead))
@@ -644,12 +569,10 @@ def step_physics(
     setup: VehicleSetup,
     geometry: TrackGeometry,
     *,
-    dt: float = FIXED_TIME_STEP,
     current_projection: TrackProjection | None = None,
 ) -> StepResult:
     """Advance exactly one fixed arcade-physics step."""
-    if dt != FIXED_TIME_STEP:
-        raise ValueError("Physics accepts only the fixed 1/60 s step.")
+    dt = FIXED_TIME_STEP
     controls = controls.clamped()
     steering = _move_toward(state.steering, controls.steering, STEERING_SLEW_PER_SECOND * dt)
 
@@ -732,24 +655,6 @@ def evaluate_episode(
     ``trace_interval_steps`` records a dense presentation-only pose trace. It
     reads the state after each step and never feeds anything back.
     """
-    if (
-        not isinstance(max_seconds, (int, float))
-        or isinstance(max_seconds, bool)
-        or not math.isfinite(float(max_seconds))
-    ):
-        raise ValueError("max_seconds must be a finite number.")
-    if (
-        not isinstance(telemetry_interval_steps, int)
-        or isinstance(telemetry_interval_steps, bool)
-        or telemetry_interval_steps <= 0
-    ):
-        raise ValueError("telemetry_interval_steps must be a positive integer.")
-    if trace_interval_steps is not None and (
-        not isinstance(trace_interval_steps, int)
-        or isinstance(trace_interval_steps, bool)
-        or trace_interval_steps <= 0
-    ):
-        raise ValueError("trace_interval_steps must be a positive integer.")
     max_steps = episode_step_limit(max_seconds)
     if max_steps <= 0:
         raise ValueError("max_seconds must include at least one fixed step.")
@@ -771,13 +676,26 @@ def evaluate_episode(
     termination = "timeout"
     steps = 0
 
+    def record_telemetry() -> None:
+        snapshot = TelemetrySnapshot(
+            selected_car_id=selected_car_id,
+            simulated_seconds=steps * FIXED_TIME_STEP,
+            state=state,
+            controls=controls,
+            progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
+            sensor_distances=geometry.sensor_distances(state),
+        )
+        telemetry.append(snapshot)
+        if telemetry_callback is not None:
+            telemetry_callback(snapshot)
+
     for step_index in range(max_steps):
         sensors = geometry.sensor_distances(state)
         observation = Observation(
             state=state,
             progress_distance=projection.path_distance,
             progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
-            heading_error=_signed_heading_delta(projection.tangent_heading, state.heading),
+            heading_error=signed_heading_delta(projection.tangent_heading, state.heading),
             sensor_distances=sensors,
         )
         controls = controller.control(observation, geometry).clamped()
@@ -815,17 +733,7 @@ def evaluate_episode(
             )
 
         if step_index % telemetry_interval_steps == 0 or result.collided:
-            snapshot = TelemetrySnapshot(
-                selected_car_id=selected_car_id,
-                simulated_seconds=steps * FIXED_TIME_STEP,
-                state=state,
-                controls=controls,
-                progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
-                sensor_distances=geometry.sensor_distances(state),
-            )
-            telemetry.append(snapshot)
-            if telemetry_callback is not None:
-                telemetry_callback(snapshot)
+            record_telemetry()
 
         if result.collided:
             collision_count += 1
@@ -836,17 +744,7 @@ def evaluate_episode(
             break
 
     if not telemetry or telemetry[-1].simulated_seconds != steps * FIXED_TIME_STEP:
-        snapshot = TelemetrySnapshot(
-            selected_car_id=selected_car_id,
-            simulated_seconds=steps * FIXED_TIME_STEP,
-            state=state,
-            controls=controls,
-            progress_fraction=clamp(best_progress / geometry.length, 0.0, 1.0),
-            sensor_distances=geometry.sensor_distances(state),
-        )
-        telemetry.append(snapshot)
-        if telemetry_callback is not None:
-            telemetry_callback(snapshot)
+        record_telemetry()
 
     return EpisodeResult(
         controller=controller.name,
@@ -871,17 +769,7 @@ def preset_geometry(track_id: str) -> TrackGeometry:
     return TrackGeometry.from_compiled(compile_track_payload(track.to_payload()))
 
 
-def _parse_point(value: object) -> Point:
-    if not isinstance(value, list) or len(value) != 2:
-        raise ValueError("Geometry point must contain two numbers.")
-    return (finite_number(value[0], "point.x"), finite_number(value[1], "point.y"))
-
-
 def _move_toward(value: float, target: float, maximum_delta: float) -> float:
     if abs(target - value) <= maximum_delta:
         return target
     return value + math.copysign(maximum_delta, target - value)
-
-
-def _signed_heading_delta(heading: float, target: float) -> float:
-    return (heading - target + math.pi) % (2.0 * math.pi) - math.pi

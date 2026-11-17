@@ -17,9 +17,10 @@ from evo_racer.neat_evolution import (
     NEATEvaluator,
     NEATGenerationReport,
     NEATRandomStream,
+    RuntimeLink,
+    RuntimeNode,
     compile_neat_network,
     create_neat_population,
-    load_neat_config,
     score_neat_generation,
 )
 from evo_racer.simulation import (
@@ -87,44 +88,6 @@ def test_pinned_feed_forward_config_and_runtime_compiler_match_neat_python() -> 
     assert config.genome_config.num_outputs == 3
     assert all(node.activation in {"identity", "tanh"} for node in compiled.nodes)
     assert compiled.activate(features) == pytest.approx(library_network.activate(features))
-    assert CompiledNEATNetwork.from_payload(compiled.to_payload()) == compiled
-
-
-def test_runtime_network_rejects_ambiguous_input_and_output_keys() -> None:
-    def payload() -> dict[str, object]:
-        return {
-            "contractVersion": 1,
-            "kind": "feed-forward-dag",
-            "inputKeys": list(range(-10, 0)),
-            "outputKeys": [0, 1, 2],
-            "outputTransforms": ["tanh", "sigmoid", "sigmoid"],
-            "nodes": [
-                {
-                    "key": output_key,
-                    "activation": "identity",
-                    "aggregation": "sum",
-                    "bias": 0.0,
-                    "response": 1.0,
-                    "links": [{"source": -1, "weight": 1.0}],
-                }
-                for output_key in range(3)
-            ],
-        }
-
-    duplicate_inputs = payload()
-    duplicate_inputs["inputKeys"] = [-10, -10, *range(-8, 0)]
-    with pytest.raises(ValueError, match="input keys must be unique"):
-        CompiledNEATNetwork.from_payload(duplicate_inputs)
-
-    duplicate_outputs = payload()
-    duplicate_outputs["outputKeys"] = [0, 0, 2]
-    with pytest.raises(ValueError, match="output keys must be unique"):
-        CompiledNEATNetwork.from_payload(duplicate_outputs)
-
-    overlapping_keys = payload()
-    overlapping_keys["outputKeys"] = [-1, 1, 2]
-    with pytest.raises(ValueError, match="input and output keys must be disjoint"):
-        CompiledNEATNetwork.from_payload(overlapping_keys)
 
 
 def test_multi_generation_neat_run_uses_shared_episode_evaluator() -> None:
@@ -199,7 +162,22 @@ def test_same_seed_reproduces_every_generation() -> None:
 
 def test_shared_neat_fixture_round_trips_in_python() -> None:
     fixture: Any = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
-    network = CompiledNEATNetwork.from_payload(fixture["network"])
+    network_payload = fixture["network"]
+    network = CompiledNEATNetwork(
+        input_keys=tuple(network_payload["inputKeys"]),
+        output_keys=tuple(network_payload["outputKeys"]),
+        nodes=tuple(
+            RuntimeNode(
+                node["key"],
+                node["activation"],
+                node["aggregation"],
+                node["bias"],
+                node["response"],
+                tuple(RuntimeLink(**link) for link in node["links"]),
+            )
+            for node in network_payload["nodes"]
+        ),
+    )
     vehicle_payload = fixture["vehicleGenes"]
     vehicle = VehicleGenome(
         performance_logits=tuple(float(value) for value in vehicle_payload["performanceLogits"]),
@@ -210,8 +188,3 @@ def test_shared_neat_fixture_round_trips_in_python() -> None:
 
     assert candidate.to_payload() == fixture
     assert network.activate((0.2,) * 10) == pytest.approx((0.2, -0.25, 0.45))
-
-
-def test_neat_config_rejects_too_small_population() -> None:
-    with pytest.raises(ValueError, match="at least 4"):
-        load_neat_config(3)

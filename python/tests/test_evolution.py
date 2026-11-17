@@ -76,10 +76,9 @@ def _run(
     return reports
 
 
-def test_feed_forward_network_round_trips_and_has_bounded_controls() -> None:
+def test_feed_forward_network_has_bounded_controls() -> None:
     network = FeedForwardNetwork(tuple(0.01 * index for index in range(NETWORK_PARAMETER_COUNT)))
-    restored = FeedForwardNetwork.from_payload(network.to_payload())
-    controller = FeedForwardController(restored, "fixture")
+    controller = FeedForwardController(network, "fixture")
     geometry = preset_geometry("easy-oval")
     baseline = evaluate_episode(
         geometry,
@@ -97,7 +96,6 @@ def test_feed_forward_network_round_trips_and_has_bounded_controls() -> None:
         )
     )
 
-    assert restored == network
     assert controller.parameters == network.parameters
     assert -1.0 <= controls.steering <= 1.0
     assert 0.0 <= controls.throttle <= 1.0
@@ -252,7 +250,9 @@ def test_controlled_training_improves_median_and_beats_random_same_vehicle() -> 
 def test_shared_fixed_ga_fixture_round_trips_in_python() -> None:
     fixture: object = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     assert isinstance(fixture, dict)
-    network = FeedForwardNetwork.from_payload(fixture["network"])
+    network_payload = fixture["network"]
+    assert isinstance(network_payload, dict)
+    network = FeedForwardNetwork(tuple(network_payload["parameters"]))
     vehicle_payload = fixture["vehicleGenes"]
     assert isinstance(vehicle_payload, dict)
     logits = vehicle_payload["performanceLogits"]

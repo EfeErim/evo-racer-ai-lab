@@ -1,4 +1,4 @@
-import type { GenerationTrail } from "./generation-trails";
+import type { GenerationTrail } from "./run-presentation";
 import {
   type AppAction,
   type AppState,

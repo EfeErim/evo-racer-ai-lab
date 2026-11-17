@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from typing import Final
 
-from evo_racer.tracks import TrackValidationError, compile_track_payload
+from evo_racer.tracks import PRESET_TRACKS, TrackValidationError, compile_track_payload
 
 CONTRACT_VERSION: Final = 1
-TRACK_PRESETS: Final = frozenset({"easy-oval", "technical-circuit", "chicane-challenge"})
+TRACK_PRESETS: Final = frozenset(track.track_id for track in PRESET_TRACKS)
 ALGORITHMS: Final = frozenset({"fixed-ga", "neat"})
 INTEGER_RANGES: Final = {
     "populationSize": (10, 500),

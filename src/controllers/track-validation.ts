@@ -1,10 +1,9 @@
 import type { AppContext } from "../app-store";
 import { assistTrackClosure, compileTrack } from "../ipc";
-import type { TrackBuilderPending } from "../track-builder";
+import { withEditorTrack, type TrackBuilderPending } from "../track-builder";
 import {
   editorTrack,
   parseTrackDocument,
-  replaceEditorTrack,
   type TrackCommandResponse,
 } from "../track-workbench";
 
@@ -133,18 +132,12 @@ export function createTrackValidation(
     }
     if (response.valid && response.compiled !== undefined) {
       store.trackWorkspace = {
-        ...store.trackWorkspace,
-        pending: null,
-        editor: replaceEditorTrack(
-          store.trackWorkspace.editor,
-          response.compiled.track,
+        ...withEditorTrack(
+          store.trackWorkspace,
+          response.compiled,
+          closureRepairMessage(response),
         ),
-        editorPreview: response.compiled,
-        editorValidation: { status: "valid", errors: [] },
-        notice: {
-          tone: "success",
-          message: closureRepairMessage(response),
-        },
+        pending: null,
       };
     } else {
       store.trackWorkspace = {
@@ -201,20 +194,13 @@ export function createTrackValidation(
         return;
       }
       store.trackWorkspace = {
-        ...store.trackWorkspace,
+        ...withEditorTrack(
+          store.trackWorkspace,
+          response.compiled,
+          "Imported track checked and loaded into the editor.",
+        ),
         pending: null,
         toolsOpen: true,
-        tab: "build",
-        editor: replaceEditorTrack(
-          store.trackWorkspace.editor,
-          response.compiled.track,
-        ),
-        editorPreview: response.compiled,
-        editorValidation: { status: "valid", errors: [] },
-        notice: {
-          tone: "success",
-          message: "Imported track checked and loaded into the editor.",
-        },
       };
       render();
     } catch (error) {

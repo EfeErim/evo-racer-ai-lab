@@ -1,4 +1,4 @@
-import type { ObservationSnapshotV1 } from "./contracts";
+import type { GenerationTrailV1, ObservationSnapshotV1 } from "./contracts";
 
 export interface RunProgressPresentation {
   fraction: number;
@@ -190,4 +190,25 @@ export function runCompletion(
     title: "Run stopped",
     message: `Stopped after ${String(snapshot.generation)} of ${String(snapshot.totalGenerations)} generations. Results cover the finished generations.`,
   };
+}
+
+const MAX_VISIBLE_PRIOR_TRAILS = 7;
+
+export type GenerationTrail = GenerationTrailV1;
+
+export function updateGenerationTrails(
+  snapshot: ObservationSnapshotV1,
+): GenerationTrail[] {
+  return snapshot.generationTrails.filter(
+    (trail) => trail.runId === snapshot.runId,
+  );
+}
+
+export function priorGenerationTrails(
+  trails: readonly GenerationTrail[],
+  currentCandidateId: string | undefined,
+): GenerationTrail[] {
+  return trails
+    .filter((trail) => trail.candidateId !== currentCandidateId)
+    .slice(-MAX_VISIBLE_PRIOR_TRAILS);
 }

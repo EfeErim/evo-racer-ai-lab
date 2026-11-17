@@ -1,35 +1,14 @@
-import {
-  parseCompiledTrack,
-  type CompiledTrackV1,
-  type TrackPieceV1,
-  type TrackV1,
-} from "./track-renderer";
-
-export const SEGMENT_CATALOGUE = [
-  "start-finish",
-  "straight-short",
-  "straight-long",
-  "turn-left-45",
-  "turn-right-45",
-  "turn-left-90",
-  "turn-right-90",
-  "hairpin-left",
-  "hairpin-right",
-  "chicane-left",
-  "chicane-right",
-] as const;
-
-export type SegmentKind = (typeof SEGMENT_CATALOGUE)[number];
+import type { CompiledTrackV1, TrackPieceV1, TrackV1 } from "./track-renderer";
 
 export interface SegmentDefinition {
-  kind: SegmentKind;
+  kind: string;
   label: string;
   description: string;
   symbol: string;
   group: "Straight" | "Corner" | "Technical";
 }
 
-export const SEGMENT_DEFINITIONS: readonly SegmentDefinition[] = [
+export const SEGMENT_DEFINITIONS = [
   {
     kind: "start-finish",
     label: "Start / finish",
@@ -107,7 +86,9 @@ export const SEGMENT_DEFINITIONS: readonly SegmentDefinition[] = [
     symbol: "R⌁",
     group: "Technical",
   },
-] as const;
+] as const satisfies readonly SegmentDefinition[];
+
+export type SegmentKind = (typeof SEGMENT_DEFINITIONS)[number]["kind"];
 
 export interface EditorSnapshot {
   id: string;
@@ -144,13 +125,6 @@ export function createEditorState(trackId = "custom-track"): EditorState {
     past: [],
     future: [],
   };
-}
-
-export function addEditorPiece(
-  state: EditorState,
-  kind: SegmentKind,
-): EditorState {
-  return insertEditorPiece(state, kind, state.present.pieces.length);
 }
 
 export function insertEditorPiece(
@@ -199,24 +173,12 @@ export function moveEditorPiece(
   index: number,
   direction: -1 | 1,
 ): EditorState {
-  const destination = index + direction;
-  if (
-    index <= 0 ||
-    index >= state.present.pieces.length ||
-    destination <= 0 ||
-    destination >= state.present.pieces.length
-  ) {
-    return state;
-  }
-  const pieces = state.present.pieces.map((piece) => ({ ...piece }));
-  const source = pieces[index];
-  const target = pieces[destination];
-  if (source === undefined || target === undefined) {
-    return state;
-  }
-  pieces[index] = target;
-  pieces[destination] = source;
-  return commit(state, { ...state.present, pieces });
+  // Moving down inserts after the next piece, so the insertion index skips it.
+  return moveEditorPieceToIndex(
+    state,
+    index,
+    direction === 1 ? index + 2 : index - 1,
+  );
 }
 
 export function moveEditorPieceToIndex(
@@ -383,183 +345,6 @@ export interface TrackLibraryResponse {
   contractVersion: 1;
   tracks: CompiledTrackV1[];
   isolated: { record: string; code: string; message: string }[];
-}
-
-export function parseTrackCommandResponse(
-  value: unknown,
-  label: string,
-): TrackCommandResponse {
-  if (
-    !isRecord(value) ||
-    value.contractVersion !== 1 ||
-    typeof value.valid !== "boolean"
-  ) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  const errors = parseTrackIssues(value.errors, label);
-  if (value.valid !== (errors.length === 0)) {
-    throw new Error(`${label} returned an inconsistent response.`);
-  }
-  const compiled =
-    value.compiled === undefined
-      ? undefined
-      : parseCompiledTrack(value.compiled, label);
-  const preview =
-    value.preview === undefined
-      ? undefined
-      : parseCompiledTrack(value.preview, label);
-  if (value.valid && compiled === undefined) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  const addedPieces = optionalStringArray(value.addedPieces, label);
-  const removedPieces = optionalNonNegativeInteger(value.removedPieces, label);
-  const candidateCount = optionalNonNegativeInteger(
-    value.candidateCount,
-    label,
-  );
-  const generatorVersion = optionalNonNegativeInteger(
-    value.generatorVersion,
-    label,
-  );
-  const features = parseGeneratedTrackFeatures(value.features, label);
-  return {
-    contractVersion: 1,
-    valid: value.valid,
-    errors,
-    ...(compiled === undefined ? {} : { compiled }),
-    ...(preview === undefined ? {} : { preview }),
-    ...(addedPieces === undefined ? {} : { addedPieces }),
-    ...(removedPieces === undefined ? {} : { removedPieces }),
-    ...(candidateCount === undefined ? {} : { candidateCount }),
-    ...(generatorVersion === undefined ? {} : { generatorVersion }),
-    ...(features === undefined ? {} : { features }),
-  };
-}
-
-export function parseTrackLibraryResponse(
-  value: unknown,
-): TrackLibraryResponse {
-  const label = "Track library";
-  if (
-    !isRecord(value) ||
-    value.contractVersion !== 1 ||
-    !Array.isArray(value.tracks) ||
-    !Array.isArray(value.isolated)
-  ) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return {
-    contractVersion: 1,
-    tracks: value.tracks.map((track) => parseCompiledTrack(track, label)),
-    isolated: value.isolated.map((item) => {
-      if (
-        !isRecord(item) ||
-        typeof item.record !== "string" ||
-        typeof item.code !== "string" ||
-        typeof item.message !== "string"
-      ) {
-        throw new Error(`${label} returned an invalid response.`);
-      }
-      return {
-        record: item.record,
-        code: item.code,
-        message: item.message,
-      };
-    }),
-  };
-}
-
-function parseTrackIssues(
-  value: unknown,
-  label: string,
-): TrackCommandResponse["errors"] {
-  if (!Array.isArray(value)) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return value.map((issue) => {
-    if (
-      !isRecord(issue) ||
-      typeof issue.code !== "string" ||
-      typeof issue.field !== "string" ||
-      typeof issue.message !== "string"
-    ) {
-      throw new Error(`${label} returned an invalid response.`);
-    }
-    return {
-      code: issue.code,
-      field: issue.field,
-      message: issue.message,
-    };
-  });
-}
-
-function optionalStringArray(
-  value: unknown,
-  label: string,
-): string[] | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (
-    !Array.isArray(value) ||
-    !value.every((item) => typeof item === "string")
-  ) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return value;
-}
-
-function optionalNonNegativeInteger(
-  value: unknown,
-  label: string,
-): number | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (!Number.isInteger(value) || (value as number) < 0) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return value as number;
-}
-
-function parseGeneratedTrackFeatures(
-  value: unknown,
-  label: string,
-): GeneratedTrackFeatures | undefined {
-  if (value === undefined) {
-    return undefined;
-  }
-  if (
-    !isRecord(value) ||
-    (value.layout !== "asymmetric" && value.layout !== "balanced")
-  ) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  const straightCount = optionalNonNegativeInteger(value.straightCount, label);
-  const cornerCount = optionalNonNegativeInteger(value.cornerCount, label);
-  const chicaneCount = optionalNonNegativeInteger(value.chicaneCount, label);
-  const hairpinCount = optionalNonNegativeInteger(value.hairpinCount, label);
-  const directionChanges = optionalNonNegativeInteger(
-    value.directionChanges,
-    label,
-  );
-  if (
-    straightCount === undefined ||
-    cornerCount === undefined ||
-    chicaneCount === undefined ||
-    hairpinCount === undefined ||
-    directionChanges === undefined
-  ) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return {
-    layout: value.layout,
-    straightCount,
-    cornerCount,
-    chicaneCount,
-    hairpinCount,
-    directionChanges,
-  };
 }
 
 function commit(state: EditorState, next: EditorSnapshot): EditorState {

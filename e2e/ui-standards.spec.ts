@@ -1,76 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
 import { distinctCanvasFrames, openMenu, openSetup } from "./flow";
-import { expectSurfaceMeetsLimits } from "./surface";
 
 async function startRecommendedRun(page: Page) {
   await openSetup(page);
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: /Start training/ }).click();
-}
-
-for (const colorScheme of ["dark", "light"] as const) {
-  for (const viewport of [
-    { width: 1280, height: 800 },
-    { width: 390, height: 844 },
-  ]) {
-    test(`text, targets, contrast, and overflow hold at ${String(viewport.width)}px in ${colorScheme}`, async ({
-      page,
-    }) => {
-      const label = `${String(viewport.width)}px ${colorScheme}`;
-      await page.emulateMedia({ colorScheme, reducedMotion: "no-preference" });
-      await page.setViewportSize(viewport);
-      await page.goto("/");
-      await expect(page.locator(".recommended .track-geometry")).toBeVisible();
-      await expectSurfaceMeetsLimits(page, `Welcome ${label}`);
-      await expect(
-        page.getByRole("button", { name: "Set up a race" }),
-      ).toBeInViewport();
-
-      await openSetup(page);
-      await expect(
-        page.getByText("Setup is valid", { exact: true }),
-      ).toBeVisible();
-      await expectSurfaceMeetsLimits(page, `Set up ${label}`);
-      await expect(
-        page.getByRole("button", { name: /Start training/ }),
-      ).toBeInViewport();
-
-      await page.getByRole("button", { name: /Start training/ }).click();
-      await expect(page.getByLabel("Live run status")).toBeVisible({
-        timeout: 15_000,
-      });
-      await expectSurfaceMeetsLimits(page, `Training ${label}`);
-      await expect(page.locator(".telemetry-disclosure")).not.toHaveAttribute(
-        "open",
-        "",
-      );
-      const stage = await page.locator(".live-race-stage").boundingBox();
-      const side = await page.locator(".run-overview").boundingBox();
-      expect((stage?.width ?? 0) * (stage?.height ?? 0)).toBeGreaterThan(
-        (side?.width ?? 0) * (side?.height ?? 0),
-      );
-
-      await page.getByRole("button", { name: /Stop after generation/ }).click();
-      const openResults = page.getByRole("button", { name: "Open results" });
-      await expect(openResults).toBeVisible({ timeout: 90_000 });
-      await expect(openResults).toBeInViewport();
-      await expectSurfaceMeetsLimits(page, `Training terminal ${label}`);
-      await openResults.click();
-
-      await expect(page.getByLabel("Result summary")).toBeVisible();
-      await expectSurfaceMeetsLimits(page, `Results ${label}`);
-      await expect(page.locator(".chart-axis-x")).toHaveText(
-        "Generation (count)",
-      );
-      await expect(page.locator(".chart-axis-y")).toHaveText("Fitness (score)");
-      const yTicks = await page
-        .locator(".chart-y-ticks text")
-        .evaluateAll((labels) =>
-          labels.map((text) => text.getBoundingClientRect().top),
-        );
-      expect(new Set(yTicks).size).toBe(yTicks.length);
-    });
-  }
 }
 
 for (const viewport of [

@@ -5,14 +5,14 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $repoRoot
 
 try {
-    $documents = git ls-files --cached --exclude-standard -- "*.md" "package.json" | Where-Object { $_ -notlike "docs/prompts/*" }
+    $documents = git ls-files --cached --exclude-standard -- "*.md" "package.json" | Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) }
     $dangling = [System.Collections.Generic.List[string]]::new()
 
     foreach ($document in $documents) {
         $content = [System.IO.File]::ReadAllText((Join-Path $repoRoot $document))
         $directory = Split-Path -Parent $document
 
-        foreach ($match in [regex]::Matches($content, '(?<![\w/.-])docs/(?!prompts/)[A-Za-z0-9._/-]+\.md')) {
+        foreach ($match in [regex]::Matches($content, '(?<![\w/.-])docs/[A-Za-z0-9._/-]+\.md')) {
             if (-not (Test-Path -LiteralPath (Join-Path $repoRoot $match.Value))) {
                 $dangling.Add("${document}: $($match.Value)")
             }

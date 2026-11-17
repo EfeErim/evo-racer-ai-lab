@@ -396,6 +396,14 @@ test("recommended offline run reaches results without starting automatically", a
   await initialRunLibraryFinished;
   await page.waitForTimeout(100);
   await page.getByRole("button", { name: /Open results/ }).click();
+  await expect(page.locator(".chart-axis-x")).toHaveText("Generation (count)");
+  await expect(page.locator(".chart-axis-y")).toHaveText("Fitness (score)");
+  const yTicks = await page
+    .locator(".chart-y-ticks text")
+    .evaluateAll((labels) =>
+      labels.map((text) => text.getBoundingClientRect().top),
+    );
+  expect(new Set(yTicks).size).toBe(yTicks.length);
 
   await expect(
     page.getByRole("heading", { name: /got better|Too early/ }),
@@ -490,30 +498,18 @@ test("recommended offline run reaches results without starting automatically", a
     async (route) => {
       const response = await route.fetch();
       const body = (await response.json()) as {
-        run: {
-          checkpoint: {
-            snapshot: {
-              result: {
-                replay: { frames: { simulatedSeconds: number }[] };
-              };
-            };
-          };
-        };
+        run: { schemaVersion: number };
       };
-      const frames = body.run.checkpoint.snapshot.result.replay.frames;
-      const firstFrame = frames[0];
-      const secondFrame = frames[1];
-      if (firstFrame === undefined || secondFrame === undefined) {
-        throw new Error("Saved replay requires two frames for this test.");
-      }
-      secondFrame.simulatedSeconds = firstFrame.simulatedSeconds;
+      body.run.schemaVersion = 99;
       await route.fulfill({ response, body: JSON.stringify(body) });
     },
     { times: 1 },
   );
   await page.getByRole("button", { name: "Open results" }).first().click();
   await expect(
-    page.getByText("Run replay frame times must be strictly increasing."),
+    page.getByText(
+      "Run document has an unsupported version or invalid envelope.",
+    ),
   ).toBeVisible();
   await expect(page.getByRole("table")).toBeVisible();
   await expect(

@@ -23,20 +23,11 @@ class RunRecordError(ValueError):
     """Raised when one local run document cannot satisfy the versioned schema."""
 
 
-def _require_current_physics(snapshot: dict[str, object]) -> None:
-    """Saved runs replay deterministically only under the physics that recorded them."""
-    if snapshot.get("simulationContractVersion") != SIMULATION_CONTRACT_VERSION:
-        raise RunRecordError("The checkpoint was recorded under different physics.")
-
-
 def checkpoint_sha256(snapshot: object) -> str:
     """Return the stable digest stored beside a resumable observation boundary."""
     try:
         encoded = json.dumps(
-            snapshot,
-            allow_nan=False,
-            separators=(",", ":"),
-            sort_keys=True,
+            snapshot, allow_nan=False, separators=(",", ":"), sort_keys=True
         ).encode("utf-8")
     except (TypeError, ValueError) as exc:
         raise RunRecordError(
@@ -55,7 +46,6 @@ def save_run_document(document: object, data_root: Path | None = None) -> dict[s
     serialized = json.dumps(validated, allow_nan=False, indent=2, sort_keys=True) + "\n"
 
     write_text_atomically(destination, serialized, ".run-")
-
     return validated
 
 
@@ -162,10 +152,8 @@ def validate_run_document(payload: object) -> dict[str, object]:
     if document.get("trackSchemaVersion") != TRACK_SCHEMA_VERSION:
         raise RunRecordError("Run trackSchemaVersion is unsupported.")
 
-    track = _object(document.get("track"), "track")
-    if track.get("schemaVersion") != TRACK_SCHEMA_VERSION:
-        raise RunRecordError("Embedded track schemaVersion is unsupported.")
-    compiled = compile_track_payload(track)
+    # The compiler rejects an unsupported embedded track schema with TrackValidationError.
+    compiled = compile_track_payload(_object(document.get("track"), "track"))
     canonical_track = _object(compiled.get("track"), "compiled track")
 
     settings = _settings(document.get("settings"))
@@ -175,7 +163,9 @@ def validate_run_document(payload: object) -> dict[str, object]:
     if status not in {"running", "paused", "stopped", "completed"}:
         raise RunRecordError("checkpoint.status is unsupported.")
     snapshot = _object(checkpoint.get("snapshot"), "checkpoint.snapshot")
-    _require_current_physics(snapshot)
+    # Saved runs replay deterministically only under the physics that recorded them.
+    if snapshot.get("simulationContractVersion") != SIMULATION_CONTRACT_VERSION:
+        raise RunRecordError("The checkpoint was recorded under different physics.")
     if checkpoint.get("sha256") != checkpoint_sha256(snapshot):
         raise RunRecordError("checkpoint.sha256 does not match the saved snapshot.")
     if snapshot.get("contractVersion") != 1 or snapshot.get("runId") != run_id:

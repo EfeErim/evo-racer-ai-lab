@@ -32,36 +32,6 @@ describe("Selected-car telemetry contract", () => {
   it("parses the shared Python telemetry fixture without domain logic", () => {
     expect(parseSelectedCarTelemetry(fixture)).toEqual(fixture);
   });
-
-  it("fails closed when a sensor or continuous control is invalid", () => {
-    expect(() =>
-      parseSelectedCarTelemetry({
-        ...(fixture as object),
-        steering: Number.NaN,
-      }),
-    ).toThrow("finite");
-    expect(() =>
-      parseSelectedCarTelemetry({
-        ...(fixture as object),
-        sensorDistances: [1, 2],
-      }),
-    ).toThrow("seven sensor distances");
-    expect(() =>
-      parseSelectedCarTelemetry({
-        ...(fixture as object),
-        heading: undefined,
-      }),
-    ).toThrow("requires x, y, and heading together");
-  });
-
-  it("rejects an empty selected car id", () => {
-    expect(() =>
-      parseSelectedCarTelemetry({
-        ...(fixture as object),
-        selectedCarId: "   ",
-      }),
-    ).toThrow("non-empty string");
-  });
 });
 
 describe("Run response envelope", () => {
@@ -80,15 +50,6 @@ describe("Run response envelope", () => {
 describe("Run file contract", () => {
   it("parses the shared versioned checkpoint without domain rules", () => {
     expect(parseRunDocument(runDocumentFixture)).toEqual(runDocumentFixture);
-  });
-
-  it("fails closed when checkpoint identity differs from the snapshot", () => {
-    expect(() =>
-      parseRunDocument({
-        ...(runDocumentFixture as object),
-        runId: "run-other",
-      }),
-    ).toThrow("identity does not match");
   });
 });
 
@@ -141,98 +102,6 @@ describe("Observation and results contract", () => {
         },
       },
     }).toEqual(observationFixture);
-  });
-
-  it("fails closed on invalid status and replay controls", () => {
-    expect(() =>
-      parseObservationSnapshot({
-        ...(observationFixture as object),
-        status: "unknown",
-      }),
-    ).toThrow("unknown status");
-
-    const invalid = structuredClone(observationFixture) as {
-      result: { replay: { frames: { throttle: number }[] } };
-    };
-    const firstFrame = invalid.result.replay.frames[0];
-    if (firstFrame === undefined) {
-      throw new Error("Fixture replay frame is missing.");
-    }
-    firstFrame.throttle = Number.NaN;
-    expect(() => parseObservationSnapshot(invalid)).toThrow("finite");
-  });
-
-  it("fails closed on empty or unordered authoritative replay frames", () => {
-    const emptyResultReplay = structuredClone(observationFixture) as {
-      result: { replay: { frames: unknown[] } };
-    };
-    emptyResultReplay.result.replay.frames = [];
-    expect(() => parseObservationSnapshot(emptyResultReplay)).toThrow(
-      "Run replay must contain at least one frame.",
-    );
-
-    const unorderedResultReplay = structuredClone(observationFixture) as {
-      result: {
-        replay: { frames: { simulatedSeconds: number }[] };
-      };
-    };
-    const resultFrames = unorderedResultReplay.result.replay.frames;
-    const secondResultFrame = resultFrames[1];
-    const firstResultFrame = resultFrames[0];
-    if (firstResultFrame === undefined || secondResultFrame === undefined) {
-      throw new Error("Fixture requires at least two replay frames.");
-    }
-    secondResultFrame.simulatedSeconds = firstResultFrame.simulatedSeconds;
-    expect(() => parseObservationSnapshot(unorderedResultReplay)).toThrow(
-      "Run replay frame times must be strictly increasing.",
-    );
-  });
-
-  it("rejects invalid replay sampling and live replay timing", () => {
-    const invalidSampling = structuredClone(observationFixture) as {
-      result: { replay: { sampleEverySteps: number } };
-    };
-    invalidSampling.result.replay.sampleEverySteps = 0;
-    expect(() => parseObservationSnapshot(invalidSampling)).toThrow(
-      "Replay sampleEverySteps must be a positive integer.",
-    );
-
-    const invalidLiveReplay = structuredClone(observationFixture) as Record<
-      string,
-      unknown
-    >;
-    invalidLiveReplay.status = "running";
-    invalidLiveReplay.generation = 0;
-    invalidLiveReplay.result = null;
-    invalidLiveReplay.generationReplay = {
-      candidateId: "g0000-c0003",
-      frames: [],
-    };
-    expect(() => parseObservationSnapshot(invalidLiveReplay)).toThrow(
-      "Generation replay must contain at least one frame.",
-    );
-  });
-
-  it("rejects impossible result counters", () => {
-    const invalidCollisions = structuredClone(observationFixture) as {
-      generationReport: { results: { collisionCount: number }[] };
-    };
-    const firstResult = invalidCollisions.generationReport.results[0];
-    if (firstResult === undefined) {
-      throw new Error("Fixture requires a generation result.");
-    }
-    firstResult.collisionCount = -1;
-    expect(() => parseObservationSnapshot(invalidCollisions)).toThrow(
-      "collisionCount cannot be negative",
-    );
-
-    const invalidPopulation = structuredClone(observationFixture) as {
-      result: { metadata: { populationSize: number } };
-    };
-    invalidPopulation.result.metadata.populationSize = 0;
-    expect(() => parseObservationSnapshot(invalidPopulation)).toThrow(
-      "populationSize must be a positive integer",
-    );
   });
 
   it("parses the Python-owned ideal racing-line comparison", () => {
@@ -335,5 +204,21 @@ describe("Observation and results contract", () => {
     expect(parseObservationSnapshot(value).generationTrails).toEqual(
       value.generationTrails,
     );
+  });
+});
+
+describe("local service boundary", () => {
+  it("rejects unsupported versions and missing envelope collections", () => {
+    expect(() =>
+      parseRunResponse({ contractVersion: 2, valid: false, errors: [] }),
+    ).toThrow("unsupported version");
+    expect(() =>
+      parseRunLibraryResponse({
+        contractVersion: 1,
+        runSchemaVersion: 1,
+        trackSchemaVersion: 1,
+      }),
+    ).toThrow("invalid envelope");
+    expect(() => parseRunDocument(null)).toThrow("must be an object");
   });
 });

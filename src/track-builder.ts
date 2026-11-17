@@ -8,6 +8,7 @@ import {
 import {
   SEGMENT_DEFINITIONS,
   createEditorState,
+  replaceEditorTrack,
   segmentDefinition,
   type EditorState,
   type GeneratedTrackFeatures,
@@ -79,6 +80,22 @@ export function createTrackWorkspaceState(
   };
 }
 
+/** Loads an already checked track into the piece editor. */
+export function withEditorTrack(
+  workspace: TrackWorkspaceState,
+  compiled: CompiledTrackV1,
+  message: string,
+): TrackWorkspaceState {
+  return {
+    ...workspace,
+    tab: "build",
+    editor: replaceEditorTrack(workspace.editor, compiled.track),
+    editorPreview: compiled,
+    editorValidation: { status: "valid", errors: [] },
+    notice: { tone: "success", message },
+  };
+}
+
 /**
  * Keep the builder's "active" track equal to the track the setup draft will
  * send at Start. When the draft falls back to a preset (New setup, the
@@ -101,7 +118,7 @@ export function syncSelectedTrack(
   return { ...workspace, selected: undefined, selectedSeed: undefined };
 }
 
-function sameTrack(
+export function sameTrack(
   first: CompiledTrackV1 | undefined,
   second: CompiledTrackV1 | undefined,
 ): boolean {
@@ -219,7 +236,9 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
     workspace.editorValidation.status === "valid" && preview !== undefined;
   const busy = workspace.pending !== null;
   const selectedMatches = sameTrack(preview, workspace.selected);
-  const status = validationPresentation(workspace.editorValidation.status);
+  const status = renderBadge(
+    validationPresentation(workspace.editorValidation.status),
+  );
   const issues = renderIssues(workspace.editorValidation.errors);
   const sequence = `${editor.pieces
     .map((piece, index) =>
@@ -256,7 +275,7 @@ function renderBuildTab(workspace: TrackWorkspaceState): string {
       <section class="builder-preview-panel" aria-labelledby="builder-preview-title">
         <header class="builder-panel-heading">
           <h3 id="builder-preview-title">${escapeHtml(editor.name.trim() || "Untitled track")}</h3>
-          <span class="validation-badge is-${status.tone}"><span aria-hidden="true">${status.glyph}</span> ${status.label}</span>
+          ${status}
         </header>
         <div class="builder-canvas ${preview === undefined ? "is-empty" : ""}">
           ${
@@ -371,17 +390,10 @@ function renderSequenceDropZone(insertionIndex: number): string {
 function renderGenerateTab(workspace: TrackWorkspaceState): string {
   const generated = workspace.generatedPreview;
   const generatedInputs = workspace.generatedInputs ?? workspace.generator;
-  const inputsChanged = generatorInputsChanged(workspace);
   const busy = workspace.pending !== null;
   const selectedMatches = sameTrack(generated, workspace.selected);
   const generatedStatus =
-    generated === undefined
-      ? ""
-      : inputsChanged
-        ? '<span class="validation-badge is-warning"><span aria-hidden="true">!</span> Inputs changed</span>'
-        : selectedMatches
-          ? '<span class="validation-badge is-success"><span aria-hidden="true">✓</span> Active track</span>'
-          : '<span class="validation-badge is-info"><span aria-hidden="true">○</span> Candidate, not active</span>';
+    generated === undefined ? "" : renderBadge(generatedBadge(workspace));
   return `
     <div class="builder-layout builder-layout-generator" role="tabpanel" id="track-builder-panel-generate" aria-labelledby="track-builder-tab-generate">
       <section class="generator-controls" aria-labelledby="generator-title">
@@ -480,6 +492,26 @@ export function generatorInputsChanged(
   );
 }
 
+interface Badge {
+  label: string;
+  tone: string;
+  glyph: string;
+}
+
+/** Glyph and label change together so state never relies on color alone. */
+export function generatedBadge(workspace: TrackWorkspaceState): Badge {
+  if (generatorInputsChanged(workspace)) {
+    return { label: "Inputs changed", tone: "warning", glyph: "!" };
+  }
+  return sameTrack(workspace.generatedPreview, workspace.selected)
+    ? { label: "Active track", tone: "success", glyph: "✓" }
+    : { label: "Candidate, not active", tone: "info", glyph: "○" };
+}
+
+function renderBadge(badge: Badge): string {
+  return `<span class="validation-badge is-${badge.tone}"><span aria-hidden="true">${badge.glyph}</span> ${badge.label}</span>`;
+}
+
 function renderGeneratorChoices(
   name: "length" | "difficulty",
   choices: readonly (readonly [string, string, string])[],
@@ -563,11 +595,9 @@ function renderIssues(issues: readonly TrackBuilderIssue[]): string {
   `;
 }
 
-function validationPresentation(status: EditorValidationState["status"]): {
-  label: string;
-  tone: string;
-  glyph: string;
-} {
+function validationPresentation(
+  status: EditorValidationState["status"],
+): Badge {
   switch (status) {
     case "checking":
       return { label: "Checking…", tone: "info", glyph: "…" };

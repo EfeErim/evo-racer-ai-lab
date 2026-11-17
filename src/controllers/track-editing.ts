@@ -1,7 +1,6 @@
 import type { AppContext } from "../app-store";
 import type { EditorDragPayload } from "../bind-actions";
 import {
-  addEditorPiece,
   deleteEditorPiece,
   duplicateEditorPiece,
   type EditorState,
@@ -78,7 +77,7 @@ export function createTrackEditing(
         const kind = element.dataset.segmentKind as SegmentKind | undefined;
         if (kind !== undefined) {
           setEditorDraft(
-            addEditorPiece(editor, kind),
+            insertEditorPiece(editor, kind, editor.present.pieces.length),
             "Piece added. Checking the new sequence.",
           );
         }

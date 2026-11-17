@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Final, Literal, cast, get_args
 
-from evo_racer.numeric import rounded
+from evo_racer.numeric import rounded, signed_heading_delta
 
 TRACK_SCHEMA_VERSION: Final = 1
 GEOMETRY_CONTRACT_VERSION: Final = 1
@@ -31,20 +31,7 @@ type SegmentKind = Literal[
 ]
 type Point = tuple[float, float]
 
-SEGMENT_CATALOGUE: Final[tuple[SegmentKind, ...]] = (
-    "start-finish",
-    "straight-short",
-    "straight-long",
-    "turn-left-45",
-    "turn-right-45",
-    "turn-left-90",
-    "turn-right-90",
-    "hairpin-left",
-    "hairpin-right",
-    "chicane-left",
-    "chicane-right",
-)
-_SEGMENT_KINDS: Final = frozenset(SEGMENT_CATALOGUE)
+_SEGMENT_KINDS: Final[frozenset[str]] = frozenset(get_args(SegmentKind.__value__))
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,13 +84,6 @@ class TrackValidationError(ValueError):
 
 @dataclass(slots=True)
 class _Pose:
-    x: float
-    y: float
-    heading: float
-
-
-@dataclass(frozen=True, slots=True)
-class _CheckpointPose:
     x: float
     y: float
     heading: float
@@ -212,7 +192,7 @@ def parse_track(payload: object) -> TrackV1:
                     )
                 )
                 continue
-            pieces.append(TrackPieceV1(kind))
+            pieces.append(TrackPieceV1(cast(SegmentKind, kind)))
 
     if sum(piece.kind == "start-finish" for piece in pieces) != 1:
         issues.append(
@@ -245,81 +225,57 @@ def compile_track_payload(payload: object) -> dict[str, object]:
 
 def compile_track(track: TrackV1) -> dict[str, object]:
     """Compile one canonical TrackV1 into deterministic renderer geometry."""
+    # Re-parse so generator and closure candidates pass the same checks as user input.
     track = parse_track(track.to_payload())
-    pose = _Pose(0.0, 0.0, 0.0)
-    centerline: list[Point] = [(pose.x, pose.y)]
-    checkpoints: list[_CheckpointPose] = []
-    start_pose: _CheckpointPose | None = None
-
-    for piece in track.pieces:
-        piece_start = _CheckpointPose(pose.x, pose.y, pose.heading)
-        checkpoints.append(piece_start)
-        if piece.kind == "start-finish":
-            start_pose = piece_start
-        _compile_piece(piece.kind, pose, centerline)
-
-    geometry_issues = _validate_compiled_geometry(pose, centerline)
-    if start_pose is None:
-        geometry_issues.append(
-            TrackIssue(
-                "START_FINISH_COUNT",
-                "pieces",
-                "Track must contain exactly one start-finish piece.",
-            )
-        )
+    end_pose, centerline, checkpoints = _trace_pieces(track)
+    geometry_issues = _validate_compiled_geometry(end_pose, centerline)
     if geometry_issues:
         raise TrackValidationError(tuple(geometry_issues))
-
     closed_centerline = _normalize_closed_loop(centerline)
-    left_boundary, right_boundary = _derive_boundaries(closed_centerline, track.road_width)
-    checkpoint_payloads = [
-        _checkpoint_payload(index, checkpoint, track.road_width)
-        for index, checkpoint in enumerate(checkpoints)
-    ]
-    assert start_pose is not None
-    spawn_distance = 5.0
-    spawn_pose = {
-        "x": rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
-        "y": rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
-        "heading": rounded(_normalize_heading(start_pose.heading)),
-    }
-
-    return {
-        "contractVersion": GEOMETRY_CONTRACT_VERSION,
-        "track": track.to_payload(),
-        "geometry": {
-            "centerline": [_point_payload(point) for point in closed_centerline],
-            "leftBoundary": [_point_payload(point) for point in left_boundary],
-            "rightBoundary": [_point_payload(point) for point in right_boundary],
-            "checkpoints": checkpoint_payloads,
-            "spawnPose": spawn_pose,
-        },
-    }
+    return _geometry_payload(
+        track,
+        closed_centerline,
+        _derive_boundaries(closed_centerline, track.road_width),
+        checkpoints,
+    )
 
 
 def preview_track(track: TrackV1) -> dict[str, object]:
-    """Compile a canonical draft without pretending that an open loop is valid."""
-    track = parse_track(track.to_payload())
+    """Compile a parsed draft without pretending that an open loop is valid."""
+    _, centerline, checkpoints = _trace_pieces(track)
+    return _geometry_payload(
+        track,
+        centerline,
+        _derive_open_boundaries(centerline, track.road_width),
+        checkpoints,
+    )
+
+
+def _trace_pieces(track: TrackV1) -> tuple[_Pose, list[Point], list[_Pose]]:
+    """Walk the pieces from the origin; return the end pose, centerline and piece starts."""
     pose = _Pose(0.0, 0.0, 0.0)
     centerline: list[Point] = [(pose.x, pose.y)]
-    checkpoints: list[_CheckpointPose] = []
-    start_pose: _CheckpointPose | None = None
-
+    checkpoints: list[_Pose] = []
     for piece in track.pieces:
-        piece_start = _CheckpointPose(pose.x, pose.y, pose.heading)
-        checkpoints.append(piece_start)
-        if piece.kind == "start-finish":
-            start_pose = piece_start
+        checkpoints.append(_Pose(pose.x, pose.y, pose.heading))
         _compile_piece(piece.kind, pose, centerline)
+    return pose, centerline, checkpoints
 
-    left_boundary, right_boundary = _derive_open_boundaries(centerline, track.road_width)
-    assert start_pose is not None
+
+def _geometry_payload(
+    track: TrackV1,
+    centerline: list[Point],
+    boundaries: tuple[list[Point], list[Point]],
+    checkpoints: list[_Pose],
+) -> dict[str, object]:
+    # parse_track guarantees exactly one start-finish piece.
+    start = next(
+        checkpoint
+        for checkpoint, piece in zip(checkpoints, track.pieces, strict=True)
+        if piece.kind == "start-finish"
+    )
     spawn_distance = 5.0
-    spawn_pose = {
-        "x": rounded(start_pose.x + math.cos(start_pose.heading) * spawn_distance),
-        "y": rounded(start_pose.y + math.sin(start_pose.heading) * spawn_distance),
-        "heading": rounded(_normalize_heading(start_pose.heading)),
-    }
+    left_boundary, right_boundary = boundaries
     return {
         "contractVersion": GEOMETRY_CONTRACT_VERSION,
         "track": track.to_payload(),
@@ -331,7 +287,11 @@ def preview_track(track: TrackV1) -> dict[str, object]:
                 _checkpoint_payload(index, checkpoint, track.road_width)
                 for index, checkpoint in enumerate(checkpoints)
             ],
-            "spawnPose": spawn_pose,
+            "spawnPose": {
+                "x": rounded(start.x + math.cos(start.heading) * spawn_distance),
+                "y": rounded(start.y + math.sin(start.heading) * spawn_distance),
+                "heading": rounded(start.heading % (2.0 * math.pi)),
+            },
         },
     }
 
@@ -429,7 +389,7 @@ def _validate_compiled_geometry(pose: _Pose, points: list[Point]) -> list[TrackI
     issues: list[TrackIssue] = []
     start_x, start_y = points[0]
     if math.hypot(pose.x - start_x, pose.y - start_y) > POSITION_TOLERANCE or (
-        abs(_signed_heading_delta(pose.heading, 0.0)) > HEADING_TOLERANCE
+        abs(signed_heading_delta(pose.heading, 0.0)) > HEADING_TOLERANCE
     ):
         issues.append(
             TrackIssue(
@@ -509,26 +469,12 @@ def _normalize_closed_loop(points: list[Point]) -> list[Point]:
 
 def _derive_boundaries(points: list[Point], road_width: float) -> tuple[list[Point], list[Point]]:
     unique_points = points[:-1]
-    half_width = road_width / 2.0
     left: list[Point] = []
     right: list[Point] = []
     for index, point in enumerate(unique_points):
         previous = unique_points[index - 1]
         following = unique_points[(index + 1) % len(unique_points)]
-        tangent_x = following[0] - previous[0]
-        tangent_y = following[1] - previous[1]
-        magnitude = math.hypot(tangent_x, tangent_y)
-        normal_x = -tangent_y / magnitude
-        normal_y = tangent_x / magnitude
-        left.append(
-            (rounded(point[0] + normal_x * half_width), rounded(point[1] + normal_y * half_width))
-        )
-        right.append(
-            (
-                rounded(point[0] - normal_x * half_width),
-                rounded(point[1] - normal_y * half_width),
-            )
-        )
+        _append_offsets(point, previous, following, road_width / 2.0, left, right)
     left.append(left[0])
     right.append(right[0])
     return left, right
@@ -537,36 +483,38 @@ def _derive_boundaries(points: list[Point], road_width: float) -> tuple[list[Poi
 def _derive_open_boundaries(
     points: list[Point], road_width: float
 ) -> tuple[list[Point], list[Point]]:
-    half_width = road_width / 2.0
     left: list[Point] = []
     right: list[Point] = []
     for index, point in enumerate(points):
-        if index == 0:
-            previous = point
-            following = points[index + 1]
-        elif index == len(points) - 1:
-            previous = points[index - 1]
-            following = point
-        else:
-            previous = points[index - 1]
-            following = points[index + 1]
-        tangent_x = following[0] - previous[0]
-        tangent_y = following[1] - previous[1]
-        magnitude = math.hypot(tangent_x, tangent_y)
-        normal_x = -tangent_y / magnitude
-        normal_y = tangent_x / magnitude
-        left.append(
-            (rounded(point[0] + normal_x * half_width), rounded(point[1] + normal_y * half_width))
-        )
-        right.append(
-            (rounded(point[0] - normal_x * half_width), rounded(point[1] - normal_y * half_width))
-        )
+        previous = points[max(index - 1, 0)]
+        following = points[min(index + 1, len(points) - 1)]
+        _append_offsets(point, previous, following, road_width / 2.0, left, right)
     return left, right
 
 
-def _checkpoint_payload(
-    index: int, checkpoint: _CheckpointPose, road_width: float
-) -> dict[str, object]:
+def _append_offsets(
+    point: Point,
+    previous: Point,
+    following: Point,
+    half_width: float,
+    left: list[Point],
+    right: list[Point],
+) -> None:
+    """Offset ``point`` along the normal of the chord from ``previous`` to ``following``."""
+    tangent_x = following[0] - previous[0]
+    tangent_y = following[1] - previous[1]
+    magnitude = math.hypot(tangent_x, tangent_y)
+    normal_x = -tangent_y / magnitude
+    normal_y = tangent_x / magnitude
+    left.append(
+        (rounded(point[0] + normal_x * half_width), rounded(point[1] + normal_y * half_width))
+    )
+    right.append(
+        (rounded(point[0] - normal_x * half_width), rounded(point[1] - normal_y * half_width))
+    )
+
+
+def _checkpoint_payload(index: int, checkpoint: _Pose, road_width: float) -> dict[str, object]:
     half_width = road_width / 2.0
     normal_x = -math.sin(checkpoint.heading)
     normal_y = math.cos(checkpoint.heading)
@@ -585,14 +533,6 @@ def _checkpoint_payload(
 
 def _point_payload(point: Point) -> list[float]:
     return [rounded(point[0]), rounded(point[1])]
-
-
-def _normalize_heading(heading: float) -> float:
-    return heading % (2.0 * math.pi)
-
-
-def _signed_heading_delta(heading: float, target: float) -> float:
-    return (heading - target + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def _pieces(*kinds: SegmentKind) -> tuple[TrackPieceV1, ...]:

@@ -1,6 +1,5 @@
 import { type AppContext, motionIsReduced } from "../app-store";
-import { priorGenerationTrails } from "../generation-trails";
-import { CHAMPION_REPLAY_RATE, RESULTS_REPLAY_RATE } from "../live-motion";
+import { priorGenerationTrails } from "../run-presentation";
 import {
   type CarSprite,
   type FrameSource,
@@ -23,6 +22,11 @@ import type {
   RunResultV1,
 } from "../contracts";
 import type { CompiledTrackV1 } from "../track-renderer";
+
+/** Champion replay speed on Training while no generation race is available. */
+const CHAMPION_REPLAY_RATE = 2;
+/** Results plays the champion at real speed. */
+const RESULTS_REPLAY_RATE = 1;
 
 /** Real seconds a finished race stays on screen before the next one starts. */
 const RACE_HOLD_SECONDS = 1.2;

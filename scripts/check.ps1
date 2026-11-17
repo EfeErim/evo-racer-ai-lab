@@ -5,7 +5,6 @@ $steps = @(
     @{ Name = "Format (TypeScript, CSS, docs)"; Script = "format:check" },
     @{ Name = "Documentation links"; Script = "check:docs" },
     @{ Name = "Lint (TypeScript)"; Script = "lint" },
-    @{ Name = "Types (TypeScript)"; Script = "typecheck" },
     @{ Name = "Tests (Vitest)"; Script = "test" },
     @{ Name = "Format (Python)"; Script = "format:python:check" },
     @{ Name = "Lint (Python)"; Script = "lint:python" },

@@ -128,8 +128,8 @@ Choose a training plan first. The exact controls below stay collapsed under
   same vehicle genes.
 
 Both choices use identical Python physics, sensors, episode termination, and
-fitness. See [Algorithm comparison](algorithm-comparison.md) for the evidence
-and limits of comparisons in this repository.
+fitness. Learning evidence compares each algorithm with a selection-free control
+under the same training budget; it does not establish universal superiority.
 
 **Cars per generation** (the population) controls how many candidates are
 evaluated per generation. Larger populations require more work per generation.
@@ -147,8 +147,9 @@ settings stays open while its values are edited.
 The bundled presets expose their maximum workload directly:
 
 - **Quick check** is the default demo, using NEAT: 16 candidates, 10 generations,
-  and 30 simulated seconds per episode. In a saved test it finished an Easy Oval
-  lap with 8 of 10 seeds. Harder tracks need a longer preset.
+  and 30 simulated seconds per episode. In the saved training-plan measurement it
+  finished Easy Oval and Technical Circuit with 3 of 3 seeds and Chicane Challenge
+  with none; Chicane Challenge needs Thorough.
 - **Balanced** is a longer Fixed GA run: 24 candidates, 20 generations, and 30
   simulated seconds per episode.
 - **Thorough** is an extended NEAT experiment: 48 candidates, 40 generations,

@@ -211,46 +211,22 @@ export function getPresentationIssues(draft: SetupDraft): ValidationIssue[] {
     });
   }
 
-  addIntegerRangeIssue(
-    issues,
+  for (const field of [
     "populationSize",
-    draft.settings.populationSize,
-    10,
-    500,
-  );
-  addIntegerRangeIssue(
-    issues,
     "generations",
-    draft.settings.generations,
-    1,
-    1000,
-  );
-  addIntegerRangeIssue(
-    issues,
     "episodeSeconds",
-    draft.settings.episodeSeconds,
-    15,
-    300,
-  );
-  addIntegerRangeIssue(issues, "seed", draft.settings.seed, 0, 2_147_483_647);
+    "seed",
+  ] as const) {
+    if (!Number.isInteger(draft.settings[field])) {
+      issues.push({
+        code: "VALUE_OUT_OF_RANGE",
+        field,
+        message: `${field} must be a whole number.`,
+      });
+    }
+  }
 
   return issues;
-}
-
-function addIntegerRangeIssue(
-  issues: ValidationIssue[],
-  field: NumericSetting,
-  value: number,
-  minimum: number,
-  maximum: number,
-): void {
-  if (!Number.isInteger(value) || value < minimum || value > maximum) {
-    issues.push({
-      code: "VALUE_OUT_OF_RANGE",
-      field,
-      message: `${field} must be a whole number from ${String(minimum)} to ${String(maximum)}.`,
-    });
-  }
 }
 
 export function canRequestReview(state: AppState): boolean {

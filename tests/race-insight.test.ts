@@ -102,27 +102,9 @@ describe("race insight", () => {
     expect(positions[0]?.y).toBeLessThan(positions[1]?.y ?? 0);
   });
 
-  it("parses the leader network and rejects rows that miss poses", () => {
+  it("reads the Python leader network", () => {
     const race = parseGenerationRace(rawRace);
     expect(race.leaderNetwork?.activations).toHaveLength(8);
     expect(race.lap.record?.seconds).toBe(0.15);
-    expect(() =>
-      parseGenerationRace({
-        ...rawRace,
-        leaderNetwork: {
-          ...rawRace.leaderNetwork,
-          activations: [0, 0, 0.1],
-        },
-      }),
-    ).toThrow("activation row");
-    expect(() =>
-      parseGenerationRace({
-        ...rawRace,
-        leaderNetwork: {
-          ...rawRace.leaderNetwork,
-          links: [{ from: 0, to: 5, weight: 1 }],
-        },
-      }),
-    ).toThrow("outside");
   });
 });

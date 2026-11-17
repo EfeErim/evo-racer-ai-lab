@@ -1,3 +1,4 @@
+import { boundary } from "./contracts";
 import { escapeHtml } from "./html";
 
 export type TrackPoint = readonly [number, number];
@@ -54,30 +55,11 @@ export interface TrackTrail {
   points: readonly TrackPoint[];
 }
 
-export function parsePresetTracksResponse(
-  payload: unknown,
-): PresetTracksResponse {
-  if (
-    !isRecord(payload) ||
-    payload.contractVersion !== 1 ||
-    !Array.isArray(payload.presets) ||
-    !payload.presets.every(isCompiledTrack)
-  ) {
-    throw new Error(
-      "The local core returned an invalid track geometry contract.",
-    );
-  }
-  return payload as unknown as PresetTracksResponse;
-}
-
 export function parseCompiledTrack(
   payload: unknown,
   label = "Compiled track",
 ): CompiledTrackV1 {
-  if (!isCompiledTrack(payload)) {
-    throw new Error(`${label} returned an invalid response.`);
-  }
-  return payload as CompiledTrackV1;
+  return boundary(payload, label, { contractVersion: 1 }) as CompiledTrackV1;
 }
 
 function trackMarkerTransform(marker: TrackMarker): string {
@@ -91,13 +73,6 @@ export function renderTrackSvg(
   currentTrail?: TrackTrail,
   referenceLine?: TrackTrail,
 ): string {
-  const points = [
-    ...compiled.geometry.leftBoundary,
-    ...compiled.geometry.rightBoundary,
-  ];
-  if (points.length === 0) {
-    throw new Error("Compiled track geometry has no boundary points.");
-  }
   const viewBox = trackViewBox(compiled);
   if (viewBox === undefined) {
     throw new Error("Compiled track geometry has non-renderable bounds.");
@@ -244,79 +219,4 @@ function trackViewBox(
     height > 0
     ? [paddedMinimumX, paddedMinimumY, width, height]
     : undefined;
-}
-
-function isCompiledTrack(value: unknown): boolean {
-  if (
-    !isRecord(value) ||
-    value.contractVersion !== 1 ||
-    !isRecord(value.track) ||
-    !isRecord(value.geometry)
-  ) {
-    return false;
-  }
-  const track = value.track;
-  const geometry = value.geometry;
-  const structurallyValid =
-    track.schemaVersion === 1 &&
-    typeof track.id === "string" &&
-    track.id.trim().length > 0 &&
-    typeof track.name === "string" &&
-    track.name.trim().length > 0 &&
-    typeof track.roadWidth === "number" &&
-    Number.isFinite(track.roadWidth) &&
-    track.roadWidth > 0 &&
-    Array.isArray(track.pieces) &&
-    track.pieces.length > 0 &&
-    track.pieces.every(
-      (piece) => isRecord(piece) && typeof piece.kind === "string",
-    ) &&
-    Array.isArray(geometry.centerline) &&
-    geometry.centerline.length >= 3 &&
-    geometry.centerline.every(isPoint) &&
-    Array.isArray(geometry.leftBoundary) &&
-    geometry.leftBoundary.length >= 2 &&
-    geometry.leftBoundary.every(isPoint) &&
-    Array.isArray(geometry.rightBoundary) &&
-    geometry.rightBoundary.length >= 2 &&
-    geometry.rightBoundary.every(isPoint) &&
-    Array.isArray(geometry.checkpoints) &&
-    geometry.checkpoints.length > 0 &&
-    geometry.checkpoints.every(isCheckpoint) &&
-    isRecord(geometry.spawnPose) &&
-    typeof geometry.spawnPose.x === "number" &&
-    Number.isFinite(geometry.spawnPose.x) &&
-    typeof geometry.spawnPose.y === "number" &&
-    Number.isFinite(geometry.spawnPose.y) &&
-    typeof geometry.spawnPose.heading === "number" &&
-    Number.isFinite(geometry.spawnPose.heading);
-  return (
-    structurallyValid &&
-    trackViewBox(value as unknown as CompiledTrackV1) !== undefined
-  );
-}
-
-function isCheckpoint(value: unknown): boolean {
-  return (
-    isRecord(value) &&
-    typeof value.index === "number" &&
-    Number.isInteger(value.index) &&
-    isPoint(value.left) &&
-    isPoint(value.right)
-  );
-}
-
-function isPoint(value: unknown): value is [number, number] {
-  return (
-    Array.isArray(value) &&
-    value.length === 2 &&
-    typeof value[0] === "number" &&
-    Number.isFinite(value[0]) &&
-    typeof value[1] === "number" &&
-    Number.isFinite(value[1])
-  );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
 }

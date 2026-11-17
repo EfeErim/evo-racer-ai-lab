@@ -160,18 +160,14 @@ class RunSession:
             if len(self.reports) >= self.settings.generations:
                 self._finalize("completed")
                 return
+            self._clear_live_progress()
             self._advancing = True
-            self._active_candidate_id = None
-            self._active_candidate_index = None
-            self._live_telemetry = None
         try:
-            report: GenerationReportValue
-            if self.settings.algorithm == "fixed-ga":
-                fixed_report, episodes = self._advance_fixed_ga()
-                report = fixed_report
-            else:
-                neat_report, episodes = self._advance_neat()
-                report = neat_report
+            report, episodes = (
+                self._advance_fixed_ga()
+                if self.settings.algorithm == "fixed-ga"
+                else self._advance_neat()
+            )
         except Exception:
             with self._lock:
                 self._clear_live_progress()
@@ -226,21 +222,24 @@ class RunSession:
             max_seconds=self.settings.episode_seconds,
             trace_interval_steps=RACE_TRACE_INTERVAL_STEPS,
         )
-        if self._reference_line is None:
-            self._reference_line = minimum_curvature_reference(
-                self.geometry.centerline, self.geometry.road_width
-            )
         laps = lap_record_payload(
             [(previous.generation, previous.results) for previous in (*self.reports, report)]
         )
         race["lap"] = {
             **laps,
             "targetSeconds": target_lap_seconds(
-                self.geometry, leader.candidate.setup, self._reference_line
+                self.geometry, leader.candidate.setup, self._racing_line()
             ),
             "targetMethod": TARGET_LAP_METHOD,
         }
         return race
+
+    def _racing_line(self) -> tuple[tuple[float, float], ...]:
+        if self._reference_line is None:
+            self._reference_line = minimum_curvature_reference(
+                self.geometry.centerline, self.geometry.road_width
+            )
+        return self._reference_line
 
     def command(self, command: str) -> None:
         """Apply pause, resume, or stop only at deterministic batch boundaries."""
@@ -347,13 +346,12 @@ class RunSession:
         """Serialize the current generation boundary into the version 1 run schema."""
         snapshot = self.snapshot(include_live=False)
         snapshot["simulationContractVersion"] = SIMULATION_CONTRACT_VERSION
-        track = self.track
         return {
             "schemaVersion": RUN_SCHEMA_VERSION,
             "kind": RUN_DOCUMENT_KIND,
             "runId": self.run_id,
-            "trackSchemaVersion": track["schemaVersion"],
-            "track": track,
+            "trackSchemaVersion": self.track["schemaVersion"],
+            "track": self.track,
             "settings": self.settings.to_payload(),
             "checkpoint": {
                 "generation": len(self.reports),
@@ -518,12 +516,8 @@ class RunSession:
         )
         self.status = status
         max_steps = episode_step_limit(self.settings.episode_seconds)
-        racing_line_reference = minimum_curvature_reference(
-            self.geometry.centerline,
-            self.geometry.road_width,
-        )
         racing_line_comparison = compare_with_reference(
-            racing_line_reference,
+            self._racing_line(),
             tuple((frame.state.x, frame.state.y) for frame in replay_episode.telemetry),
             road_width=self.geometry.road_width,
             champion_finished=replay_episode.finished,

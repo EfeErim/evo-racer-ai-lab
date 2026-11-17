@@ -58,7 +58,6 @@ class RunManager:
         assert isinstance(payload, dict)
         settings_value = payload["settings"]
         assert isinstance(settings_value, dict)
-        assert settings_value["algorithm"] in {"fixed-ga", "neat"}
         run_id = f"run-{uuid.uuid4().hex}"
         session = RunSession(
             run_id=run_id,
@@ -201,15 +200,9 @@ class RunManager:
         self,
         payload: object,
     ) -> RunSession | dict[str, object]:
-        if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
-            return _run_error(
-                "UNSUPPORTED_OBSERVATION_VERSION",
-                "contractVersion",
-                "Run command contractVersion must be 1.",
-            )
-        run_id = payload.get("runId")
-        if not isinstance(run_id, str) or not run_id:
-            return _run_error("RUN_ID_REQUIRED", "runId", "A runId is required.")
+        run_id = _run_id_from_payload(payload)
+        if isinstance(run_id, dict):
+            return run_id
         with self._lock:
             session = self._sessions.get(run_id)
         if session is None:

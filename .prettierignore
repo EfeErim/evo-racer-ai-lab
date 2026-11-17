@@ -1,11 +1,5 @@
-.venv/
 contracts/
 docs/experiments/data/
-coverage/
-dist/
 docs/media/
-node_modules/
 package-lock.json
 python/
-release/
-test-results/

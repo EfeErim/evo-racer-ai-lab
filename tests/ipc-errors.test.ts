@@ -5,8 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   compileTrack,
-  deleteRun,
-  deleteTrack,
+  deleteRecord,
   exportRun,
   generateTrack,
   loadPresetTracks,
@@ -86,10 +85,10 @@ describe("truthful local IPC failures", () => {
       );
     vi.stubGlobal("fetch", fetchMock);
 
-    await expect(deleteTrack("missing-track")).rejects.toThrow(
+    await expect(deleteRecord("track", "missing-track")).rejects.toThrow(
       "Track deletion failed because the local track no longer exists.",
     );
-    await expect(deleteRun("missing-run")).rejects.toThrow(
+    await expect(deleteRecord("run", "missing-run")).rejects.toThrow(
       "Run deletion failed because the local run no longer exists.",
     );
   });
@@ -215,10 +214,10 @@ describe("truthful local IPC failures", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(compileTrack(trackFixture.compiled.track)).rejects.toThrow(
-      "Track compilation returned an invalid response.",
+      "Track compilation must be an object.",
     );
     await expect(loadTrackLibrary()).rejects.toThrow(
-      "Track library returned an invalid response.",
+      "Track library has an unsupported version or invalid envelope.",
     );
   });
 
@@ -253,9 +252,6 @@ describe("truthful local IPC failures", () => {
         jsonResponse({ contractVersion: 1, valid: "yes", errors: [] }),
       )
       .mockResolvedValueOnce(
-        jsonResponse({ contractVersion: 1, valid: false, errors: [{}] }),
-      )
-      .mockResolvedValueOnce(
         jsonResponse({
           contractVersion: 1,
           valid: true,
@@ -272,9 +268,6 @@ describe("truthful local IPC failures", () => {
 
     await expect(validateSetup(setupDraft)).rejects.toThrow(
       "Local validation returned invalid JSON.",
-    );
-    await expect(validateSetup(setupDraft)).rejects.toThrow(
-      "Local validation returned an invalid response.",
     );
     await expect(validateSetup(setupDraft)).rejects.toThrow(
       "Local validation returned an invalid response.",

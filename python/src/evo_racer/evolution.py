@@ -9,7 +9,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Final
 
-from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
+from evo_racer.numeric import clamp, rounded, sigmoid
 from evo_racer.simulation import (
     SENSOR_ANGLES,
     SENSOR_RANGE,
@@ -41,14 +41,6 @@ class FeedForwardNetwork:
 
     parameters: tuple[float, ...]
 
-    def __post_init__(self) -> None:
-        if len(self.parameters) != NETWORK_PARAMETER_COUNT:
-            raise ValueError(
-                f"Fixed network requires exactly {NETWORK_PARAMETER_COUNT} parameters."
-            )
-        if any(not math.isfinite(value) for value in self.parameters):
-            raise ValueError("Network parameters must be finite.")
-
     def activate(self, features: Sequence[float]) -> Controls:
         """Execute the fixed 10-6-3 feed-forward topology."""
         _, outputs = self.layer_values(features)
@@ -62,11 +54,6 @@ class FeedForwardNetwork:
         self, features: Sequence[float]
     ) -> tuple[tuple[float, ...], tuple[float, ...]]:
         """Return hidden activations and raw outputs for one input vector."""
-        if len(features) != NETWORK_INPUT_COUNT:
-            raise ValueError(f"Network requires exactly {NETWORK_INPUT_COUNT} input features.")
-        if any(not math.isfinite(feature) for feature in features):
-            raise ValueError("Network features must be finite.")
-
         hidden_weight_count = NETWORK_INPUT_COUNT * NETWORK_HIDDEN_COUNT
         hidden_weights = self.parameters[:hidden_weight_count]
         hidden_biases = self.parameters[
@@ -117,36 +104,11 @@ class FeedForwardNetwork:
             "parameters": list(self.parameters),
         }
 
-    @classmethod
-    def from_payload(cls, payload: object) -> FeedForwardNetwork:
-        """Parse the versioned network representation fail-closed."""
-        if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
-            raise ValueError("Network contractVersion must be 1.")
-        expected_topology = {
-            "inputCount": NETWORK_INPUT_COUNT,
-            "hiddenCount": NETWORK_HIDDEN_COUNT,
-            "outputCount": NETWORK_OUTPUT_COUNT,
-        }
-        expected_activations = {
-            "hidden": "tanh",
-            "steering": "tanh",
-            "throttle": "sigmoid",
-            "brake": "sigmoid",
-        }
-        if payload.get("topology") != expected_topology:
-            raise ValueError("Network topology is not the supported fixed topology.")
-        if payload.get("activations") != expected_activations:
-            raise ValueError("Network activations are not supported.")
-        values = payload.get("parameters")
-        if not isinstance(values, list):
-            raise ValueError("Network parameters must be an array.")
-        return cls(tuple(finite_number(value, "network parameter") for value in values))
-
 
 class FeedForwardController:
     """Canonical Python controller backed by a frozen feed-forward network."""
 
-    def __init__(self, network: FeedForwardNetwork, candidate_id: str = "fixed-ga") -> None:
+    def __init__(self, network: FeedForwardNetwork, candidate_id: str) -> None:
         self._network = network
         self._name = f"fixed-ga:{candidate_id}"
 
@@ -170,16 +132,6 @@ class VehicleGenome:
     performance_logits: tuple[float, ...]
     front_brake_bias: float
     front_drive_bias: float
-
-    def __post_init__(self) -> None:
-        if len(self.performance_logits) != PERFORMANCE_GENE_COUNT:
-            raise ValueError("Vehicle genome requires five performance logits.")
-        if any(not math.isfinite(value) for value in self.performance_logits):
-            raise ValueError("Performance logits must be finite.")
-        if not 0.0 <= self.front_brake_bias <= 1.0:
-            raise ValueError("front_brake_bias must stay in [0,1].")
-        if not 0.0 <= self.front_drive_bias <= 1.0:
-            raise ValueError("front_drive_bias must stay in [0,1].")
 
     @property
     def allocations(self) -> tuple[float, ...]:
@@ -234,12 +186,6 @@ class FixedCandidate:
     generation: int
     genome: FixedGenome
 
-    def __post_init__(self) -> None:
-        if not self.candidate_id:
-            raise ValueError("candidate_id must be non-empty.")
-        if self.generation < 0:
-            raise ValueError("generation must be non-negative.")
-
     @property
     def controller(self) -> FeedForwardController:
         return FeedForwardController(self.genome.network, self.candidate_id)
@@ -269,14 +215,6 @@ class CandidateEvaluation:
             "collisionCount": self.collision_count,
             "steps": self.steps,
         }
-
-    def __post_init__(self) -> None:
-        if not math.isfinite(self.fitness):
-            raise ValueError("fitness must be finite.")
-        if not 0.0 <= self.progress_fraction <= 1.0:
-            raise ValueError("progress_fraction must stay in [0,1].")
-        if self.collision_count < 0 or self.steps < 0:
-            raise ValueError("Evaluation counts must be non-negative.")
 
 
 @dataclass(frozen=True, slots=True)
@@ -318,7 +256,7 @@ class GenerationReport:
 
 @dataclass(frozen=True, slots=True)
 class FixedGAConfig:
-    """Validated selection and variation settings."""
+    """Selection and variation settings; the population size is validated with the setup."""
 
     population_size: int = 24
     elite_count: int = 2
@@ -328,25 +266,6 @@ class FixedGAConfig:
     network_mutation_scale: float = 0.35
     performance_mutation_scale: float = 0.2
     bias_mutation_scale: float = 0.08
-
-    def __post_init__(self) -> None:
-        if self.population_size < 4:
-            raise ValueError("population_size must be at least 4.")
-        if not 1 <= self.elite_count < self.population_size:
-            raise ValueError("elite_count must be positive and smaller than the population.")
-        if not 2 <= self.tournament_size <= self.population_size:
-            raise ValueError("tournament_size must be from 2 through population_size.")
-        if not 0.0 <= self.crossover_rate <= 1.0:
-            raise ValueError("crossover_rate must stay in [0,1].")
-        if not 0.0 <= self.mutation_rate <= 1.0:
-            raise ValueError("mutation_rate must stay in [0,1].")
-        scales = (
-            self.network_mutation_scale,
-            self.performance_mutation_scale,
-            self.bias_mutation_scale,
-        )
-        if any(not math.isfinite(scale) or scale < 0.0 for scale in scales):
-            raise ValueError("Mutation scales must be finite and non-negative.")
 
 
 FitnessEvaluator = Callable[[FixedCandidate], CandidateEvaluation]
@@ -390,15 +309,6 @@ class FixedGA:
 
     def advance(self, report: GenerationReport) -> None:
         """Create the next generation; elites are copied without variation."""
-        if report.generation != self.generation:
-            raise ValueError("Generation report does not match the active population.")
-        by_id = {candidate.candidate_id: candidate for candidate in self.population}
-        if set(by_id) != {scored.candidate.candidate_id for scored in report.results} or any(
-            by_id.get(scored.candidate.candidate_id) != scored.candidate
-            for scored in report.results
-        ):
-            raise ValueError("Generation report does not cover the active population.")
-
         ranked = _ranked(report.results)
         next_generation = self.generation + 1
         genomes: list[FixedGenome] = [
@@ -437,8 +347,6 @@ def episode_fitness(result: EpisodeResult, max_steps: int) -> CandidateEvaluatio
     rewarding stationary throttle, wall riding, or oscillation around one point.
     Completion efficiency is available only after a full canonical lap.
     """
-    if max_steps <= 0:
-        raise ValueError("max_steps must be positive.")
     progress = clamp(result.progress_fraction, 0.0, 1.0)
     progress_score = 1200.0 * progress
     finish_bonus = 1000.0 if result.finished else 0.0

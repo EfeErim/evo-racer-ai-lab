@@ -27,14 +27,6 @@ def minimum_curvature_reference(
     deterministically minimizes discrete squared curvature. It is intentionally
     geometric: it is a transparent benchmark, not a minimum-lap-time claim.
     """
-    if (
-        len(centerline) < 4
-        or centerline[0] != centerline[-1]
-        or not math.isfinite(road_width)
-        or road_width <= 0.0
-    ):
-        raise ValueError("Racing-line reference requires a finite closed track.")
-
     unique_count = min(REFERENCE_LINE_POINT_LIMIT - 1, max(24, (len(centerline) - 1) * 2))
     base = _resample_closed(centerline, unique_count)
     normals = _normal_vectors(base)
@@ -74,13 +66,6 @@ def compare_with_reference(
     champion_finished: bool,
 ) -> dict[str, object]:
     """Compare one recorded champion path with the geometric reference."""
-    if len(reference) < 3 or reference[0] != reference[-1]:
-        raise ValueError("Racing-line comparison requires a closed reference.")
-    if not champion_points:
-        raise ValueError("Racing-line comparison requires champion points.")
-    if not math.isfinite(road_width) or road_width <= 0.0:
-        raise ValueError("Racing-line comparison requires a positive road width.")
-
     sampled_champion = _bounded_sample(champion_points, REFERENCE_LINE_POINT_LIMIT)
     champion_deviations = [_distance_to_polyline(point, reference) for point in sampled_champion]
     reference_deviations = [
@@ -112,8 +97,6 @@ def compare_with_reference(
 def _resample_closed(points: Sequence[Point], count: int) -> tuple[Point, ...]:
     segments = tuple(zip(points, points[1:], strict=False))
     lengths = tuple(math.dist(start, end) for start, end in segments)
-    if any(length <= 0.0 or not math.isfinite(length) for length in lengths):
-        raise ValueError("Racing-line centerline contains an invalid segment.")
     total_length = sum(lengths)
     sampled: list[Point] = []
     segment_index = 0

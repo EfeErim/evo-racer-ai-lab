@@ -8,7 +8,6 @@ import pytest
 
 from evo_racer.tracks import (
     PRESET_TRACKS,
-    SEGMENT_CATALOGUE,
     TrackPieceV1,
     TrackV1,
     TrackValidationError,
@@ -18,22 +17,6 @@ from evo_racer.tracks import (
 )
 
 CONTRACTS_DIR = Path(__file__).parents[2] / "contracts"
-
-
-def test_segment_catalogue_contains_every_piece_family() -> None:
-    assert SEGMENT_CATALOGUE == (
-        "start-finish",
-        "straight-short",
-        "straight-long",
-        "turn-left-45",
-        "turn-right-45",
-        "turn-left-90",
-        "turn-right-90",
-        "hairpin-left",
-        "hairpin-right",
-        "chicane-left",
-        "chicane-right",
-    )
 
 
 def test_all_presets_compile_as_closed_connected_non_intersecting_tracks() -> None:

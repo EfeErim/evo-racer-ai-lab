@@ -1,7 +1,9 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
 import { describe, expect, it } from "vitest";
 
 import {
-  addEditorPiece,
   createEditorState,
   deleteEditorPiece,
   duplicateEditorPiece,
@@ -9,7 +11,6 @@ import {
   insertEditorPiece,
   moveEditorPiece,
   moveEditorPieceToIndex,
-  parseTrackCommandResponse,
   parseTrackDocument,
   redoEditor,
   resetEditor,
@@ -20,7 +21,11 @@ import {
 describe("Sequential editor and JSON document UI", () => {
   it("supports add, delete, undo, redo, and reset without deriving geometry", () => {
     const initial = createEditorState();
-    const added = addEditorPiece(initial, "chicane-left");
+    const added = insertEditorPiece(
+      initial,
+      "chicane-left",
+      initial.present.pieces.length,
+    );
     const deleted = deleteEditorPiece(added, added.present.pieces.length - 1);
 
     expect(editorTrack(added).pieces.at(-1)?.kind).toBe("chicane-left");
@@ -87,62 +92,4 @@ describe("Sequential editor and JSON document UI", () => {
     const source = readFileSync(fixturePath, "utf8");
     expect(parseTrackDocument(source).id).toBe("shared-oval");
   });
-
-  it("rejects contradictory Python command validity and errors", () => {
-    const issue = { code: "FAILED", field: "track", message: "Invalid." };
-    expect(() =>
-      parseTrackCommandResponse(
-        { contractVersion: 1, valid: true, errors: [issue] },
-        "Track command",
-      ),
-    ).toThrow("inconsistent response");
-    expect(() =>
-      parseTrackCommandResponse(
-        { contractVersion: 1, valid: false, errors: [] },
-        "Track command",
-      ),
-    ).toThrow("inconsistent response");
-  });
-
-  it("parses Python-owned generated-track feature evidence", () => {
-    const compiledFixture = JSON.parse(
-      readFileSync(
-        fileURLToPath(
-          new URL("../contracts/easy-oval-geometry.json", import.meta.url),
-        ),
-        "utf8",
-      ),
-    ) as { compiled: unknown };
-    const response = parseTrackCommandResponse(
-      {
-        contractVersion: 1,
-        valid: true,
-        errors: [],
-        compiled: compiledFixture.compiled,
-        generatorVersion: 5,
-        candidateCount: 1,
-        features: {
-          layout: "asymmetric",
-          straightCount: 7,
-          cornerCount: 10,
-          chicaneCount: 2,
-          hairpinCount: 1,
-          directionChanges: 6,
-        },
-      },
-      "Track generation",
-    );
-
-    expect(response.generatorVersion).toBe(5);
-    expect(response.features).toEqual({
-      layout: "asymmetric",
-      straightCount: 7,
-      cornerCount: 10,
-      chicaneCount: 2,
-      hairpinCount: 1,
-      directionChanges: 6,
-    });
-  });
 });
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";

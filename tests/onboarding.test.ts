@@ -192,18 +192,18 @@ describe("Onboarding contract", () => {
     expect(canStartSession(state)).toBe(true);
   });
 
-  it("rejects invalid numeric settings before authoritative validation", () => {
+  it("rejects non-integer settings before authoritative validation", () => {
     let state = createInitialState();
     state = transition(state, {
       type: "set-number",
       field: "populationSize",
-      value: 9,
+      value: 9.5,
     });
 
     expect(getPresentationIssues(state.draft)).toContainEqual({
       code: "VALUE_OUT_OF_RANGE",
       field: "populationSize",
-      message: "populationSize must be a whole number from 10 to 500.",
+      message: "populationSize must be a whole number.",
     });
     expect(canRequestReview(state)).toBe(false);
   });

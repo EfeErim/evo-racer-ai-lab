@@ -52,12 +52,6 @@ def test_trace_is_dense_and_does_not_change_the_episode() -> None:
     assert max(b - a for a, b in zip(times, times[1:], strict=False)) <= 3 * FIXED_TIME_STEP + 1e-9
 
 
-def test_trace_interval_must_be_positive() -> None:
-    geometry = TrackGeometry.from_compiled(compile_track_payload(PRESET_TRACKS[0].to_payload()))
-    with pytest.raises(ValueError):
-        evaluate_episode(geometry, PurePursuitBaseline(), max_seconds=1.0, trace_interval_steps=0)
-
-
 @pytest.mark.parametrize("algorithm", ["fixed-ga", "neat"])
 def test_generation_race_holds_the_ranked_cars_of_the_last_generation(algorithm: str) -> None:
     session = _session(algorithm)

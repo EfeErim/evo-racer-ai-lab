@@ -1,6 +1,6 @@
-import { LOCAL_SERVICE_ORIGIN, isLoopbackOrigin } from "./foundation";
 import type { SetupDraft, SetupValidationResponse } from "./onboarding";
 import {
+  boundary,
   parseRunResponse,
   parseRunDocument,
   parseRunLibraryResponse,
@@ -8,48 +8,45 @@ import {
   type RunLibraryResponseV1,
   type RunResponseV1,
 } from "./contracts";
-import {
-  parseTrackCommandResponse,
-  parseTrackLibraryResponse,
-  type TrackCommandResponse,
-  type TrackLibraryResponse,
+import type {
+  TrackCommandResponse,
+  TrackLibraryResponse,
 } from "./track-workbench";
 import {
-  parsePresetTracksResponse,
+  parseCompiledTrack,
   type PresetTracksResponse,
   type TrackV1,
 } from "./track-renderer";
 
-export async function loadPresetTracks(): Promise<PresetTracksResponse> {
-  return parsePresetTracksResponse(
-    await getJson<unknown>("/v1/tracks/presets", "Preset track request"),
+const LOCAL_SERVICE_ORIGIN =
+  import.meta.env.VITE_EVORACER_SERVICE_ORIGIN ?? "http://127.0.0.1:8765";
+
+function isLoopbackOrigin(origin: string): boolean {
+  const url = new URL(origin);
+  return (
+    (url.protocol === "http:" || url.protocol === "https:") &&
+    (url.hostname === "127.0.0.1" || url.hostname === "localhost")
   );
+}
+
+export async function loadPresetTracks(): Promise<PresetTracksResponse> {
+  const response = boundary(
+    await getJson<unknown>("/v1/tracks/presets", "Preset track request"),
+    "Preset tracks",
+    { contractVersion: 1 },
+    ["presets"],
+  ) as PresetTracksResponse;
+  response.presets.forEach((track) => parseCompiledTrack(track));
+  return response;
 }
 
 export async function validateSetup(
   draft: SetupDraft,
 ): Promise<SetupValidationResponse> {
-  const response = await postJson<unknown>(
-    "/v1/setup/validate",
-    draft,
+  return checkedResult(
+    await postJson<unknown>("/v1/setup/validate", draft, "Local validation"),
     "Local validation",
-  );
-  if (
-    !isRecord(response) ||
-    response.contractVersion !== 1 ||
-    typeof response.valid !== "boolean"
-  ) {
-    throw new Error("Local validation returned an invalid response.");
-  }
-  const errors = parseLocalErrors(response.errors, "Local validation");
-  if (response.valid !== (errors.length === 0)) {
-    throw new Error("Local validation returned an inconsistent response.");
-  }
-  return {
-    contractVersion: 1,
-    valid: response.valid,
-    errors,
-  };
+  ) as unknown as SetupValidationResponse;
 }
 
 export async function startRun(draft: SetupDraft): Promise<RunResponseV1> {
@@ -134,49 +131,23 @@ async function loadRunDocument(
   runId: string,
   operation: string,
 ): Promise<RunDocumentV1> {
-  const response = await getJson<unknown>(
-    `/v1/runs/library/${encodeURIComponent(runId)}/export`,
+  const response = checkedResult(
+    await getJson<unknown>(
+      `/v1/runs/library/${encodeURIComponent(runId)}/export`,
+      operation,
+    ),
     operation,
   );
-  if (
-    !isRecord(response) ||
-    response.contractVersion !== 1 ||
-    typeof response.valid !== "boolean"
-  ) {
-    throw new Error(`${operation} returned an invalid response.`);
-  }
-  const errors = parseLocalErrors(response.errors, operation);
-  if (response.valid !== (errors.length === 0)) {
-    throw new Error(`${operation} returned an inconsistent response.`);
-  }
   if (!response.valid) {
     throw new Error(
-      errors[0]?.message ?? "The local run document is unavailable.",
+      response.errors[0]?.message ?? "The local run document is unavailable.",
     );
-  }
-  if (response.run === undefined) {
-    throw new Error(`${operation} returned an invalid response.`);
   }
   const document = parseRunDocument(response.run);
   if (typeof response.serializedRun === "string") {
-    const serializedDocument = parseRunDocument(
-      JSON.parse(response.serializedRun),
-    );
-    if (JSON.stringify(serializedDocument) !== JSON.stringify(document)) {
-      throw new Error(`${operation} returned conflicting serialized data.`);
-    }
     document.sourceJson = response.serializedRun;
   }
   return document;
-}
-
-export async function deleteRun(runId: string): Promise<void> {
-  const response = await requestJson<unknown>(
-    `/v1/runs/library/${encodeURIComponent(runId)}`,
-    { method: "DELETE" },
-    "Run deletion",
-  );
-  parseDeletionResponse(response, "runId", runId, "Run deletion", "run");
 }
 
 export async function shutdownApplication(): Promise<void> {
@@ -199,10 +170,7 @@ export async function compileTrack(
 ): Promise<TrackCommandResponse> {
   return postTrackCommand(
     "/v1/tracks/compile",
-    {
-      contractVersion: 1,
-      track,
-    },
+    { contractVersion: 1, track },
     "Track compilation",
   );
 }
@@ -212,10 +180,7 @@ export async function assistTrackClosure(
 ): Promise<TrackCommandResponse> {
   return postTrackCommand(
     "/v1/tracks/assist-closure",
-    {
-      contractVersion: 1,
-      track,
-    },
+    { contractVersion: 1, track },
     "Track closure assist",
   );
 }
@@ -227,10 +192,7 @@ export async function generateTrack(inputs: {
 }): Promise<TrackCommandResponse> {
   return postTrackCommand(
     "/v1/tracks/generate",
-    {
-      contractVersion: 1,
-      ...inputs,
-    },
+    { contractVersion: 1, ...inputs },
     "Track generation",
   );
 }
@@ -238,50 +200,28 @@ export async function generateTrack(inputs: {
 export async function saveTrack(
   track: TrackV1,
 ): Promise<{ saved: boolean; errors: TrackCommandResponse["errors"] }> {
-  const response = await postJson<unknown>(
-    "/v1/tracks/library",
-    {
-      contractVersion: 1,
-      track,
-    },
+  const response = checkedResult(
+    await postJson<unknown>(
+      "/v1/tracks/library",
+      { contractVersion: 1, track },
+      "Track save",
+    ),
     "Track save",
+    "saved",
   );
-  if (
-    !isRecord(response) ||
-    response.contractVersion !== 1 ||
-    typeof response.saved !== "boolean"
-  ) {
-    throw new Error("Track save returned an invalid response.");
-  }
-  const errors = parseLocalErrors(response.errors, "Track save");
-  if (response.saved !== (errors.length === 0)) {
-    throw new Error("Track save returned an inconsistent response.");
-  }
-  return {
-    saved: response.saved,
-    errors,
-  };
+  return { saved: response.saved === true, errors: response.errors };
 }
 
 export async function loadTrackLibrary(): Promise<TrackLibraryResponse> {
-  return parseTrackLibraryResponse(
+  const label = "Track library";
+  const library = boundary(
     await getJson<unknown>("/v1/tracks/library", "Track library request"),
-  );
-}
-
-export async function deleteTrack(trackId: string): Promise<void> {
-  const response = await requestJson<unknown>(
-    `/v1/tracks/library/${encodeURIComponent(trackId)}`,
-    { method: "DELETE" },
-    "Track deletion",
-  );
-  parseDeletionResponse(
-    response,
-    "trackId",
-    trackId,
-    "Track deletion",
-    "track",
-  );
+    label,
+    { contractVersion: 1 },
+    ["tracks", "isolated"],
+  ) as TrackLibraryResponse;
+  library.tracks.forEach((track) => parseCompiledTrack(track, label));
+  return library;
 }
 
 async function postTrackCommand(
@@ -289,16 +229,20 @@ async function postTrackCommand(
   body: object,
   label: string,
 ): Promise<TrackCommandResponse> {
-  return parseTrackCommandResponse(
+  const response = checkedResult(
     await postJson<unknown>(path, body, label),
     label,
-  );
+  ) as unknown as TrackCommandResponse;
+  if (response.valid) {
+    parseCompiledTrack(response.compiled, label);
+  }
+  return response;
 }
 
 async function postJson<T>(
   path: string,
   body: object,
-  label = "Local command",
+  label: string,
 ): Promise<T> {
   return requestJson(
     path,
@@ -344,50 +288,54 @@ async function requestJson<T>(
   }
 }
 
-function parseDeletionResponse(
-  value: unknown,
-  idField: "trackId" | "runId",
-  expectedId: string,
-  label: string,
-  recordLabel: "track" | "run",
-): void {
+export async function deleteRecord(
+  kind: "track" | "run",
+  id: string,
+): Promise<void> {
+  const label = kind === "track" ? "Track deletion" : "Run deletion";
+  const response = await requestJson<unknown>(
+    `/v1/${kind}s/library/${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+    label,
+  );
   if (
-    !isRecord(value) ||
-    value.contractVersion !== 1 ||
-    typeof value.deleted !== "boolean" ||
-    value[idField] !== expectedId
+    !isRecord(response) ||
+    response.contractVersion !== 1 ||
+    typeof response.deleted !== "boolean" ||
+    response[`${kind}Id`] !== id
   ) {
     throw new Error(`${label} returned an invalid response.`);
   }
-  if (!value.deleted) {
+  if (!response.deleted) {
     throw new Error(
-      `${label} failed because the local ${recordLabel} no longer exists.`,
+      `${label} failed because the local ${kind} no longer exists.`,
     );
   }
 }
 
-function parseLocalErrors(
+/**
+ * Envelope of a command that reports success as a boolean `flag` with an
+ * `errors` list. Python owns the errors' content; only their count must agree.
+ */
+function checkedResult(
   value: unknown,
   label: string,
-): TrackCommandResponse["errors"] {
-  if (!Array.isArray(value)) {
+  flag: "valid" | "saved" = "valid",
+): Record<string, unknown> & { errors: TrackCommandResponse["errors"] } {
+  if (
+    !isRecord(value) ||
+    value.contractVersion !== 1 ||
+    typeof value[flag] !== "boolean" ||
+    !Array.isArray(value.errors)
+  ) {
     throw new Error(`${label} returned an invalid response.`);
   }
-  return value.map((item) => {
-    if (
-      !isRecord(item) ||
-      typeof item.code !== "string" ||
-      typeof item.field !== "string" ||
-      typeof item.message !== "string"
-    ) {
-      throw new Error(`${label} returned an invalid response.`);
-    }
-    return {
-      code: item.code,
-      field: item.field,
-      message: item.message,
-    };
-  });
+  if (value[flag] !== (value.errors.length === 0)) {
+    throw new Error(`${label} returned an inconsistent response.`);
+  }
+  return value as Record<string, unknown> & {
+    errors: TrackCommandResponse["errors"];
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

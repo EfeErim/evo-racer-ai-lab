@@ -23,7 +23,7 @@ from evo_racer.evolution import (
     VehicleGenome,
     controller_features,
 )
-from evo_racer.numeric import clamp, finite_number, rounded, sigmoid
+from evo_racer.numeric import clamp, rounded, sigmoid
 from evo_racer.simulation import Controls, Observation, TrackGeometry, VehicleSetup
 
 NEAT_CONFIG_RESOURCE: Final = "config/neat-feed-forward.ini"
@@ -160,10 +160,6 @@ class RuntimeLink:
     source: int
     weight: float
 
-    def __post_init__(self) -> None:
-        if not math.isfinite(self.weight):
-            raise ValueError("Runtime link weight must be finite.")
-
     def to_payload(self) -> dict[str, object]:
         return {"source": self.source, "weight": self.weight}
 
@@ -182,8 +178,6 @@ class RuntimeNode:
             raise ValueError(f"Unsupported runtime activation: {self.activation}.")
         if self.aggregation != "sum":
             raise ValueError(f"Unsupported runtime aggregation: {self.aggregation}.")
-        if not math.isfinite(self.bias) or not math.isfinite(self.response):
-            raise ValueError("Runtime node values must be finite.")
 
     def to_payload(self) -> dict[str, object]:
         return {
@@ -241,10 +235,6 @@ class CompiledNEATNetwork:
 
     def node_values(self, features: Sequence[float]) -> dict[int, float]:
         """Return the value of every input and evaluated node for one input vector."""
-        if len(features) != len(self.input_keys):
-            raise ValueError(f"NEAT network requires {len(self.input_keys)} input features.")
-        if any(not math.isfinite(feature) for feature in features):
-            raise ValueError("NEAT network features must be finite.")
         values = dict(zip(self.input_keys, features, strict=True))
         for node in self.nodes:
             total = sum(values[link.source] * link.weight for link in node.links)
@@ -261,48 +251,6 @@ class CompiledNEATNetwork:
             "outputTransforms": ["tanh", "sigmoid", "sigmoid"],
             "nodes": [node.to_payload() for node in self.nodes],
         }
-
-    @classmethod
-    def from_payload(cls, payload: object) -> CompiledNEATNetwork:
-        if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
-            raise ValueError("NEAT network contractVersion must be 1.")
-        if payload.get("kind") != "feed-forward-dag":
-            raise ValueError("NEAT network kind must be feed-forward-dag.")
-        if payload.get("outputTransforms") != ["tanh", "sigmoid", "sigmoid"]:
-            raise ValueError("NEAT output transforms are unsupported.")
-        input_keys = _integer_array(payload.get("inputKeys"), "inputKeys")
-        output_keys = _integer_array(payload.get("outputKeys"), "outputKeys")
-        node_payloads = payload.get("nodes")
-        if not isinstance(node_payloads, list):
-            raise ValueError("NEAT network nodes must be an array.")
-        nodes: list[RuntimeNode] = []
-        for node_payload in node_payloads:
-            if not isinstance(node_payload, dict):
-                raise ValueError("NEAT runtime node must be an object.")
-            link_payloads = node_payload.get("links")
-            if not isinstance(link_payloads, list):
-                raise ValueError("NEAT runtime links must be an array.")
-            links: list[RuntimeLink] = []
-            for link_payload in link_payloads:
-                if not isinstance(link_payload, dict):
-                    raise ValueError("NEAT runtime link must be an object.")
-                links.append(
-                    RuntimeLink(
-                        source=_integer(link_payload.get("source"), "link source"),
-                        weight=finite_number(link_payload.get("weight"), "link weight"),
-                    )
-                )
-            nodes.append(
-                RuntimeNode(
-                    key=_integer(node_payload.get("key"), "node key"),
-                    activation=_string(node_payload.get("activation"), "node activation"),
-                    aggregation=_string(node_payload.get("aggregation"), "node aggregation"),
-                    bias=finite_number(node_payload.get("bias"), "node bias"),
-                    response=finite_number(node_payload.get("response"), "node response"),
-                    links=tuple(links),
-                )
-            )
-        return cls(input_keys=input_keys, output_keys=output_keys, nodes=tuple(nodes))
 
 
 class NEATController:
@@ -383,10 +331,8 @@ class NEATGenerationReport:
         }
 
 
-def load_neat_config(population_size: int = 24) -> Any:
+def load_neat_config(population_size: int) -> Any:
     """Load the bundled, explicit feed-forward neat-python configuration."""
-    if population_size < 4:
-        raise ValueError("NEAT population_size must be at least 4.")
     config_resource = resources.files("evo_racer").joinpath(NEAT_CONFIG_RESOURCE)
     with resources.as_file(config_resource) as config_path:
         config = neat.Config(
@@ -397,8 +343,6 @@ def load_neat_config(population_size: int = 24) -> Any:
             str(config_path),
         )
     config.pop_size = population_size
-    if not config.genome_config.feed_forward:
-        raise RuntimeError("EvoRacer supports feed-forward NEAT only.")
     return config
 
 
@@ -484,8 +428,6 @@ def score_neat_generation(
             raise RuntimeError("Vehicle genes changed during active evaluation.")
         raw_genome.fitness = evaluation.fitness
         scored.append(NEATScoredCandidate(candidate, evaluation))
-    if not scored:
-        raise RuntimeError("NEAT evaluated an empty population.")
     champion = min(scored, key=lambda item: (-item.evaluation.fitness, item.candidate.candidate_id))
     return NEATGenerationReport(
         generation=generation,
@@ -500,21 +442,3 @@ def _mutate_value(value: float, power: float, minimum: float, maximum: float) ->
     if random.random() >= VEHICLE_MUTATION_RATE:
         return value
     return clamp(value + random.gauss(0.0, power), minimum, maximum)
-
-
-def _integer_array(value: object, field: str) -> tuple[int, ...]:
-    if not isinstance(value, list):
-        raise ValueError(f"{field} must be an array.")
-    return tuple(_integer(item, field) for item in value)
-
-
-def _integer(value: object, field: str) -> int:
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise ValueError(f"{field} must be an integer.")
-    return value
-
-
-def _string(value: object, field: str) -> str:
-    if not isinstance(value, str):
-        raise ValueError(f"{field} must be a string.")
-    return value

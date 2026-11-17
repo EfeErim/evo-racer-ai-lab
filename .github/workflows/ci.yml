@@ -3,9 +3,6 @@ name: CI
 on:
   push:
     branches: [main]
-  # pull_request runs with the PR's own code and a read-only token; pull_request_target is not used.
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read

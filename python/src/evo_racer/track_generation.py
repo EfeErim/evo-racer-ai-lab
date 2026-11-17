@@ -376,14 +376,10 @@ def _sample_half_lap(
 
 def _half_endpoint_key(half: tuple[str, ...]) -> tuple[float, float]:
     pose = _Pose(0.0, 0.0, 0.0)
-    _compile_piece_kinds(half, pose)
-    return pose.x, pose.y
-
-
-def _compile_piece_kinds(kinds: tuple[str, ...], pose: _Pose) -> None:
     points: list[Point] = []
-    for kind in kinds:
+    for kind in half:
         _compile_piece(cast(SegmentKind, kind), pose, points)
+    return pose.x, pose.y
 
 
 def _half_difference(first: tuple[str, ...], second: tuple[str, ...]) -> int:
@@ -482,8 +478,6 @@ def _varied_rectangle_candidates(
         pair_budget = remaining // 2
         for top_count in range(pair_budget):
             side_count = pair_budget - top_count
-            if side_count < 1:
-                continue
             for top in _sequence_options(top_count, difficulty):
                 for side in _sequence_options(side_count, difficulty):
                     for split_corners in itertools.combinations(range(4), split_count):
@@ -560,8 +554,6 @@ def _simple_rectangle_candidates(target: int) -> list[tuple[TrackPieceV1, ...]]:
     results: list[tuple[TrackPieceV1, ...]] = []
     for top_count in range(pair_budget):
         side_count = pair_budget - top_count
-        if side_count < 1:
-            continue
         for direction in ("left", "right"):
             turn = f"turn-{direction}-90"
             kinds = (
@@ -622,15 +614,11 @@ def _generated_id(
 
 def _closure_exhausted(candidate_count: int) -> dict[str, object]:
     return {
-        "contractVersion": GENERATOR_CONTRACT_VERSION,
-        "valid": False,
-        "errors": [
-            _issue(
-                "ASSISTED_CLOSURE_NOT_FOUND",
-                "pieces",
-                "No safe closure was found within the bounded search.",
-            )
-        ],
+        **_failure(
+            "ASSISTED_CLOSURE_NOT_FOUND",
+            "pieces",
+            "No safe closure was found within the bounded search.",
+        ),
         "candidateCount": candidate_count,
     }
 

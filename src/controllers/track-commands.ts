@@ -1,20 +1,20 @@
 import type { AppContext } from "../app-store";
 import { downloadTrack } from "../downloads";
 import {
-  deleteTrack,
+  deleteRecord,
   generateTrack,
   loadPresetTracks,
   loadTrackLibrary,
   saveTrack,
 } from "../ipc";
 import {
-  generatorInputsChanged,
+  generatedBadge,
+  withEditorTrack,
   type TrackBuilderPending,
   type TrackBuilderTab,
   type TrackWorkspaceState,
 } from "../track-builder";
 import type { CompiledTrackV1 } from "../track-renderer";
-import { replaceEditorTrack } from "../track-workbench";
 import { createTrackEditing } from "./track-editing";
 import { createTrackValidation } from "./track-validation";
 
@@ -38,6 +38,19 @@ export function dismissedTrackResponseMessage(
   return `Track ${operations[pending]} response ignored after ${context}.`;
 }
 
+/** Drops the response of a validation, assist or import still in flight. */
+export function cancelTrackRequests(
+  requests: AppContext["store"]["requests"],
+  pending: TrackBuilderPending,
+): void {
+  if (pending === "import") {
+    requests.trackImport.cancel();
+  }
+  if (pending === "validate" || pending === "assist") {
+    requests.trackValidation.cancel();
+  }
+}
+
 export function syncGeneratorDraftPresentation(
   root: HTMLElement,
   workspace: TrackWorkspaceState,
@@ -57,21 +70,9 @@ export function syncGeneratorDraftPresentation(
     return;
   }
 
-  const inputsChanged = generatorInputsChanged(workspace);
-  const selectedMatches =
-    workspace.generatedPreview !== undefined &&
-    workspace.selected !== undefined &&
-    JSON.stringify(workspace.generatedPreview.track) ===
-      JSON.stringify(workspace.selected.track);
-  badge.classList.toggle("is-warning", inputsChanged);
-  badge.classList.toggle("is-success", !inputsChanged && selectedMatches);
-  badge.classList.toggle("is-info", !inputsChanged && !selectedMatches);
-  // Update glyph and label together so state never relies on color alone.
-  const [glyph, label] = inputsChanged
-    ? ["!", "Inputs changed"]
-    : selectedMatches
-      ? ["✓", "Active track"]
-      : ["○", "Candidate, not active"];
+  const { tone, glyph, label } = generatedBadge(workspace);
+  const inputsChanged = tone === "warning";
+  badge.className = `validation-badge is-${tone}`;
   const glyphElement = document.createElement("span");
   glyphElement.setAttribute("aria-hidden", "true");
   glyphElement.textContent = glyph;
@@ -220,6 +221,18 @@ export function createTrackCommands(context: AppContext) {
       (candidate) => candidate.track.id === trackId,
     );
 
+  const editInBuilder = (compiled: CompiledTrackV1, message: string): void => {
+    store.trackWorkspace = withEditorTrack(
+      store.trackWorkspace,
+      compiled,
+      message,
+    );
+    render();
+    root
+      .querySelector<HTMLElement>('[data-builder-tab="build"]')
+      ?.focus({ preventScroll: true });
+  };
+
   const handleTrackAction = async (
     action: string,
     element: HTMLElement,
@@ -273,19 +286,12 @@ export function createTrackCommands(context: AppContext) {
         case "open-selected-builder":
           if (store.trackWorkspace.selected !== undefined) {
             store.trackWorkspace = {
-              ...store.trackWorkspace,
-              toolsOpen: true,
-              tab: "build",
-              editor: replaceEditorTrack(
-                store.trackWorkspace.editor,
-                store.trackWorkspace.selected.track,
+              ...withEditorTrack(
+                store.trackWorkspace,
+                store.trackWorkspace.selected,
+                "Selected track loaded into the piece editor.",
               ),
-              editorPreview: store.trackWorkspace.selected,
-              editorValidation: { status: "valid", errors: [] },
-              notice: {
-                tone: "success",
-                message: "Selected track loaded into the piece editor.",
-              },
+              toolsOpen: true,
             };
             dispatch({ type: "navigate", route: "track" });
             root
@@ -295,15 +301,7 @@ export function createTrackCommands(context: AppContext) {
           return;
         case "close-builder": {
           const canceledTrackCommand = store.trackWorkspace.pending;
-          if (canceledTrackCommand === "import") {
-            store.requests.trackImport.cancel();
-          }
-          if (
-            canceledTrackCommand === "validate" ||
-            canceledTrackCommand === "assist"
-          ) {
-            store.requests.trackValidation.cancel();
-          }
+          cancelTrackRequests(store.requests, canceledTrackCommand);
           store.trackWorkspace = {
             ...store.trackWorkspace,
             toolsOpen: false,
@@ -332,15 +330,7 @@ export function createTrackCommands(context: AppContext) {
               tab === store.trackWorkspace.tab
                 ? null
                 : store.trackWorkspace.pending;
-            if (
-              canceledTrackCommand === "validate" ||
-              canceledTrackCommand === "assist"
-            ) {
-              store.requests.trackValidation.cancel();
-            }
-            if (canceledTrackCommand === "import") {
-              store.requests.trackImport.cancel();
-            }
+            cancelTrackRequests(store.requests, canceledTrackCommand);
             const messages: Record<TrackBuilderTab, string> = {
               build: "Edit the pieces. Every change is previewed and checked.",
               generate:
@@ -440,9 +430,7 @@ export function createTrackCommands(context: AppContext) {
             },
           };
           render();
-          const response = await generateTrack({
-            ...generator,
-          });
+          const response = await generateTrack(generator);
           if (!isCurrentTrackCommand(isCurrentRequest, "generate")) {
             return;
           }
@@ -492,24 +480,10 @@ export function createTrackCommands(context: AppContext) {
           return;
         case "edit-generated":
           if (store.trackWorkspace.generatedPreview !== undefined) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              tab: "build",
-              editor: replaceEditorTrack(
-                store.trackWorkspace.editor,
-                store.trackWorkspace.generatedPreview.track,
-              ),
-              editorPreview: store.trackWorkspace.generatedPreview,
-              editorValidation: { status: "valid", errors: [] },
-              notice: {
-                tone: "success",
-                message: "Generated track loaded into the piece editor.",
-              },
-            };
-            render();
-            root
-              .querySelector<HTMLElement>('[data-builder-tab="build"]')
-              ?.focus({ preventScroll: true });
+            editInBuilder(
+              store.trackWorkspace.generatedPreview,
+              "Generated track loaded into the piece editor.",
+            );
           }
           return;
         case "save-editor":
@@ -554,24 +528,10 @@ export function createTrackCommands(context: AppContext) {
         case "edit-library": {
           const compiled = libraryTrack(element.dataset.trackId);
           if (compiled !== undefined) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              tab: "build",
-              editor: replaceEditorTrack(
-                store.trackWorkspace.editor,
-                compiled.track,
-              ),
-              editorPreview: compiled,
-              editorValidation: { status: "valid", errors: [] },
-              notice: {
-                tone: "success",
-                message: "Saved track loaded into the piece editor.",
-              },
-            };
-            render();
-            root
-              .querySelector<HTMLElement>('[data-builder-tab="build"]')
-              ?.focus({ preventScroll: true });
+            editInBuilder(
+              compiled,
+              "Saved track loaded into the piece editor.",
+            );
           }
           return;
         }
@@ -601,7 +561,7 @@ export function createTrackCommands(context: AppContext) {
               },
             };
             render();
-            await deleteTrack(trackId);
+            await deleteRecord("track", trackId);
             if (!isCurrentTrackCommand(isCurrentRequest, "delete")) {
               await refreshLibrary();
               return;

@@ -26,11 +26,6 @@ npm run check              # format, links, lint, types, Vitest, pytest, build (
 npm run test:learning      # rerun the 30-case benchmark and fail on any difference
 ```
 
-On a clean clone and a 12-thread desktop CPU, `setup.ps1` took 45 s, `npm run check`
-2 min 17 s, `npm run test:e2e` (31 Chromium flows) 1 min 43 s, and `npm run
-test:learning` 3 min with one process per core.
-[docs/demo.md](docs/demo.md) has the captured output.
-
 `npm run build:release` produces a self-contained `release\EvoRacer\EvoRacer.exe` with
 Python bundled; `npm run test:release` runs it with no Node.js or Python on `PATH`. To
 try it without building, download

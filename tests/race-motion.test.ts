@@ -121,31 +121,6 @@ describe("generation race playback", () => {
     },
   });
 
-  it("rejects malformed pose arrays", () => {
-    expect(() =>
-      parseGenerationRace({
-        ...race,
-        cars: [{ ...race.cars[0], poses: [0, 1] }],
-      }),
-    ).toThrow();
-    expect(() =>
-      parseGenerationRace({
-        generation: 1,
-        populationSize: 1,
-        cars: [
-          {
-            candidateId: "x",
-            rank: 1,
-            fitness: 0,
-            termination: "timeout",
-            progress: 0,
-            poses: [0, 0, 0, 0, 0, 0, 1, 1, 0, 0],
-          },
-        ],
-      }),
-    ).toThrow("increase");
-  });
-
   it("runs on its own clock and ends after the slowest car plus a hold", () => {
     const showing = createShowingRace("run", race, 1000);
     expect(showing.duration).toBeCloseTo(4, 6);

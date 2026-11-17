@@ -7,11 +7,12 @@ import json
 import mimetypes
 import os
 import socket
+from collections.abc import Callable
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
-from typing import Final
+from typing import Final, cast
 from urllib.parse import unquote, urlsplit
 
 from evo_racer.onboarding import validate_setup
@@ -87,35 +88,25 @@ class HealthHandler(BaseHTTPRequestHandler):
                 },
             )
             return
-        if path == "/v1/tracks/presets":
-            if not self._origin_allowed():
-                self.send_error(HTTPStatus.FORBIDDEN)
-                return
-            self._send_json(HTTPStatus.OK, compiled_presets_payload())
-            return
-        if path == "/v1/tracks/library":
-            if not self._origin_allowed():
-                self.send_error(HTTPStatus.FORBIDDEN)
-                return
-            self._send_json(HTTPStatus.OK, library_payload(self._data_root()))
-            return
-        if path == "/v1/runs/library":
-            if not self._origin_allowed():
-                self.send_error(HTTPStatus.FORBIDDEN)
-                return
-            self._send_json(HTTPStatus.OK, self._run_manager().library())
+        listings: dict[str, Callable[[], object]] = {
+            "/v1/tracks/presets": compiled_presets_payload,
+            "/v1/tracks/library": lambda: library_payload(self._app_server.data_root),
+            "/v1/runs/library": lambda: self._app_server.run_manager.library(),
+        }
+        if path in listings:
+            if not self._forbidden():
+                self._send_json(HTTPStatus.OK, listings[path]())
             return
         run_prefix = "/v1/runs/library/"
         export_suffix = "/export"
         if path.startswith(run_prefix) and path.endswith(export_suffix):
-            if not self._origin_allowed():
-                self.send_error(HTTPStatus.FORBIDDEN)
+            if self._forbidden():
                 return
             run_id = unquote(path.removeprefix(run_prefix).removesuffix(export_suffix))
             if not run_id:
                 self._send_json(HTTPStatus.BAD_REQUEST, {"error": "RUN_ID_REQUIRED"})
                 return
-            self._send_json(HTTPStatus.OK, self._run_manager().export(run_id))
+            self._send_json(HTTPStatus.OK, self._app_server.run_manager.export(run_id))
             return
         if self._serve_static(path):
             return
@@ -145,24 +136,24 @@ class HealthHandler(BaseHTTPRequestHandler):
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if not self._origin_allowed():
-            self.send_error(HTTPStatus.FORBIDDEN)
+        if self._forbidden():
             return
 
         payload = self._read_json()
         if payload is INVALID_REQUEST_BODY:
             return
 
+        runs = self._app_server.run_manager
         if path == "/v1/setup/validate":
             response = validate_setup(payload)
         elif path == "/v1/runs/start":
-            response = self._run_manager().start(payload)
+            response = runs.start(payload)
         elif path == "/v1/runs/observe":
-            response = self._run_manager().observe(payload)
+            response = runs.observe(payload)
         elif path == "/v1/runs/resume":
-            response = self._run_manager().resume(payload)
+            response = runs.resume(payload)
         elif path == "/v1/runs/command":
-            response = self._run_manager().command(payload)
+            response = runs.command(payload)
         elif path == "/v1/tracks/compile":
             response = self._compile_request(payload)
         elif path == "/v1/tracks/generate":
@@ -170,7 +161,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         elif path == "/v1/tracks/assist-closure":
             response = assist_track_closure_payload(payload)
         else:
-            response = save_track_payload(payload, self._data_root())
+            response = save_track_payload(payload, self._app_server.data_root)
         self._send_json(HTTPStatus.OK, response)
 
     def do_DELETE(self) -> None:
@@ -181,8 +172,7 @@ class HealthHandler(BaseHTTPRequestHandler):
         if not path.startswith((track_prefix, run_prefix)):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        if not self._origin_allowed():
-            self.send_error(HTTPStatus.FORBIDDEN)
+        if self._forbidden():
             return
         if path.startswith(track_prefix):
             record_id = unquote(path.removeprefix(track_prefix))
@@ -194,9 +184,9 @@ class HealthHandler(BaseHTTPRequestHandler):
             self._send_json(HTTPStatus.BAD_REQUEST, {"error": label})
             return
         response = (
-            delete_track(record_id, self._data_root())
+            delete_track(record_id, self._app_server.data_root)
             if path.startswith(track_prefix)
-            else self._run_manager().delete(record_id)
+            else self._app_server.run_manager.delete(record_id)
         )
         self._send_json(HTTPStatus.OK, response)
 
@@ -241,15 +231,16 @@ class HealthHandler(BaseHTTPRequestHandler):
             }
         return validate_track_payload(payload.get("track"))
 
-    def _data_root(self) -> Path | None:
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
-        return server.data_root
+    @property
+    def _app_server(self) -> EvoRacerServer:
+        return cast(EvoRacerServer, self.server)
 
-    def _run_manager(self) -> RunManager:
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
-        return server.run_manager
+    def _forbidden(self) -> bool:
+        """Answer 403 and return True when the request comes from a foreign origin."""
+        if self._origin_allowed():
+            return False
+        self.send_error(HTTPStatus.FORBIDDEN)
+        return True
 
     def _origin_allowed(self) -> bool:
         origin = self.headers.get("Origin")
@@ -262,18 +253,13 @@ class HealthHandler(BaseHTTPRequestHandler):
             self.send_header("Vary", "Origin")
 
     def _allowed_origins(self) -> frozenset[str]:
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
-        return server.allowed_origins
+        return self._app_server.allowed_origins
 
     def _origin(self) -> str:
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
-        return f"http://{LOOPBACK_HOST}:{server.server_port}"
+        return f"http://{LOOPBACK_HOST}:{self._app_server.server_port}"
 
     def _serve_static(self, request_path: str) -> bool:
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
+        server = self._app_server
         if server.static_root is None or request_path.startswith(("/v1/", "/health")):
             return False
 
@@ -306,26 +292,13 @@ class HealthHandler(BaseHTTPRequestHandler):
         return True
 
     def _request_shutdown(self) -> None:
-        if not self._origin_allowed():
-            self.send_error(HTTPStatus.FORBIDDEN)
+        if self._forbidden():
             return
-        self._send_json(
-            HTTPStatus.OK,
-            {
-                "contractVersion": 1,
-                "status": "shutting-down",
-            },
-        )
-        server = self.server
-        assert isinstance(server, EvoRacerServer)
-        Thread(target=server.shutdown, name="evo-racer-shutdown", daemon=True).start()
+        self._send_json(HTTPStatus.OK, {"contractVersion": 1, "status": "shutting-down"})
+        Thread(target=self._app_server.shutdown, name="evo-racer-shutdown", daemon=True).start()
 
     def _send_json(self, status: HTTPStatus, payload: object) -> None:
-        body = json.dumps(
-            payload,
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
+        body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         self.send_response(status)
         self._send_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -370,17 +343,11 @@ def run(port: int = DEFAULT_PORT) -> None:
         server.server_close()
 
 
-def parse_args() -> argparse.Namespace:
-    """Parse the intentionally small local service CLI."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    return parser.parse_args()
-
-
 def main() -> None:
     """Run the command-line service entrypoint."""
-    args = parse_args()
-    run(port=args.port)
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    run(port=parser.parse_args().port)
 
 
 if __name__ == "__main__":

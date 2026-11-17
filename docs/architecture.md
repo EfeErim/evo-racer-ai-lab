@@ -23,14 +23,12 @@ one runtime dependency, `neat-python 2.0.0`.
   generation, physics, sensors, controllers, episode termination, fitness, baselines,
   Fixed GA and NEAT, checkpointing, persistence, replay data, and process lifecycle.
 - **TypeScript** owns UI state, interaction, rendering, charts, accessibility, and the
-  versioned IPC client. It checks the shape of each response and displays Python's
-  results and error codes; it never re-decides a domain rule.
-- Messages carry explicit contract versions. Fixtures under `contracts/` are parsed by
-  both test suites.
-- `src/contracts.ts` holds the TypeScript contract types and their runtime parsers. The
-  parsers are written by hand instead of with a schema library: the client stays free of
-  runtime dependencies, and Vitest runs them against the same `contracts/*.json`
-  fixtures that pytest checks are exactly what Python sends.
+  versioned IPC client. It displays Python's results and error codes and never
+  re-decides a domain rule.
+- Messages carry explicit contract versions. At the boundary `src/contracts.ts` and
+  `src/ipc.ts` check only the envelope (versions, collections, validity against the
+  error list); Python owns nested validation, including imported checkpoints. Fixtures
+  under `contracts/` are parsed by both test suites.
 - Rendering cadence is independent of Python's fixed simulation step.
 
 One canonical language for the computational parts keeps Fixed GA and NEAT on the same
@@ -132,7 +130,7 @@ requested during a generation apply at its end; they never change the seeded seq
 A worker error is reported as `RUN_ADVANCE_FAILED`, including a failed save, and a
 deleted run is never written again.
 
-A full episode evaluates in roughly 50–130 ms, far faster than real time, so Race shows
+An episode evaluates far faster than real time, so Race shows
 the most recently finished generation. The evaluator records a presentation-only pose
 every three physics steps. When a generation finishes, Python sends its top 12 cars as
 a transient `generationRace`; the browser acknowledges what it holds, so each race
@@ -196,7 +194,7 @@ child Node.js or Python process.
 `python/tools/regression_matrix.py` runs 18 small cases (three seeds, three presets, both
 algorithms) through the public `RunSession` and pins their result hashes in
 `docs/experiments/data/regression-matrix-v2.json`. `python/tests/test_regression_matrix.py` reruns
-them and requires exact equality; the TypeScript suite checks the same file's shape.
+them and requires exact equality.
 
 `python/tests/test_run_worker.py` checks the run lifecycle without fixed sleeps: both
 algorithms finish with no observe call, observe never starts a worker, no, sparse and
@@ -204,6 +202,6 @@ constant polling give the same result, pause and resume match an uninterrupted r
 repeated resume, stop, delete, close and a failed save behave as described above.
 
 CI (`.github/workflows/ci.yml`) runs `npm run check` and `npm run test:e2e` on Windows
-for every push to `main` and every pull request into it. `npm run test:learning` and the
+for every push to `main`. `npm run test:learning` and the
 release build and acceptance test (`npm run build:release`, `npm run test:release`) are
 run locally; none of them replaces running the package on a clean, offline machine.

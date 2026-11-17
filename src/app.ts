@@ -14,6 +14,7 @@ import { createRunLibraryController } from "./controllers/run-library";
 import { createRunSession } from "./controllers/run-session";
 import {
   createTrackCommands,
+  cancelTrackRequests,
   dismissedTrackResponseMessage,
   syncGeneratorDraftPresentation,
   TRACK_LIBRARY_REFRESHED_NOTICE,
@@ -126,15 +127,7 @@ export function mountApp(root: HTMLElement): AppController {
     ) {
       const canceledTrackCommand = store.trackWorkspace.pending;
       store.requests.trackCommand.cancel();
-      if (canceledTrackCommand === "import") {
-        store.requests.trackImport.cancel();
-      }
-      if (
-        canceledTrackCommand === "validate" ||
-        canceledTrackCommand === "assist"
-      ) {
-        store.requests.trackValidation.cancel();
-      }
+      cancelTrackRequests(store.requests, canceledTrackCommand);
       store.trackWorkspace = {
         ...store.trackWorkspace,
         pending: null,

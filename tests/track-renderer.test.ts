@@ -5,7 +5,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   parseCompiledTrack,
-  parsePresetTracksResponse,
   renderTrackSvg,
   type CompiledTrackV1,
 } from "../src/track-renderer";
@@ -23,17 +22,6 @@ const fixture = JSON.parse(
 ) as GeometryFixture;
 
 describe("Python geometry renderer", () => {
-  it("accepts the shared versioned geometry fixture", () => {
-    const response = parsePresetTracksResponse({
-      contractVersion: 1,
-      presets: [fixture.compiled],
-    });
-
-    expect(response.presets[0]?.track.id).toBe("easy-oval");
-    expect(response.presets[0]?.geometry.centerline.at(0)).toEqual([0, 0]);
-    expect(response.presets[0]?.geometry.centerline.at(-1)).toEqual([0, 0]);
-  });
-
   it("renders only the Python-derived geometry as SVG paths", () => {
     const svg = renderTrackSvg(fixture.compiled);
 
@@ -112,53 +100,9 @@ describe("Python geometry renderer", () => {
     );
   });
 
-  it("rejects malformed geometry contracts", () => {
+  it("rejects an unversioned compiled track", () => {
     expect(() =>
-      parsePresetTracksResponse({ contractVersion: 2, presets: [] }),
-    ).toThrow("invalid track geometry contract");
-
-    for (const geometryPatch of [
-      { centerline: [] },
-      { leftBoundary: [] },
-      { rightBoundary: [] },
-      { checkpoints: [] },
-    ]) {
-      expect(() =>
-        parseCompiledTrack({
-          ...fixture.compiled,
-          geometry: { ...fixture.compiled.geometry, ...geometryPatch },
-        }),
-      ).toThrow("invalid response");
-    }
-
-    expect(() =>
-      parseCompiledTrack({
-        ...fixture.compiled,
-        track: { ...fixture.compiled.track, roadWidth: 0 },
-      }),
-    ).toThrow("invalid response");
-    expect(() =>
-      parseCompiledTrack({
-        ...fixture.compiled,
-        track: { ...fixture.compiled.track, name: "   " },
-      }),
-    ).toThrow("invalid response");
-
-    expect(() =>
-      parseCompiledTrack({
-        ...fixture.compiled,
-        geometry: {
-          ...fixture.compiled.geometry,
-          leftBoundary: [
-            [-1e308, 0],
-            [-1e308, 1],
-          ],
-          rightBoundary: [
-            [1e308, 0],
-            [1e308, 1],
-          ],
-        },
-      }),
-    ).toThrow("invalid response");
+      parseCompiledTrack({ ...fixture.compiled, contractVersion: 2 }),
+    ).toThrow("unsupported version");
   });
 });

@@ -1,5 +1,5 @@
 import { type AppContext, type RunLibraryNotice } from "../app-store";
-import { updateGenerationTrails } from "../generation-trails";
+import { updateGenerationTrails } from "../run-presentation";
 import type { createRacePlayback } from "./race-playback";
 import {
   commandRun,

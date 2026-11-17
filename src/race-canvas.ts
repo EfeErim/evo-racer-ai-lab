@@ -55,7 +55,11 @@ const CAR_WIDTH_M = 2;
 const MIN_CAR_LENGTH_PX = 14;
 const STAGE_PADDING_PX = 16;
 
-function cssVar(style: CSSStyleDeclaration, name: string, fallback: string) {
+export function cssVar(
+  style: CSSStyleDeclaration,
+  name: string,
+  fallback: string,
+) {
   const value = style.getPropertyValue(name).trim();
   return value === "" ? fallback : value;
 }

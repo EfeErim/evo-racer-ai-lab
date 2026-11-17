@@ -1,3 +1,4 @@
+import { cssVar } from "./race-canvas";
 import type {
   GenerationRaceCarV1,
   GenerationRaceV1,
@@ -17,11 +18,6 @@ interface InsightPalette {
   neutral: string;
   label: string;
   text: string;
-}
-
-function cssVar(style: CSSStyleDeclaration, name: string, fallback: string) {
-  const value = style.getPropertyValue(name).trim();
-  return value === "" ? fallback : value;
 }
 
 function make<K extends keyof HTMLElementTagNameMap>(

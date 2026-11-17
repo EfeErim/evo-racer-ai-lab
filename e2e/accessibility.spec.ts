@@ -1,7 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
-import { openSetup } from "./flow";
+import { openSetup, expectSurfaceMeetsLimits } from "./flow";
 import { expect, test, type Page } from "@playwright/test";
-import { expectSurfaceMeetsLimits } from "./surface";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -79,9 +78,10 @@ for (const colorScheme of ["dark", "light"] as const) {
   }) => {
     await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
     await page.setViewportSize({ width: 1280, height: 800 });
-    await visitEveryScreen(page, (surface) =>
-      expectNoSeriousViolations(page, `${surface} ${colorScheme}`),
-    );
+    await visitEveryScreen(page, async (surface) => {
+      await expectNoSeriousViolations(page, `${surface} ${colorScheme}`);
+      await expectSurfaceMeetsLimits(page, `${surface} ${colorScheme}`);
+    });
   });
 }
 

@@ -6,13 +6,18 @@ import {
   renderTrainingCompletion,
 } from "../src/views/training";
 import {
+  priorGenerationTrails,
+  updateGenerationTrails,
   clampReplayFrameIndex,
   replayFrameIndexAfterAction,
   runCompletion,
   runControls,
   runProgress,
 } from "../src/run-presentation";
-import type { ObservationSnapshotV1 } from "../src/contracts";
+import type {
+  GenerationTrailV1,
+  ObservationSnapshotV1,
+} from "../src/contracts";
 
 function snapshot(
   overrides: Partial<ObservationSnapshotV1> = {},
@@ -206,5 +211,56 @@ describe("Results replay navigation", () => {
   it("keeps every action on the only available frame", () => {
     expect(replayFrameIndexAfterAction(0, 1, "previous")).toBe(0);
     expect(replayFrameIndexAfterAction(0, 1, "next")).toBe(0);
+  });
+});
+
+function trail(runId: string, candidateId: string): GenerationTrailV1 {
+  return {
+    runId,
+    candidateId,
+    generation: 0,
+    points: [
+      [1, 2],
+      [3, 4],
+    ],
+  };
+}
+
+function trailSnapshot(
+  runId: string,
+  generationTrails: GenerationTrailV1[],
+): ObservationSnapshotV1 {
+  return {
+    contractVersion: 1,
+    runId,
+    status: "running",
+    generation: 1,
+    totalGenerations: 10,
+    generationReport: null,
+    fitnessHistory: [],
+    selectedCar: null,
+    result: null,
+    generationTrails,
+    previousRuns: [],
+  };
+}
+
+describe("previous generation champion trails", () => {
+  it("uses the Python trails of the observed run only", () => {
+    const own = trail("run-a", "g0000-c0001");
+    expect(
+      updateGenerationTrails(
+        trailSnapshot("run-a", [own, trail("run-b", "g0000-c0002")]),
+      ),
+    ).toEqual([own]);
+  });
+
+  it("hides the displayed champion and keeps at most seven earlier paths", () => {
+    const trails = Array.from({ length: 8 }, (_, index) =>
+      trail("run-a", `g${String(index).padStart(4, "0")}-c0001`),
+    );
+    const prior = priorGenerationTrails(trails, "g0007-c0001");
+    expect(prior).toHaveLength(7);
+    expect(prior.map((item) => item.candidateId)).not.toContain("g0007-c0001");
   });
 });

@@ -21,8 +21,6 @@ from evo_racer.evolution import (
 )
 from evo_racer.neat_evolution import NEATCandidate, NEATScoredCandidate
 from evo_racer.simulation import (
-    CORNER_GRIP_BASE,
-    CORNER_GRIP_PER_RECOVERY,
     DRAG_COEFFICIENT,
     FIXED_TIME_STEP,
     SENSOR_ANGLES,
@@ -34,6 +32,7 @@ from evo_racer.simulation import (
     Observation,
     TrackGeometry,
     VehicleSetup,
+    corner_grip,
     evaluate_episode,
 )
 
@@ -255,7 +254,7 @@ def target_lap_seconds(
         start = len(ring) - 1 - start
     ring = ring[start:] + ring[:start]
     count = len(ring)
-    grip = CORNER_GRIP_BASE + CORNER_GRIP_PER_RECOVERY * setup.grip_recovery
+    grip = corner_grip(setup)
     caps: list[float] = []
     for index in range(count):
         curvature = _menger_curvature(ring[index - 1], ring[index], ring[(index + 1) % count])

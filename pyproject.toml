@@ -35,7 +35,6 @@ testpaths = ["python/tests"]
 
 [tool.ruff]
 line-length = 100
-required-version = "==0.17.3"
 src = ["python/src", "python/tests", "python/tools"]
 target-version = "py313"
 

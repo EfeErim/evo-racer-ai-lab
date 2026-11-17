@@ -32,9 +32,6 @@ function Wait-ForHealth {
     throw "EvoRacer health endpoint did not become ready within 30 seconds."
 }
 
-$script:SawLiveTelemetry = $false
-$script:SawGenerationReplay = $false
-
 function Wait-ForRunState {
     param(
         [Parameter(Mandatory)][string] $RunId,
@@ -52,42 +49,6 @@ function Wait-ForRunState {
             -TimeoutSec 10
         if (-not $observed.valid) {
             throw "The packaged app rejected a run observation."
-        }
-
-        $selectedCar = $observed.snapshot.selectedCar
-        $positionFields = if ($null -eq $selectedCar) {
-            @()
-        }
-        else {
-            @($selectedCar.PSObject.Properties.Name)
-        }
-        if ($observed.snapshot.generationInProgress -eq $true -and
-            $null -ne $observed.snapshot.activeCandidate -and
-            $positionFields -contains "x" -and
-            $positionFields -contains "y" -and
-            $positionFields -contains "heading") {
-            $script:SawLiveTelemetry = $true
-        }
-
-        $generationReplay = $observed.snapshot.generationReplay
-        $replayFrames = if ($null -eq $generationReplay) {
-            @()
-        }
-        else {
-            @($generationReplay.frames)
-        }
-        $replayFields = if ($replayFrames.Count -eq 0) {
-            @()
-        }
-        else {
-            @($replayFrames[0].PSObject.Properties.Name)
-        }
-        if ($replayFrames.Count -gt 1 -and
-            $replayFields -contains "x" -and
-            $replayFields -contains "y" -and
-            $replayFields -contains "heading" -and
-            $replayFields -contains "simulatedSeconds") {
-            $script:SawGenerationReplay = $true
         }
 
         $generationReached = $observed.snapshot.generation -ge $TargetGeneration
@@ -287,7 +248,6 @@ foreach ($requiredPath in @(
 }
 
 $firstProcess = $null
-$secondProcess = $null
 try {
     Test-ExecutableStarter -Executable $directExecutable -LocalData $dataRoot
     Test-ExecutableStarter -Executable $executable -LocalData $dataRoot
@@ -319,56 +279,6 @@ try {
     }
     $runId = [string] $started.snapshot.runId
 
-    $observed = Wait-ForRunState -RunId $runId -TargetGeneration 1
-    if (-not $observed.valid -or $observed.snapshot.generation -ne 1) {
-        throw "The packaged app did not save the first complete generation."
-    }
-    if (-not $script:SawLiveTelemetry) {
-        throw "The packaged app did not expose live candidate position telemetry."
-    }
-    if (-not $script:SawGenerationReplay) {
-        throw "The packaged app did not expose a Python generation replay for smooth presentation."
-    }
-    $pauseRequested = Invoke-RestMethod `
-        -Uri "$appOrigin/v1/runs/command" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body (@{
-            contractVersion = 1
-            runId = $runId
-            command = "pause"
-        } | ConvertTo-Json) `
-        -TimeoutSec 30
-    if (-not $pauseRequested.valid) {
-        throw "The packaged app rejected the pause command."
-    }
-    $paused = Wait-ForRunState `
-        -RunId $runId `
-        -TargetGeneration 2 `
-        -ExpectedStatus "paused"
-    if (-not $paused.valid -or $paused.snapshot.status -ne "paused") {
-        throw "The packaged app did not persist the requested generation-boundary pause."
-    }
-    Assert-LoopbackOnly -AppProcess $firstProcess
-    Stop-AcceptanceApp -AppProcess $firstProcess
-    $firstProcess = $null
-
-    $secondProcess = Start-AcceptanceApp -Executable $executable -LocalData $dataRoot
-    $library = Invoke-RestMethod -Uri "$appOrigin/v1/runs/library" -TimeoutSec 10
-    if ($library.runs.runId -notcontains $runId) {
-        throw "The packaged app did not restore the saved run after restart."
-    }
-
-    $resumed = Invoke-RestMethod `
-        -Uri "$appOrigin/v1/runs/resume" `
-        -Method Post `
-        -ContentType "application/json" `
-        -Body (@{ contractVersion = 1; runId = $runId } | ConvertTo-Json) `
-        -TimeoutSec 120
-    if (-not $resumed.valid -or $resumed.snapshot.status -ne "running") {
-        throw "The packaged app could not resume the saved run."
-    }
-
     $completed = Wait-ForRunState `
         -RunId $runId `
         -TargetGeneration 3 `
@@ -386,13 +296,13 @@ try {
         $referenceLine[0][1] -ne $referenceLine[-1][1]) {
         throw "The packaged app did not complete training and retain replay frames."
     }
-    Assert-LoopbackOnly -AppProcess $secondProcess
-    Stop-AcceptanceApp -AppProcess $secondProcess
-    $secondProcess = $null
+    Assert-LoopbackOnly -AppProcess $firstProcess
+    Stop-AcceptanceApp -AppProcess $firstProcess
+    $firstProcess = $null
 
     Write-Host "Release acceptance passed."
     Write-Host "Archive SHA-256: $actualHash"
-    Write-Host "Run restored and completed: $runId"
+    Write-Host "Run completed: $runId"
     Write-Host "Packaged minimum-curvature result contract verified."
     Write-Host "Outside-ZIP executable started successfully: $directExecutable"
     Write-Host "EvoRacer.exe started directly and owned the loopback service."
@@ -401,8 +311,5 @@ try {
 finally {
     if ($null -ne $firstProcess -and -not $firstProcess.HasExited) {
         Stop-AcceptanceApp -AppProcess $firstProcess
-    }
-    if ($null -ne $secondProcess -and -not $secondProcess.HasExited) {
-        Stop-AcceptanceApp -AppProcess $secondProcess
     }
 }

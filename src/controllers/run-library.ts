@@ -4,10 +4,10 @@ import type {
   RunLibraryNotice,
 } from "../app-store";
 import { downloadRunDocument } from "../downloads";
-import { updateGenerationTrails } from "../generation-trails";
+import { updateGenerationTrails } from "../run-presentation";
 import {
   compileTrack,
-  deleteRun,
+  deleteRecord,
   exportRun,
   loadRunLibrary,
   openRun,
@@ -94,7 +94,7 @@ export function createRunLibraryController(
     render();
     try {
       if (action === "delete") {
-        await deleteRun(runId);
+        await deleteRecord("run", runId);
         if (!isCurrentAction()) {
           await refreshRuns({
             tone: "neutral",
