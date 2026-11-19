@@ -30,7 +30,7 @@ npm run test:learning      # rerun the 30-case benchmark and fail on any differe
 `npm run build:release` produces a self-contained `release\EvoRacer\EvoRacer.exe` and a
 ZIP with Python bundled; `npm run test:release` runs the extracted ZIP with no Node.js or
 Python on `PATH`. To try it without building, download
-[v1.2.0](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.2.0), extract the
+[v1.2.1](https://github.com/EfeErim/evo-racer-ai-lab/releases/tag/v1.2.1), extract the
 ZIP and open `EvoRacer\EvoRacer.exe`. Builds are not code-signed. Using the app:
 [user guide](docs/user-guide.md).
 

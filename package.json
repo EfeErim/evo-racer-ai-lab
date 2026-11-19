@@ -1,6 +1,6 @@
 {
   "name": "evo-racer-ai-lab",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "description": "Watch AI cars learn to race by evolution, fully offline on Windows.",
   "author": "Efe Erim",
