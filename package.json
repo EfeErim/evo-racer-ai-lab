@@ -16,24 +16,18 @@
     "npm": ">=11.0.0 <12"
   },
   "scripts": {
-    "build": "tsc -b --pretty false && vite build",
-    "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
-    "check": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check.ps1",
-    "check:docs": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-doc-links.ps1",
+    "setup": "(if not exist .venv\\Scripts\\python.exe py -3.13 -m venv .venv) && .venv\\Scripts\\python -m pip install --disable-pip-version-check -r requirements-dev.lock && .venv\\Scripts\\python -m pip install --disable-pip-version-check --no-deps --no-build-isolation -e . && npm ci",
     "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
-    "format": "prettier --write . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
-    "format:check": "prettier --check . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude",
-    "format:python": ".venv\\Scripts\\python -m ruff format python",
-    "format:python:check": ".venv\\Scripts\\python -m ruff format --check python",
-    "lint": "eslint . --max-warnings 0",
-    "lint:python": ".venv\\Scripts\\python -m ruff check python",
+    "build": "tsc -b --pretty false && vite build",
+    "format": "prettier . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude --write && .venv\\Scripts\\python -m ruff format python",
+    "lint": "prettier . --ignore-path .gitignore --ignore-path .prettierignore --ignore-path .git/info/exclude --check && eslint . --max-warnings 0 && .venv\\Scripts\\python -m ruff format --check python && .venv\\Scripts\\python -m ruff check python && .venv\\Scripts\\python -m mypy python/src python/tests python/tools",
     "test": "vitest run tests",
-    "test:e2e": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e.ps1",
-    "test:learning": ".venv\\Scripts\\python python/tools/learning_benchmark.py --fixture docs/experiments/data/learning-benchmark-v2.json",
-    "test:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-release.ps1",
     "test:python": ".venv\\Scripts\\python -m pytest",
-    "typecheck": "tsc -b --pretty false",
-    "typecheck:python": ".venv\\Scripts\\python -m mypy python/src python/tests python/tools"
+    "check": "npm run lint && npm test && npm run test:python && npm run build",
+    "test:e2e": "npm run build && playwright test",
+    "test:learning": ".venv\\Scripts\\python python/tools/learning_benchmark.py --fixture docs/experiments/data/learning-benchmark-v2.json",
+    "build:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-release.ps1",
+    "test:release": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-release.ps1"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",

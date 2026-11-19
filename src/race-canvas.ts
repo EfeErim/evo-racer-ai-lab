@@ -1,7 +1,7 @@
 import type { CompiledTrackV1, TrackPoint } from "./track-renderer";
 
-export type CarTone = "leader" | "pack" | "crashed" | "finished";
-export type LineTone = "current" | "prior" | "ideal" | "trail";
+type CarTone = "leader" | "pack" | "crashed" | "finished";
+type LineTone = "current" | "prior" | "ideal" | "trail";
 
 export interface CarSprite {
   x: number;
@@ -17,7 +17,7 @@ export interface RaceLine {
   alpha?: number;
 }
 
-export interface RaceFrame {
+interface RaceFrame {
   cars: CarSprite[];
   lines: RaceLine[];
 }

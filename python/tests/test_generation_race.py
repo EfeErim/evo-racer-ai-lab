@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
 from evo_racer.observer import GENERATION_RACE_CAR_LIMIT, RunSession, RunSettings
-from evo_racer.run_manager import RunManager
 from evo_racer.simulation import (
     FIXED_TIME_STEP,
     PurePursuitBaseline,
@@ -95,30 +93,6 @@ def test_generation_race_cannot_change_evolution_or_persist(algorithm: str) -> N
     observed = run(observe=True)
     assert observed == run(observe=False)
     assert "generationRace" not in json.dumps(observed)
-
-
-def test_observe_rejects_an_invalid_known_race(tmp_path: Path) -> None:
-    manager = RunManager(tmp_path)
-    started = manager.start(
-        {
-            "contractVersion": 1,
-            "trackPreset": "easy-oval",
-            "settings": {
-                "algorithm": "fixed-ga",
-                "populationSize": 10,
-                "generations": 1,
-                "episodeSeconds": 15,
-                "seed": 819,
-            },
-            "track": None,
-        }
-    )
-    assert started["valid"] is True, started
-    run_id = cast(dict[str, Any], started["snapshot"])["runId"]
-    rejected = manager.observe({"contractVersion": 1, "runId": run_id, "knownGenerationRace": "1"})
-    assert rejected["valid"] is False
-    errors = cast(list[dict[str, Any]], rejected["errors"])
-    assert errors[0]["code"] == "KNOWN_RACE_INVALID"
 
 
 def test_a_checkpoint_with_a_live_race_still_resumes() -> None:

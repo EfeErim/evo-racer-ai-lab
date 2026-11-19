@@ -2,206 +2,93 @@
 
 ## Runtime boundary
 
-EvoRacer is a local Windows x64 application with two runtime components:
-
 ```text
 TypeScript browser UI and renderer
-        |
-        | batched commands and observation snapshots
-        | versioned JSON over 127.0.0.1 only
-        |
-Python application, simulation, and evolution core
+        |  versioned JSON commands and observation snapshots, 127.0.0.1 only
+Python application, simulation and evolution core
 ```
 
-No component binds to a LAN or public interface or calls a non-loopback resource. The
-Python service uses the standard-library HTTP server, hard-codes `127.0.0.1`, and has
-one runtime dependency, `neat-python 2.0.0`.
+Python owns tracks, geometry, validation, physics, sensors, controllers, fitness,
+baselines, Fixed GA, NEAT, persistence and the process lifecycle. TypeScript owns UI
+state, rendering, charts and the IPC client, and never re-decides a domain rule: at the
+boundary `src/contracts.ts` and `src/ipc.ts` check only the envelope (contract versions,
+collections, validity against the error list), and Python does the nested validation.
+Fixtures under `contracts/` are read by both test suites, so a contract change breaks
+both sides.
 
-## Responsibility split
-
-- **Python** owns track schemas and compilation, generated geometry, validation, seeded
-  generation, physics, sensors, controllers, episode termination, fitness, baselines,
-  Fixed GA and NEAT, checkpointing, persistence, replay data, and process lifecycle.
-- **TypeScript** owns UI state, interaction, rendering, charts, accessibility, and the
-  versioned IPC client. It displays Python's results and error codes and never
-  re-decides a domain rule.
-- Messages carry explicit contract versions. At the boundary `src/contracts.ts` and
-  `src/ipc.ts` check only the envelope (versions, collections, validity against the
-  error list); Python owns nested validation, including imported checkpoints. Fixtures
-  under `contracts/` are parsed by both test suites.
-- Rendering cadence is independent of Python's fixed simulation step.
-
-One canonical language for the computational parts keeps Fixed GA and NEAT on the same
-evaluator, with no second physics implementation in the browser.
-
-## Frontend
-
-Vite, TypeScript, HTML and CSS, with no UI framework. Pages are Home, Set up (track,
-training plan and Start on one page), the Track Builder, Race and Results. Renders patch
-the existing DOM in place (`src/dom-patch.ts`) and actions are delegated from the root,
-so a 250 ms observation never recreates the canvas, moves focus, or interrupts a
-pointer press.
-
-Training never starts by itself: Python must validate the setup
-(`POST /v1/setup/validate`, which never creates a run) and the user must press Start.
-After Start the configuration is frozen.
+The service is the standard-library HTTP server bound to `127.0.0.1`; its one runtime
+dependency is `neat-python 2.0.0`. Training never starts by itself: Python validates the
+setup (`POST /v1/setup/validate` never creates a run) and the user presses Start, after
+which the settings are frozen.
 
 ## Tracks
 
-`TrackV1` is the only stored track representation: schema version, identity, road
-width, and an ordered list of catalogue pieces (start/finish, straights, 45° and 90°
-turns, hairpins, chicanes). Centerlines, boundaries, checkpoints and spawn poses are
-never stored; the Python compiler derives them from the pieces. Validation requires one
-start/finish, supported pieces, corridor-width bounds, position and heading closure,
-and a non-self-intersecting centerline.
+`TrackV1` (schema version, identity, road width, ordered pieces) is the only stored
+track form. Centerline, walls, checkpoints and spawn poses are always recompiled from the
+pieces by `compile_track_payload`, for presets, edits, generated, imported and reloaded
+tracks alike. The browser editor holds only the piece list and undo history.
 
-Presets, edited, generated, imported and reloaded tracks all go through
-`compile_track_payload`. The browser editor owns only the piece list and undo history;
-validation, open-draft previews and assisted closure are Python commands. Assisted
-closure searches a bounded append-only suffix, then may roll back up to six trailing
-pieces.
+Generator version 5 pairs two seeded half laps that differ in at least two pieces, ranks
+candidates by SHA-256 and gives up after 200. Changing the generator changes which track a
+seed produces, so the version is part of the output.
 
-Generator version 5 samples seeded half laps, pairs two compatible halves that differ
-in at least two pieces into an asymmetric circuit, ranks candidates by SHA-256, and
-gives up after 200. Length selects 12, 18 or 24 pieces. Easy uses flowing corners only,
-Technical requires chicanes, and Hard requires chicanes and hairpins. Every candidate
-must pass the same compiler.
+## Simulation and evolution
 
-Saved tracks are written atomically under the local `tracks` directory and reloaded
-through the compiler; an unreadable record is isolated instead of blocking the library.
+`simulation.py` is the single evaluator, at a fixed `1/60 s` step. Fixed GA
+(`evolution.py`) and NEAT (`neat_evolution.py`) both score candidates through
+`RunSession._evaluate_live`, so they share physics, sensors, termination and fitness.
+Vehicle genes ride on the genome (for NEAT, a subclass of the library genome) and change
+only while offspring are created. Tournament selection follows
+[Miller and Goldberg](https://www.complex-systems.com/abstracts/v09_i03_a02/); the NEAT
+config follows the
+[neat-python v2.0.0 feed-forward example](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/examples/xor/config-feedforward);
+Pure Pursuit follows
+[Coulter's CMU report](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm),
+with local lookahead and speed tuning.
 
-## Simulation
+Saved results record `simulationContractVersion`. A run resumes or compares only against
+runs recorded under the current physics revision.
 
-`python/src/evo_racer/simulation.py` is the single fixed-step evaluator, at exactly
-`1/60 s`. The model is arcade-style: throttle, braking, quadratic drag,
-speed-dependent steering, a speed-dependent turn-rate limit, lateral slip and grip
-recovery. Front- or rear-heavy drive and brake bias shift between understeer and slip;
-both bias genes keep their full `[0,1]` range. Vehicle setup is frozen, and the
-evaluator checks controller parameters at every step.
+## Run lifecycle and observation
 
-Collision sweeps the vehicle disc between steps against the centerline corridor.
-Progress projects onto the closed centerline. Seven ray sensors intersect the
-compiler's boundaries.
+`observer.py` holds a deterministic `RunSession` with no threads and no file writes.
+`run_manager.py` gives each started or resumed run one worker that advances and saves a
+generation at a time until the run pauses, stops, completes, is deleted or the app exits.
+Observe only reads a snapshot, so how often the browser polls cannot change a result.
+Pause and stop apply at the end of the current generation.
 
-The seeded random-network and Pure Pursuit baselines use the same controller protocol
-and evaluator. Pure Pursuit follows R. Craig Coulter's
-[CMU technical report](https://publications.ri.cmu.edu/implementation-of-the-pure-pursuit-path-tracking-algorithm);
-its lookahead and corner-speed policy are local tuning.
+When a generation finishes, Python sends its top 12 cars' poses (one every three physics
+steps) once, as a transient `generationRace`; the browser acknowledges the race it holds
+and plays it on one long-lived canvas, interpolating between poses for display only. The
+browser polls every 250 ms while visible and 1000 ms while hidden. A `RequestGate` per
+request kind (`src/request-gate.ts`) drops a response when a newer request of that kind
+has started or the user has left the page that asked.
 
-Saved results record the physics revision (`simulationContractVersion`). A run only
-resumes or compares against runs recorded under the current revision.
-
-## Evolution
-
-**Fixed GA** (`evolution.py`): a fixed `10 → 6 → 3` network (`tanh` hidden layer,
-continuous outputs) plus seven vehicle genes: five performance logits turned into
-allocations by a stable softmax, and two bias genes. Each run owns one seeded
-`random.Random`, evaluates candidates in a stable order, and creates the next generation
-by elitism, tournament selection
-([Miller and Goldberg](https://www.complex-systems.com/abstracts/v09_i03_a02/)), uniform
-crossover and bounded Gaussian mutation.
-
-**NEAT** (`neat_evolution.py`) is the only neat-python integration. The bundled INI
-declares a feed-forward network with 10 inputs and 3 outputs, following the
-[official v2.0.0 example](https://github.com/CodeReclaimers/neat-python/blob/v2.0.0/examples/xor/config-feedforward).
-`EvoRacerGenome` subclasses the library genome and carries the same vehicle genes,
-crossed and mutated only in the hooks neat-python calls while creating offspring.
-Enabled topology is compiled into an ordered DAG that `NEATController` runs on the same
-observation features. `score_neat_generation` is the one place fitness is written back
-to neat-python genomes. Saved runs never hold neat-python objects; a resumed run is
-replayed from its seed (see [persistence](#persistence-and-recovery)).
-
-Both algorithms score candidates through `RunSession._evaluate_live`: one
-`evaluate_episode` call, then `episode_fitness`. Genome,
-network and vehicle values never change during an episode. Fitness rewards net forward
-progress; a completion and lap-time bonus applies only after a full lap, and collisions
-are penalized.
-
-## Observation and results
-
-`observer.py` holds one deterministic `RunSession`: run identity, frozen settings,
-algorithm state, generation advancement, snapshots, baselines and replays. It starts no
-threads and writes no files. `run_manager.py` owns the lifecycle around it: Start,
-Resume, or a resume command starts the run's single training worker, which advances and
-saves one generation at a time until the run pauses, stops, completes, is deleted, or
-the app exits. Observe only reads a snapshot, so training finishes whether or not a
-browser is polling, and how often it polls cannot change the result. Pause and stop
-requested during a generation apply at its end; they never change the seeded sequence.
-A worker error is reported as `RUN_ADVANCE_FAILED`, including a failed save, and a
-deleted run is never written again.
-
-An episode evaluates far faster than real time, so Race shows
-the most recently finished generation. The evaluator records a presentation-only pose
-every three physics steps. When a generation finishes, Python sends its top 12 cars as
-a transient `generationRace`; the browser acknowledges what it holds, so each race
-crosses loopback once. The browser plays races at `1x`, `2x` or `4x` on one long-lived
-`<canvas>`, joining poses with cubic Hermite curves. Interpolation is visual only and
-nothing predicted is sent back.
-
-Python also keeps the last eight champion paths (at most 64 points each) in the
-checkpoint. Observation polls every 250 ms while visible and 1000 ms while hidden, one
-request at a time; training runs at full speed either way. In the browser each kind of
-request has a `RequestGate` (`src/request-gate.ts`): a late response applies only if no
-newer request of that kind started and the player has not left the page that asked.
-
-Results replays the champion and compares it with the random-network and Pure Pursuit
-baselines on the same track, budget and vehicle setup. `racing_line.py` builds a
-minimum-curvature reference line from the centerline and reports how far the champion's
-path deviates from it. It is a geometric reference, not a lap-time optimum.
-
-## Persistence and recovery
+## Persistence
 
 Each run is one file, `%LOCALAPPDATA%\EvoRacerAILab\runs\<run-id>\run.json`: the
-embedded `TrackV1`, frozen settings, and one checkpoint at a complete generation
-boundary with a SHA-256 of its snapshot. The training worker saves after every
-generation and a pause, resume or stop saves at once. Every write creates a temporary file,
-`fsync`s it and replaces `run.json` with `os.replace`. JSON uses sorted keys and rejects
-non-finite numbers.
+embedded track, frozen settings and one checkpoint at a generation boundary with a
+SHA-256 of its snapshot. Writes go to a temporary file, are `fsync`ed and replace the
+record with `os.replace`. No Python or neat-python objects are stored; Resume replays the
+completed generations from the seed and refuses the run if the result differs from the
+checkpoint. The library validates each record on its own and isolates corrupt ones.
 
-Startup, listing saved runs and opening saved results never train. The library validates each record independently and
-isolates corrupt ones. An explicit Resume rebuilds the run from its track, settings and
-seed, replays the completed generations deterministically, and fails if the result
-differs from the checkpoint. Nothing stores live Python or neat-python objects, so the
-file stays portable and inspectable.
+## Package
 
-## Windows offline package
-
-The entry point is `evo_racer.launcher`. It binds the same server to `127.0.0.1:8765`,
-serves the API and the built Vite assets from one fixed root (path traversal is
-rejected, responses carry a same-origin content security policy), and opens the default
-browser. A second launch opens the running instance. Exit calls a shutdown endpoint
-that responds before the server stops and releases its socket.
-
-The release is a PyInstaller `onedir` build: `EvoRacer.exe` plus its runtime directory,
-kept at `release\EvoRacer` and zipped with a separate checksum. It includes the user
-guide, third-party notices and the Python, neat-python and PyInstaller licenses.
-
-`npm run test:release` extracts the ZIP, runs it with only the Windows system directory
-on `PATH`, no Python variables and unreachable proxies, and then starts, saves, shuts
-down, restarts, resumes and completes a run. It fails on any non-loopback socket or any
-child Node.js or Python process.
-
-## Dependencies
-
-- JavaScript development dependencies are exact versions, locked by
-  `package-lock.json`.
-- Python dependencies are exact versions in `requirements-dev.lock`. `scripts/setup.ps1`
-  creates `.venv`, installs that lock and the local package, and runs `npm ci`.
-- TypeScript stays within the range typescript-eslint supports.
+`evo_racer.launcher` serves the API and the built UI from one origin on
+`127.0.0.1:8765` and opens the browser; a second launch opens the running instance. The
+service answers only requests whose `Host` is this loopback port and whose `Origin`, if
+any, is this origin; `npm run dev` reaches it through a Vite proxy. Warnings and
+failures go to `%LOCALAPPDATA%\EvoRacerAILab\logs\evoracer.log` (1 MB, two backups). The
+release is a PyInstaller `onedir` build kept at `release\EvoRacer` and zipped with a
+checksum, the user guide, third-party notices and licenses.
 
 ## Verification
 
-`python/tools/regression_matrix.py` runs 18 small cases (three seeds, three presets, both
-algorithms) through the public `RunSession` and pins their result hashes in
-`docs/experiments/data/regression-matrix-v2.json`. `python/tests/test_regression_matrix.py` reruns
-them and requires exact equality.
-
-`python/tests/test_run_worker.py` checks the run lifecycle without fixed sleeps: both
-algorithms finish with no observe call, observe never starts a worker, no, sparse and
-constant polling give the same result, pause and resume match an uninterrupted run, and
-repeated resume, stop, delete, close and a failed save behave as described above.
-
-CI (`.github/workflows/ci.yml`) runs `npm run check` and `npm run test:e2e` on Windows
-for every push to `main`. `npm run test:learning` and the
-release build and acceptance test (`npm run build:release`, `npm run test:release`) are
-run locally; none of them replaces running the package on a clean, offline machine.
+- `npm run check`: Prettier, ESLint, Ruff, mypy, Vitest, pytest and the production
+  build. pytest includes `test_regression_matrix.py`, which reruns 18 small cases and
+  requires the result hashes in `docs/experiments/data/regression-matrix-v2.json`.
+- `npm run test:e2e`: Playwright flows, with an axe scan, against the built UI and the
+  real Python service.
+- CI runs both on Windows. `npm run test:learning`, `npm run build:release` and
+  `npm run test:release` run locally.

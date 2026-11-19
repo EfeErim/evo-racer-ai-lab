@@ -31,7 +31,7 @@ import { captureRenderState, restoreFocus } from "./render-state";
 import { updateEditorDetails } from "./track-workbench";
 import { renderShell } from "./views/shell";
 
-export interface AppController {
+interface AppController {
   getState(): AppState;
   dispatch(action: AppAction): void;
 }
@@ -88,41 +88,57 @@ export function mountApp(root: HTMLElement): AppController {
     store.trackWorkspace = { ...store.trackWorkspace, toolsOpen: false };
   };
 
-  const dispatch = (action: AppAction): void => {
-    const previousRoute = store.state.route;
-    const validationWasChecking = store.state.validation.status === "checking";
-    store.state = transition(store.state, action);
-    store.trackWorkspace = syncSelectedTrack(
-      store.trackWorkspace,
-      store.state.draft.track,
-    );
-    const routeChanged = store.state.route !== previousRoute;
-    const enteredWelcome = routeChanged && store.state.route === "welcome";
-    const enteredTrack = routeChanged && store.state.route === "track";
-    const retryPresetGeometry =
-      routeChanged &&
-      (store.state.route === "track" || store.state.route === "setup") &&
-      store.presetGeometry.status === "unavailable";
-    const retryTrackLibrary =
-      enteredTrack && store.trackWorkspace.libraryStatus === "unavailable";
-    const welcomeRefreshNotice: RunLibraryNotice =
-      store.runLibrary.status === "ready" &&
-      store.runLibrary.notice.tone !== "error"
-        ? store.runLibrary.notice
-        : {
-            tone: "neutral",
-            message: "Saved runs refreshed from local storage.",
-          };
+  /** Side effects of a route change, decided from the state before any of them run. */
+  interface RouteChange {
+    changed: boolean;
+    enteredWelcome: boolean;
+    retryPresetGeometry: boolean;
+    retryTrackLibrary: boolean;
+    welcomeRefreshNotice: RunLibraryNotice;
+  }
+
+  const planRouteChange = (previousRoute: AppState["route"]): RouteChange => {
+    const route = store.state.route;
+    const changed = route !== previousRoute;
+    return {
+      changed,
+      enteredWelcome: changed && route === "welcome",
+      retryPresetGeometry:
+        changed &&
+        (route === "track" || route === "setup") &&
+        store.presetGeometry.status === "unavailable",
+      retryTrackLibrary:
+        changed &&
+        route === "track" &&
+        store.trackWorkspace.libraryStatus === "unavailable",
+      welcomeRefreshNotice:
+        store.runLibrary.status === "ready" &&
+        store.runLibrary.notice.tone !== "error"
+          ? store.runLibrary.notice
+          : {
+              tone: "neutral",
+              message: "Saved runs refreshed from local storage.",
+            },
+    };
+  };
+
+  /** Drops the responses the page being left was still waiting for. */
+  const cancelLeftRouteRequests = (
+    previousRoute: AppState["route"],
+    validationWasChecking: boolean,
+    routeChanged: boolean,
+  ): void => {
+    const route = store.state.route;
     if (
       previousRoute === "setup" &&
-      store.state.route !== "setup" &&
+      route !== "setup" &&
       validationWasChecking
     ) {
       store.requests.setupValidation.cancel();
     }
     if (
       previousRoute === "track" &&
-      store.state.route !== "track" &&
+      route !== "track" &&
       store.trackWorkspace.pending !== null
     ) {
       const canceledTrackCommand = store.trackWorkspace.pending;
@@ -162,14 +178,15 @@ export function mountApp(root: HTMLElement): AppController {
         store.simulation = { status: "idle" };
       }
     }
-    if (action.type === "new-setup") {
-      resetRunPresentation();
-    }
-    if (routeChanged && store.state.route === "results") {
+  };
+
+  /** Puts the entered page into its loading state before it renders. */
+  const prepareEnteredRoute = (change: RouteChange): void => {
+    if (change.changed && store.state.route === "results") {
       store.replayFrameIndex = 0;
       store.replayPaused = false;
     }
-    if (enteredWelcome) {
+    if (change.enteredWelcome) {
       if (store.runLibrary.status === "ready") {
         store.runLibrary = {
           ...store.runLibrary,
@@ -182,10 +199,10 @@ export function mountApp(root: HTMLElement): AppController {
         store.runLibrary = { status: "loading" };
       }
     }
-    if (retryPresetGeometry) {
+    if (change.retryPresetGeometry) {
       store.presetGeometry = { status: "loading" };
     }
-    if (retryTrackLibrary) {
+    if (change.retryTrackLibrary) {
       store.trackWorkspace = {
         ...store.trackWorkspace,
         libraryStatus: "loading",
@@ -203,16 +220,40 @@ export function mountApp(root: HTMLElement): AppController {
         toolsOpen: store.state.route === "track",
       };
     }
-    render(routeChanged);
-    if (enteredWelcome) {
-      void refreshRuns(welcomeRefreshNotice);
+  };
+
+  const loadEnteredRoute = (change: RouteChange): void => {
+    if (change.enteredWelcome) {
+      void refreshRuns(change.welcomeRefreshNotice);
     }
-    if (retryPresetGeometry) {
+    if (change.retryPresetGeometry) {
       void refreshPresetGeometry();
     }
-    if (retryTrackLibrary) {
+    if (change.retryTrackLibrary) {
       void refreshLibrary(TRACK_LIBRARY_REFRESHED_NOTICE);
     }
+  };
+
+  const dispatch = (action: AppAction): void => {
+    const previousRoute = store.state.route;
+    const validationWasChecking = store.state.validation.status === "checking";
+    store.state = transition(store.state, action);
+    store.trackWorkspace = syncSelectedTrack(
+      store.trackWorkspace,
+      store.state.draft.track,
+    );
+    const change = planRouteChange(previousRoute);
+    cancelLeftRouteRequests(
+      previousRoute,
+      validationWasChecking,
+      change.changed,
+    );
+    if (action.type === "new-setup") {
+      resetRunPresentation();
+    }
+    prepareEnteredRoute(change);
+    render(change.changed);
+    loadEnteredRoute(change);
   };
 
   const showShutdownScreen = (
@@ -281,20 +322,20 @@ export function mountApp(root: HTMLElement): AppController {
       : (captureRenderState(root).focus ?? store.deferredFocus);
     patchHtml(
       root,
-      renderShell(
-        store.state,
-        store.presetGeometry,
-        store.trackWorkspace,
-        store.simulation,
-        store.runLibrary,
-        {
+      renderShell({
+        state: store.state,
+        presetGeometry: store.presetGeometry,
+        trackWorkspace: store.trackWorkspace,
+        simulation: store.simulation,
+        runLibrary: store.runLibrary,
+        replay: {
           frameIndex: store.replayFrameIndex,
           paused: store.replayPaused,
         },
-        motionIsReduced(store),
-        trainingStageInfo(),
-        store.raceSpeed,
-      ),
+        reducedMotion: motionIsReduced(store),
+        stageInfo: trainingStageInfo(),
+        raceSpeed: store.raceSpeed,
+      }),
     );
     attachRaceCanvases(root);
     attachRaceInsight(root);

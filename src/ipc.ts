@@ -18,17 +18,6 @@ import {
   type TrackV1,
 } from "./track-renderer";
 
-const LOCAL_SERVICE_ORIGIN =
-  import.meta.env.VITE_EVORACER_SERVICE_ORIGIN ?? "http://127.0.0.1:8765";
-
-function isLoopbackOrigin(origin: string): boolean {
-  const url = new URL(origin);
-  return (
-    (url.protocol === "http:" || url.protocol === "https:") &&
-    (url.hostname === "127.0.0.1" || url.hostname === "localhost")
-  );
-}
-
 export async function loadPresetTracks(): Promise<PresetTracksResponse> {
   const response = boundary(
     await getJson<unknown>("/v1/tracks/presets", "Preset track request"),
@@ -264,12 +253,10 @@ async function requestJson<T>(
   init: RequestInit | undefined,
   label: string,
 ): Promise<T> {
-  if (!isLoopbackOrigin(LOCAL_SERVICE_ORIGIN)) {
-    throw new Error(`${label} is restricted to the local service.`);
-  }
   let response: Response;
   try {
-    response = await fetch(`${LOCAL_SERVICE_ORIGIN}${path}`, init);
+    // Same origin: the service serves the UI, and the Vite dev server proxies to it.
+    response = await fetch(path, init);
   } catch (error) {
     throw new Error(
       `${label} has no response yet from the local service. Try again.${error instanceof Error ? ` ${error.message}` : ""}`,

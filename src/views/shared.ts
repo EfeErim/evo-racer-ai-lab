@@ -11,7 +11,7 @@ export function pageHeader(title: string, description: string): string {
   `;
 }
 
-export interface TrackIdentity {
+interface TrackIdentity {
   name: string;
   summary: string;
   seed: string;

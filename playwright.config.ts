@@ -1,32 +1,23 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const e2ePort = process.env.EVORACER_E2E_PORT ?? "8765";
-const e2eBaseUrl = `http://127.0.0.1:${e2ePort}`;
-
 export default defineConfig({
   testDir: "./e2e",
-  fullyParallel: false,
   // Every spec shares one Python service and local data root.
   workers: 1,
   timeout: 120_000,
   expect: { timeout: 15_000 },
   reporter: "line",
   use: {
-    baseURL: e2eBaseUrl,
+    ...devices["Desktop Chrome"],
+    baseURL: "http://127.0.0.1:8765",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  projects: [
-    {
-      name: "chromium",
-      use: { ...devices["Desktop Chrome"] },
-    },
-  ],
   webServer: {
+    // Serves the built UI from dist/ with a fresh local data root.
     command:
-      "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-e2e.ps1",
-    url: `${e2eBaseUrl}/health`,
-    reuseExistingServer: false,
+      "rmdir /s /q .runtime_tmp\\e2e-data 2>nul & .venv\\Scripts\\python -m evo_racer.launcher --no-browser --data-root .runtime_tmp\\e2e-data --static-root dist",
+    url: "http://127.0.0.1:8765/health",
     timeout: 30_000,
   },
 });

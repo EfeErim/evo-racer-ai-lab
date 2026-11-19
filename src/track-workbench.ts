@@ -1,6 +1,6 @@
 import type { CompiledTrackV1, TrackPieceV1, TrackV1 } from "./track-renderer";
 
-export interface SegmentDefinition {
+interface SegmentDefinition {
   kind: string;
   label: string;
   description: string;
@@ -90,7 +90,7 @@ export const SEGMENT_DEFINITIONS = [
 
 export type SegmentKind = (typeof SEGMENT_DEFINITIONS)[number]["kind"];
 
-export interface EditorSnapshot {
+interface EditorSnapshot {
   id: string;
   name: string;
   roadWidth: number;

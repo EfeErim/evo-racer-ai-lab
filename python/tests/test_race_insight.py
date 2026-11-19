@@ -12,8 +12,9 @@ from evo_racer.evolution import NETWORK_INPUT_COUNT
 from evo_racer.observer import RunSession, RunSettings, best_pure_pursuit_episode
 from evo_racer.race_insight import lap_record_payload, target_lap_seconds
 from evo_racer.racing_line import compare_with_reference, minimum_curvature_reference
-from evo_racer.simulation import TrackGeometry, VehicleSetup, preset_geometry
+from evo_racer.simulation import TrackGeometry, VehicleSetup
 from evo_racer.tracks import PRESET_TRACKS, TrackV1, compile_track, compile_track_payload
+from preset_tracks import preset_geometry
 
 
 def _advanced_race(algorithm: str, seed: int = 11) -> dict[str, Any]:

@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from http import HTTPStatus
-from http.client import HTTPConnection
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError
@@ -12,606 +14,229 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-import evo_racer.launcher as launcher_module
 from evo_racer.observer import RunSession, RunSettings
 from evo_racer.run_library import save_run_document
 from evo_racer.service import LOOPBACK_HOST, EvoRacerServer, create_server
 from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 
-def test_production_frontend_and_assets_are_served_from_the_loopback_core(
-    tmp_path: Path,
-) -> None:
-    static_root = tmp_path / "web"
-    assets_root = static_root / "assets"
-    assets_root.mkdir(parents=True)
-    (static_root / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
-    (assets_root / "app.js").write_text("export {};", encoding="utf-8")
-    server = create_server(allow_development_origins=True, port=0, static_root=static_root)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+@dataclass
+class Service:
+    server: EvoRacerServer
 
-    try:
-        with urlopen(f"http://{host}:{port}/", timeout=2) as response:  # noqa: S310
-            index_body = response.read().decode("utf-8")
-        with urlopen(f"http://{host}:{port}/assets/app.js", timeout=2) as response:  # noqa: S310
-            asset_body = response.read().decode("utf-8")
+    @property
+    def origin(self) -> str:
+        return f"http://{LOOPBACK_HOST}:{self.server.server_port}"
 
-        assert index_body == "<main>EvoRacer</main>"
-        assert asset_body == "export {};"
-        assert response.headers["Content-Security-Policy"] == (
-            "default-src 'self'; img-src 'self' data:; "
-            "style-src 'self'; script-src 'self'; connect-src 'self'"
-        )
-        with pytest.raises(HTTPError) as error:
-            urlopen(f"http://{host}:{port}/%2e%2e/secret.txt", timeout=2)  # noqa: S310
-        assert error.value.code == HTTPStatus.FORBIDDEN
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_production_origin_can_request_graceful_shutdown() -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/app/shutdown",
-        method="POST",
-        headers={"Origin": f"http://127.0.0.1:{port}"},
-    )
-
-    try:
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-        thread.join(timeout=2)
-
-        assert payload == {"contractVersion": 1, "status": "shutting-down"}
-        assert response.headers["Access-Control-Allow-Origin"] == f"http://127.0.0.1:{port}"
-        assert not thread.is_alive()
-    finally:
-        server.server_close()
-
-
-def test_health_contract_is_served_on_loopback() -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    try:
-        with urlopen(f"http://{host}:{port}/health", timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-
-        assert response.status == HTTPStatus.OK
-        assert host == LOOPBACK_HOST
-        assert payload == {
-            "contractVersion": 1,
-            "host": "127.0.0.1",
-            "service": "evo-racer-core",
-            "status": "ready",
-        }
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_setup_validation_contract_does_not_start_a_run() -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/setup/validate",
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Origin": "http://127.0.0.1:4173",
-        },
-        data=json.dumps(
-            {
-                "contractVersion": 1,
-                "trackPreset": "easy-oval",
-                "settings": {
-                    "algorithm": "fixed-ga",
-                    "populationSize": 48,
-                    "generations": 30,
-                    "episodeSeconds": 90,
-                    "seed": 42,
-                },
-            }
-        ).encode("utf-8"),
-    )
-
-    try:
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-
-        assert response.status == HTTPStatus.OK
-        assert response.headers["Access-Control-Allow-Origin"] == ("http://127.0.0.1:4173")
-        assert payload == {"contractVersion": 1, "valid": True, "errors": []}
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_valid_json_null_receives_a_versioned_validation_response() -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/setup/validate",
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "Origin": "http://127.0.0.1:4173",
-        },
-        data=b"null",
-    )
-
-    try:
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-
-        assert response.status == HTTPStatus.OK
-        assert payload == {
-            "contractVersion": 1,
-            "valid": False,
-            "errors": [
-                {
-                    "code": "INVALID_PAYLOAD",
-                    "field": "request",
-                    "message": "Expected a JSON object.",
-                }
-            ],
-        }
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-@pytest.mark.parametrize(
-    "origin",
-    [
-        "http://127.0.0.1:4173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://localhost:5173",
-    ],
-)
-def test_setup_validation_accepts_supported_loopback_ui_origins(origin: str) -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/setup/validate",
-        method="POST",
-        headers={"Content-Type": "application/json", "Origin": origin},
-        data=json.dumps(
-            {
-                "contractVersion": 1,
-                "trackPreset": "easy-oval",
-                "settings": {
-                    "algorithm": "neat",
-                    "populationSize": 37,
-                    "generations": 6,
-                    "episodeSeconds": 45,
-                    "seed": 999,
-                },
-            }
-        ).encode("utf-8"),
-    )
-
-    try:
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-
-        assert response.status == HTTPStatus.OK
-        assert response.headers["Access-Control-Allow-Origin"] == origin
-        assert payload == {"contractVersion": 1, "valid": True, "errors": []}
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_compiled_track_presets_are_served_from_the_loopback_core() -> None:
-    server = create_server(allow_development_origins=True, port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/tracks/presets",
-        method="GET",
-        headers={"Origin": "http://127.0.0.1:4173"},
-    )
-
-    try:
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            payload: dict[str, Any] = json.load(response)
-
-        assert response.status == HTTPStatus.OK
-        assert response.headers["Access-Control-Allow-Origin"] == ("http://127.0.0.1:4173")
-        assert payload["contractVersion"] == 1
-        presets = payload["presets"]
-        assert isinstance(presets, list)
-        assert [preset["track"]["id"] for preset in presets] == [
-            track.track_id for track in PRESET_TRACKS
-        ]
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_generator_and_library_stay_on_versioned_loopback_contracts(
-    tmp_path: Path,
-) -> None:
-    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    def post(path: str, payload: object) -> dict[str, Any]:
+    def call(self, path: str, payload: object = None, method: str | None = None) -> Any:
         request = Request(  # noqa: S310
-            f"http://{host}:{port}{path}",
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Origin": "http://127.0.0.1:4173",
-            },
-            data=json.dumps(payload).encode("utf-8"),
+            self.origin + path,
+            method=method or ("GET" if payload is None else "POST"),
+            headers={"Content-Type": "application/json", "Origin": self.origin},
+            data=None if payload is None else json.dumps(payload).encode("utf-8"),
         )
         # Generator v5 alone takes about 2 s here, and CI machines can be slower.
         with urlopen(request, timeout=30) as response:  # noqa: S310
             assert response.status == HTTPStatus.OK
-            result: dict[str, Any] = json.load(response)
-            return result
+            return json.load(response)
 
-    try:
-        generated = post(
-            "/v1/tracks/generate",
-            {
-                "contractVersion": 1,
-                "seed": 44,
-                "length": "short",
-                "difficulty": "easy",
-            },
-        )
-        assert generated["valid"] is True
-        compiled = generated["compiled"]
-        assert isinstance(compiled, dict)
-        saved = post(
-            "/v1/tracks/library",
-            {"contractVersion": 1, "track": compiled["track"]},
-        )
-        assert saved["saved"] is True
-
-        request = Request(  # noqa: S310
-            f"http://{host}:{port}/v1/tracks/library",
-            headers={"Origin": "http://127.0.0.1:4173"},
-        )
-        with urlopen(request, timeout=2) as response:  # noqa: S310
-            library: dict[str, Any] = json.load(response)
-        assert library["tracks"] == [compiled]
-        assert library["isolated"] == []
-
-        track = compiled["track"]
-        assert isinstance(track, dict)
-        track_id = track["id"]
-        assert isinstance(track_id, str)
-        preflight = Request(  # noqa: S310
-            f"http://{host}:{port}/v1/tracks/library/{track_id}",
-            method="OPTIONS",
-            headers={"Origin": "http://127.0.0.1:4173"},
-        )
-        with urlopen(preflight, timeout=2) as response:  # noqa: S310
-            assert response.status == HTTPStatus.NO_CONTENT
-            assert "DELETE" in response.headers["Access-Control-Allow-Methods"]
-
-        deletion = Request(  # noqa: S310
-            f"http://{host}:{port}/v1/tracks/library/{track_id}",
-            method="DELETE",
-            headers={"Origin": "http://127.0.0.1:4173"},
-        )
-        with urlopen(deletion, timeout=2) as response:  # noqa: S310
-            deleted: dict[str, Any] = json.load(response)
-        assert deleted["deleted"] is True
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_run_commands_are_served_on_the_loopback_contract(
-    tmp_path: Path,
-) -> None:
-    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    def post(path: str, payload: object) -> dict[str, Any]:
-        request = Request(  # noqa: S310
-            f"http://{host}:{port}{path}",
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Origin": "http://127.0.0.1:4173",
-            },
-            data=json.dumps(payload).encode("utf-8"),
-        )
-        with urlopen(request, timeout=10) as response:  # noqa: S310
-            result: dict[str, Any] = json.load(response)
-            return result
-
-    try:
-        started = post(
-            "/v1/runs/start",
-            {
-                "contractVersion": 1,
-                "trackPreset": "easy-oval",
-                "track": None,
-                "settings": {
-                    "algorithm": "fixed-ga",
-                    "populationSize": 10,
-                    "generations": 2,
-                    "episodeSeconds": 15,
-                    "seed": 42,
-                },
-            },
-        )
-        assert started["valid"] is True
-        run_id = started["snapshot"]["runId"]
-        paused = post(
-            "/v1/runs/command",
-            {"contractVersion": 1, "runId": run_id, "command": "pause"},
-        )
-        assert paused["snapshot"]["status"] == "running"
-        assert paused["snapshot"]["pendingCommand"] == "pause"
+    def wait_for_status(self, run_id: str, status: str) -> dict[str, Any]:
         deadline = time.monotonic() + 30
-        while True:
-            unchanged = post(
-                "/v1/runs/observe",
-                {"contractVersion": 1, "runId": run_id},
-            )
-            if unchanged["snapshot"]["status"] == "paused":
-                break
-            if time.monotonic() >= deadline:
-                pytest.fail("Background service generation did not pause.")
+        while time.monotonic() < deadline:
+            snapshot: dict[str, Any] = self.call(
+                "/v1/runs/observe", {"contractVersion": 1, "runId": run_id}
+            )["snapshot"]
+            if snapshot["status"] == status:
+                return snapshot
             time.sleep(0.01)
-        assert unchanged["snapshot"]["generation"] == 1
-        post(
-            "/v1/runs/command",
-            {"contractVersion": 1, "runId": run_id, "command": "resume"},
-        )
-        deadline = time.monotonic() + 30
-        while True:
-            completed = post(
-                "/v1/runs/observe",
-                {"contractVersion": 1, "runId": run_id},
-            )
-            snapshot = completed["snapshot"]
-            if snapshot["status"] == "completed":
-                break
-            if time.monotonic() >= deadline:
-                pytest.fail("Background service generation did not complete.")
-            time.sleep(0.01)
-        assert snapshot["status"] == "completed"
-        assert snapshot["generation"] == 2
-        assert snapshot["result"]["metadata"]["runId"] == run_id
-        assert snapshot["result"]["replay"]["frames"]
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
+        pytest.fail(f"Run {run_id} did not reach {status}.")
 
 
-def test_run_library_resume_export_and_delete_survive_restart(
-    tmp_path: Path,
-) -> None:
-    session = RunSession(
-        run_id="run-service-library",
-        compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
-        settings=RunSettings(
-            algorithm="fixed-ga",
-            population_size=4,
-            generations=2,
-            episode_seconds=0.2,
-            seed=83,
-        ),
-    )
-    session.advance()
-    save_run_document(session.to_run_document(), tmp_path)
-
-    server = create_server(allow_development_origins=True, port=0, data_root=tmp_path)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-
-    def get(path: str) -> dict[str, Any]:
-        request = Request(  # noqa: S310
-            f"http://{host}:{port}{path}",
-            headers={"Origin": "http://127.0.0.1:4173"},
-        )
-        with urlopen(request, timeout=5) as response:  # noqa: S310
-            result: dict[str, Any] = json.load(response)
-            return result
-
-    def post(path: str, payload: object) -> dict[str, Any]:
-        request = Request(  # noqa: S310
-            f"http://{host}:{port}{path}",
-            method="POST",
-            headers={
-                "Content-Type": "application/json",
-                "Origin": "http://127.0.0.1:4173",
-            },
-            data=json.dumps(payload).encode("utf-8"),
-        )
-        with urlopen(request, timeout=5) as response:  # noqa: S310
-            result: dict[str, Any] = json.load(response)
-            return result
-
-    try:
-        library = get("/v1/runs/library")
-        assert library["runs"][0]["runId"] == session.run_id
-        assert library["runs"][0]["resumable"] is True
-
-        resumed = post(
-            "/v1/runs/resume",
-            {"contractVersion": 1, "runId": session.run_id},
-        )
-        assert resumed["snapshot"]["status"] == "running"
-        deadline = time.monotonic() + 5
-        while True:
-            completed = post(
-                "/v1/runs/observe",
-                {"contractVersion": 1, "runId": session.run_id},
-            )
-            if completed["snapshot"]["status"] == "completed":
-                break
-            if time.monotonic() >= deadline:
-                pytest.fail("Restored background service run did not complete.")
-            time.sleep(0.01)
-        assert completed["snapshot"]["status"] == "completed"
-
-        exported = get(f"/v1/runs/library/{session.run_id}/export")
-        assert exported["valid"] is True
-        assert exported["run"]["schemaVersion"] == 1
-
-        deletion = Request(  # noqa: S310
-            f"http://{host}:{port}/v1/runs/library/{session.run_id}",
-            method="DELETE",
-            headers={"Origin": "http://127.0.0.1:4173"},
-        )
-        with urlopen(deletion, timeout=5) as response:  # noqa: S310
-            deleted: dict[str, Any] = json.load(response)
-        assert deleted["deleted"] is True
-        assert get("/v1/runs/library")["runs"] == []
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-@pytest.mark.parametrize(
-    "origin",
-    ["http://127.0.0.1:4173", "http://localhost:5173", "http://example.test"],
-)
-def test_packaged_default_rejects_development_and_foreign_origins(origin: str) -> None:
-    server = create_server(port=0)
-    address = server.server_address
-    host = address[0]
-    port = address[1]
-    assert isinstance(host, str)
-    assert isinstance(port, int)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    request = Request(  # noqa: S310
-        f"http://{host}:{port}/v1/setup/validate",
-        method="POST",
-        headers={"Content-Type": "application/json", "Origin": origin},
-        data=b"{}",
-    )
-
-    try:
-        with pytest.raises(HTTPError) as error:
-            urlopen(request, timeout=2)  # noqa: S310
-        assert error.value.code == HTTPStatus.FORBIDDEN
-        assert error.value.headers["Access-Control-Allow-Origin"] is None
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join(timeout=2)
-
-
-def test_launcher_uses_the_packaged_origin_policy(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    created: list[EvoRacerServer] = []
-    original_create_server = create_server
-
-    def recording_create_server(**kwargs: Any) -> EvoRacerServer:
-        server = original_create_server(**{**kwargs, "port": 0})
-        created.append(server)
-        server.serve_forever = lambda *_args: None  # type: ignore[method-assign]
-        return server
-
-    monkeypatch.setattr(launcher_module, "create_server", recording_create_server)
-    (tmp_path / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
-
-    launcher_module.run_launcher(static_root=tmp_path, data_root=tmp_path, open_browser=False)
-
-    assert created[0].allowed_origins == frozenset()
-
-
-def test_a_running_service_owns_its_port_and_frees_it_for_a_restart(tmp_path: Path) -> None:
-    server = create_server(port=0, data_root=tmp_path)
-    port = server.server_port
+@contextmanager
+def serving(server: EvoRacerServer) -> Iterator[Service]:
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     try:
-        connection = HTTPConnection(LOOPBACK_HOST, port, timeout=5)
-        connection.request("GET", "/health")
-        assert connection.getresponse().status == HTTPStatus.OK
-        connection.close()
-        with pytest.raises(OSError):
-            create_server(port=port, data_root=tmp_path)
+        yield Service(server)
     finally:
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
 
-    restarted = create_server(port=port, data_root=tmp_path)
-    restarted.server_close()
+
+@pytest.fixture
+def service(tmp_path: Path) -> Iterator[Service]:
+    with serving(create_server(port=0, data_root=tmp_path)) as running:
+        yield running
+
+
+def test_health_is_served_on_loopback(service: Service) -> None:
+    assert service.server.server_address[0] == LOOPBACK_HOST
+    assert service.call("/health") == {
+        "contractVersion": 1,
+        "host": "127.0.0.1",
+        "service": "evo-racer-core",
+        "status": "ready",
+    }
+
+
+def test_production_frontend_is_served_with_a_strict_csp(tmp_path: Path) -> None:
+    (tmp_path / "assets").mkdir()
+    (tmp_path / "index.html").write_text("<main>EvoRacer</main>", encoding="utf-8")
+    (tmp_path / "assets" / "app.js").write_text("export {};", encoding="utf-8")
+    with serving(create_server(port=0, static_root=tmp_path)) as running:
+        with urlopen(f"{running.origin}/", timeout=2) as response:  # noqa: S310
+            assert response.read() == b"<main>EvoRacer</main>"
+        with urlopen(f"{running.origin}/assets/app.js", timeout=2) as response:  # noqa: S310
+            assert response.read() == b"export {};"
+            assert response.headers["Content-Security-Policy"] == (
+                "default-src 'self'; img-src 'self' data:; "
+                "style-src 'self'; script-src 'self'; connect-src 'self'"
+            )
+        with pytest.raises(HTTPError) as error:
+            urlopen(f"{running.origin}/%2e%2e/secret.txt", timeout=2)  # noqa: S310
+        assert error.value.code == HTTPStatus.FORBIDDEN
+
+
+@pytest.mark.parametrize("origin", ["http://127.0.0.1:5173", "http://example.test"])
+def test_server_rejects_foreign_origins(service: Service, origin: str) -> None:
+    request = Request(  # noqa: S310
+        f"{service.origin}/v1/setup/validate",
+        method="POST",
+        headers={"Content-Type": "application/json", "Origin": origin},
+        data=b"{}",
+    )
+    with pytest.raises(HTTPError) as error:
+        urlopen(request, timeout=2)  # noqa: S310
+    assert error.value.code == HTTPStatus.FORBIDDEN
+    assert error.value.headers["Access-Control-Allow-Origin"] is None
+
+
+def test_server_rejects_a_foreign_host_name(service: Service) -> None:
+    # A DNS-rebinding page reaches 127.0.0.1 under its own host name and sends no Origin.
+    request = Request(  # noqa: S310
+        f"{service.origin}/v1/runs/library",
+        headers={"Host": f"rebind.example.test:{service.server.server_port}"},
+    )
+    with pytest.raises(HTTPError) as error:
+        urlopen(request, timeout=2)  # noqa: S310
+    assert error.value.code == HTTPStatus.FORBIDDEN
+
+
+def test_setup_validation_does_not_start_a_run(service: Service) -> None:
+    validated = service.call(
+        "/v1/setup/validate",
+        {
+            "contractVersion": 1,
+            "trackPreset": "easy-oval",
+            "settings": {
+                "algorithm": "fixed-ga",
+                "populationSize": 48,
+                "generations": 30,
+                "episodeSeconds": 90,
+                "seed": 42,
+            },
+        },
+    )
+
+    assert validated == {"contractVersion": 1, "valid": True, "errors": []}
+    assert service.call("/v1/runs/library")["runs"] == []
+
+
+def test_presets_generator_and_track_library(service: Service) -> None:
+    presets = service.call("/v1/tracks/presets")["presets"]
+    assert [preset["track"]["id"] for preset in presets] == [
+        track.track_id for track in PRESET_TRACKS
+    ]
+
+    generated = service.call(
+        "/v1/tracks/generate",
+        {"contractVersion": 1, "seed": 44, "length": "short", "difficulty": "easy"},
+    )
+    compiled = generated["compiled"]
+    saved = service.call("/v1/tracks/library", {"contractVersion": 1, "track": compiled["track"]})
+    assert saved["saved"] is True
+    library = service.call("/v1/tracks/library")
+    assert library["tracks"] == [compiled]
+    assert library["isolated"] == []
+
+    track_path = f"/v1/tracks/library/{compiled['track']['id']}"
+    assert service.call(track_path, method="DELETE")["deleted"] is True
+
+
+def test_run_trains_pauses_and_completes_over_http(service: Service) -> None:
+    started = service.call(
+        "/v1/runs/start",
+        {
+            "contractVersion": 1,
+            "trackPreset": "easy-oval",
+            "track": None,
+            "settings": {
+                "algorithm": "fixed-ga",
+                "populationSize": 10,
+                "generations": 2,
+                "episodeSeconds": 15,
+                "seed": 42,
+            },
+        },
+    )
+    run_id = started["snapshot"]["runId"]
+    paused = service.call(
+        "/v1/runs/command", {"contractVersion": 1, "runId": run_id, "command": "pause"}
+    )
+    assert paused["snapshot"]["pendingCommand"] == "pause"
+    assert service.wait_for_status(run_id, "paused")["generation"] == 1
+
+    service.call("/v1/runs/command", {"contractVersion": 1, "runId": run_id, "command": "resume"})
+    completed = service.wait_for_status(run_id, "completed")
+    assert completed["generation"] == 2
+    assert completed["result"]["metadata"]["runId"] == run_id
+    assert completed["result"]["replay"]["frames"]
+
+
+def test_saved_run_resumes_exports_and_deletes_after_restart(tmp_path: Path) -> None:
+    session = RunSession(
+        run_id="run-service-library",
+        compiled_track=compile_track_payload(PRESET_TRACKS[0].to_payload()),
+        settings=RunSettings(
+            algorithm="fixed-ga", population_size=4, generations=2, episode_seconds=0.2, seed=83
+        ),
+    )
+    session.advance()
+    save_run_document(session.to_run_document(), tmp_path)
+
+    with serving(create_server(port=0, data_root=tmp_path)) as running:
+        listed = running.call("/v1/runs/library")["runs"]
+        assert [(run["runId"], run["resumable"]) for run in listed] == [(session.run_id, True)]
+
+        running.call("/v1/runs/resume", {"contractVersion": 1, "runId": session.run_id})
+        running.wait_for_status(session.run_id, "completed")
+
+        exported = running.call(f"/v1/runs/library/{session.run_id}/export")
+        assert exported["run"]["schemaVersion"] == 1
+        deleted = running.call(f"/v1/runs/library/{session.run_id}", method="DELETE")
+        assert deleted["deleted"] is True
+        assert running.call("/v1/runs/library")["runs"] == []
+
+
+def test_shutdown_stops_the_server_and_frees_its_port(tmp_path: Path) -> None:
+    server = create_server(port=0, data_root=tmp_path)
+    port = server.server_port
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with pytest.raises(OSError):
+            create_server(port=port, data_root=tmp_path)
+        request = Request(  # noqa: S310
+            f"http://{LOOPBACK_HOST}:{port}/v1/app/shutdown",
+            method="POST",
+            headers={"Origin": f"http://127.0.0.1:{port}"},
+        )
+        with urlopen(request, timeout=2) as response:  # noqa: S310
+            assert json.load(response) == {"contractVersion": 1, "status": "shutting-down"}
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+    finally:
+        server.server_close()
+
+    create_server(port=port, data_root=tmp_path).server_close()

@@ -19,24 +19,24 @@ export type TrackBuilderTab = "build" | "generate" | "library";
 export type TrackBuilderPending =
   "validate" | "assist" | "generate" | "save" | "delete" | "import" | null;
 
-export interface TrackBuilderIssue {
+interface TrackBuilderIssue {
   code: string;
   field: string;
   message: string;
 }
 
-export type EditorValidationState =
+type EditorValidationState =
   | { status: "unchecked"; errors: TrackBuilderIssue[] }
   | { status: "checking"; errors: TrackBuilderIssue[] }
   | { status: "valid"; errors: TrackBuilderIssue[] }
   | { status: "invalid"; errors: TrackBuilderIssue[] };
 
-export interface TrackBuilderNotice {
+interface TrackBuilderNotice {
   tone: "neutral" | "info" | "success" | "warning" | "error";
   message: string;
 }
 
-export interface TrackGeneratorDraft {
+interface TrackGeneratorDraft {
   seed: number;
   length: "short" | "medium" | "long";
   difficulty: "easy" | "technical" | "hard";
@@ -118,7 +118,7 @@ export function syncSelectedTrack(
   return { ...workspace, selected: undefined, selectedSeed: undefined };
 }
 
-export function sameTrack(
+function sameTrack(
   first: CompiledTrackV1 | undefined,
   second: CompiledTrackV1 | undefined,
 ): boolean {
@@ -480,9 +480,7 @@ function renderGeneratedFeatureSummary(
   return `<p class="generated-feature-summary">${details.join(" · ")}</p>`;
 }
 
-export function generatorInputsChanged(
-  workspace: TrackWorkspaceState,
-): boolean {
+function generatorInputsChanged(workspace: TrackWorkspaceState): boolean {
   return (
     workspace.generatedPreview !== undefined &&
     workspace.generatedInputs !== undefined &&

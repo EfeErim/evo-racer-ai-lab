@@ -29,8 +29,8 @@ from evo_racer.simulation import (
     VehicleSetup,
     episode_step_limit,
     evaluate_episode,
-    preset_geometry,
 )
+from preset_tracks import preset_geometry
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "neat.json"
 

@@ -1,129 +1,57 @@
-# Learning benchmark and Pure Pursuit reference
+# Learning benchmark
 
-Recorded on `2026-11-05`. Physics, sensors, fitness, and evolution were not changed.
-The saved results are in
-[`docs/experiments/data/learning-benchmark.json`](data/learning-benchmark.json). They
-describe physics v1, which the current code no longer runs (removed in `34ee670`); to
-reproduce them, check out `3410234` and run `npm run test:learning`. See
-[the physics v2 rerun](#rerun-under-physics-v2) for the fixture the current code checks.
+`npm run test:learning` reruns `30` cases through `RunSession` and fails if any value
+differs from [`data/learning-benchmark-v2.json`](data/learning-benchmark-v2.json):
+`3` presets × `2` algorithms × seeds `42`, `19`, `73`, `211`, `1009`.
 
-## Pure Pursuit crashed on the cars it was compared with
+- **Evolved:** `16` cars × `10` generations × `30 s`.
+- **Same-budget control:** `160` cars × `1` generation × `30 s`, no selection, crossover
+  or mutation.
+- **Pure Pursuit reference:** the best of five drives on the champion's own car and time
+  limit (the fixed-speed controller and `SetupAwarePurePursuit` at caution `1.5`, `1.0`,
+  `0.6`, `0.35`). Five tries against the champion's one favours the reference.
 
-Results compares the champion with Pure Pursuit on the champion's own vehicle setup.
-That controller's speed targets were fixed for the default car. Evolved setups in these
-runs had steering agility from `0.74` to `1.04`, against `1.35` on the default car, so
-they could not turn as sharply at the same speed.
+These seeds informed the [physics v2](physics-v2.md) work, so this is development
+evidence; the held-out results are on that page.
 
-| Measurement                                              | Result                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------- |
-| Default car, `120 s`, all presets                        | Finished `3 / 3`                                        |
-| Real NEAT champions' setups, `30 s`, 3 presets × 4 seeds | Crashed in `6 / 12`: Technical `2 / 4`, Chicane `4 / 4` |
-| Earliest crash in those runs                             | `280` steps, fitness `40.20`                            |
-| `60` sampled setups, `120 s`, Chicane Challenge          | Finished `4 / 60`                                       |
-| The same setups, `120 s`, Technical Circuit              | Finished `32 / 60`                                      |
+## Physics v2 (current)
 
-Beating a reference that crashed after `5` seconds says little about learning, and
-the Results screen could still report that as being ahead of it.
+Each count is out of `5` seeds.
 
-Earlier notes put the `2259.33` tie at `1444` steps between a champion and Pure Pursuit
-down to coincidence. The seed comparison supports that: at other seeds and tracks the
-two step counts differ, so the value is not copied between them.
+| Track             | Algorithm | Improved on gen 1 | Beat control | Beat Pure Pursuit | Laps: evolved | Laps: control | Laps: Pure Pursuit | Median fitness: evolved | Control | Pure Pursuit |
+| ----------------- | --------- | ----------------: | -----------: | ----------------: | ------------: | ------------: | -----------------: | ----------------------: | ------: | -----------: |
+| Easy Oval         | Fixed GA  |                 5 |            4 |                 0 |             2 |             0 |                  3 |                     923 |     617 |         2277 |
+| Easy Oval         | NEAT      |                 5 |            5 |                 4 |             4 |             1 |                  5 |                    2278 |     424 |         2266 |
+| Technical Circuit | Fixed GA  |                 5 |            4 |                 1 |             3 |             0 |                  2 |                    2231 |     570 |          746 |
+| Technical Circuit | NEAT      |                 5 |            4 |                 5 |             5 |             1 |                  3 |                    2271 |     634 |         2220 |
+| Chicane Challenge | Fixed GA  |                 5 |            4 |                 0 |             0 |             0 |                  0 |                     319 |     210 |          490 |
+| Chicane Challenge | NEAT      |                 5 |            4 |                 2 |             0 |             0 |                  0 |                     397 |     220 |          472 |
 
-## The correction
-
-A single careful speed policy did not solve this. It finished far more of the same
-sampled setups (`59 / 60` on Technical, `54 / 60` on Chicane), but a median lap took
-over `4000` steps, which cannot finish inside a `30 s` limit of `1800` steps.
-
-The reference is now the best of five drives on the champion's setup and time limit:
-the original fixed-speed controller, and `SetupAwarePurePursuit` at caution levels
-`1.5`, `1.0`, `0.6`, and `0.35`. All five use the same steering law, physics, and fitness.
-Ties keep the earlier controller, so the choice is deterministic.
-
-- `PurePursuitBaseline()` is unchanged, so the telemetry fixture is too.
-- The reference gets up to five attempts and the champion's replay gets one. This
-  favors the reference, which is the safe direction for a bar to beat.
-- The physics v1 regression fixture was regenerated. Across its `18` cases, only
-  `pursuitFitness`, `pursuitProgress`, and `resultSha256` changed, in `15` cases.
-  Champion and random-network values are identical.
-- Results saved before this change keep the reference values they were saved with.
-- If the champion beat a reference that crashed, Results names that reference and says
-  the win means little. A crashed reference that still scored higher is not discounted,
-  because that would hide a loss. The table reads **Crashed**
-  or **Ran out of time** rather than **Did not finish**.
-
-## Benchmark design
-
-`npm run test:learning` reruns `30` cases through the real `RunSession` and fails if any
-value differs from the saved file: `3` presets × `2` algorithms × seeds `42`, `19`, `73`,
-`211`, and `1009`.
-
-- **Evolved run:** `16` cars × `10` generations × `30 s`.
-- **Same-budget control:** `160` cars × `1` generation × `30 s`. It evaluates the same
-  number of cars with no selection, crossover, or mutation. This is the main question:
-  improvement over the first generation alone is nearly guaranteed by keeping the best.
-
-## Results
-
-Each cell counts cases out of `5`.
-
-| Track             | Algorithm | Improved on generation 1 | Beat control | Beat Pure Pursuit | Laps: evolved | Laps: control | Laps: Pure Pursuit | Pure Pursuit crashed |
-| ----------------- | --------- | -----------------------: | -----------: | ----------------: | ------------: | ------------: | -----------------: | -------------------: |
-| Easy Oval         | Fixed GA  |                        5 |            4 |                 0 |             0 |             0 |                  4 |                    0 |
-| Easy Oval         | NEAT      |                        5 |            5 |                 2 |             4 |             0 |                  5 |                    0 |
-| Technical Circuit | Fixed GA  |                        5 |            4 |                 2 |             0 |             0 |                  0 |                    0 |
-| Technical Circuit | NEAT      |                        5 |            4 |                 5 |             5 |             1 |                  2 |                    0 |
-| Chicane Challenge | Fixed GA  |                        5 |            3 |                 0 |             0 |             0 |                  0 |                    0 |
-| Chicane Challenge | NEAT      |                        5 |            4 |                 2 |             0 |             0 |                  0 |                    0 |
-
-Median fitness:
-
-| Track             | Algorithm | Evolved | Control | Pure Pursuit |
-| ----------------- | --------- | ------: | ------: | -----------: |
-| Easy Oval         | Fixed GA  |     656 |     504 |         2256 |
-| Easy Oval         | NEAT      |    2259 |     442 |         2252 |
-| Technical Circuit | Fixed GA  |     881 |     471 |         1161 |
-| Technical Circuit | NEAT      |    2220 |     821 |          703 |
-| Chicane Challenge | Fixed GA  |     252 |     229 |          464 |
-| Chicane Challenge | NEAT      |     385 |     195 |          453 |
-
-What this supports, within this budget:
-
-- Evolution beat the same work without selection in `24 / 30` cases: Fixed GA `11 / 15`,
-  NEAT `13 / 15`. This is the first saved evidence of that comparison for NEAT.
-- NEAT finished `9 / 15` laps and Fixed GA `0 / 15`. The control finished `1 / 30`.
-- Nothing finished Chicane Challenge in this budget, including Pure Pursuit.
-- Pure Pursuit no longer crashed in any of the `30` cases.
-
-## Rerun under physics v2
-
-The results above are the historical physics v1 record and stay in
-[`docs/experiments/data/learning-benchmark.json`](data/learning-benchmark.json).
-`npm run test:learning` now verifies
-[`docs/experiments/data/learning-benchmark-v2.json`](data/learning-benchmark-v2.json), the
-same `30` cases under [physics v2](physics-v2.md). These seeds informed that physics
-work, so this is development evidence; the held-out results are in that document.
-
-| Track             | Algorithm | Improved on generation 1 | Beat control | Beat Pure Pursuit | Laps: evolved | Laps: control | Laps: Pure Pursuit | Median fitness: evolved | Control | Pure Pursuit |
-| ----------------- | --------- | -----------------------: | -----------: | ----------------: | ------------: | ------------: | -----------------: | ----------------------: | ------: | -----------: |
-| Easy Oval         | Fixed GA  |                        5 |            4 |                 0 |             2 |             0 |                  3 |                     923 |     617 |         2277 |
-| Easy Oval         | NEAT      |                        5 |            5 |                 4 |             4 |             1 |                  5 |                    2278 |     424 |         2266 |
-| Technical Circuit | Fixed GA  |                        5 |            4 |                 1 |             3 |             0 |                  2 |                    2231 |     570 |          746 |
-| Technical Circuit | NEAT      |                        5 |            4 |                 5 |             5 |             1 |                  3 |                    2271 |     634 |         2220 |
-| Chicane Challenge | Fixed GA  |                        5 |            4 |                 0 |             0 |             0 |                  0 |                     319 |     210 |          490 |
-| Chicane Challenge | NEAT      |                        5 |            4 |                 2 |             0 |             0 |                  0 |                     397 |     220 |          472 |
-
-Evolution beat the control in `25 / 30` cases (Fixed GA `12 / 15`, NEAT `13 / 15`), and
-laps rose from `9 / 30` to `14 / 30`, all of that rise from Fixed GA. Pure Pursuit never
+Evolution beat the control in `25 / 30` cases (Fixed GA `12 / 15`, NEAT `13 / 15`).
+Evolved champions finished `14 / 30` laps, the control `2 / 30`. Pure Pursuit never
 crashed. Nothing finished Chicane Challenge in this budget.
+
+## Physics v1 (historical)
+
+[`data/learning-benchmark.json`](data/learning-benchmark.json), recorded on
+`2026-11-05`. The current code no longer runs physics v1 (removed in `34ee670`); check
+out `3410234` and run `npm run test:learning` to reproduce it.
+
+| Track             | Algorithm | Beat control | Beat Pure Pursuit | Laps: evolved | Laps: control | Laps: Pure Pursuit | Median fitness: evolved | Control | Pure Pursuit |
+| ----------------- | --------- | -----------: | ----------------: | ------------: | ------------: | -----------------: | ----------------------: | ------: | -----------: |
+| Easy Oval         | Fixed GA  |            4 |                 0 |             0 |             0 |                  4 |                     656 |     504 |         2256 |
+| Easy Oval         | NEAT      |            5 |                 2 |             4 |             0 |                  5 |                    2259 |     442 |         2252 |
+| Technical Circuit | Fixed GA  |            4 |                 2 |             0 |             0 |                  0 |                     881 |     471 |         1161 |
+| Technical Circuit | NEAT      |            4 |                 5 |             5 |             1 |                  2 |                    2220 |     821 |          703 |
+| Chicane Challenge | Fixed GA  |            3 |                 0 |             0 |             0 |                  0 |                     252 |     229 |          464 |
+| Chicane Challenge | NEAT      |            4 |                 2 |             0 |             0 |                  0 |                     385 |     195 |          453 |
+
+The five-try reference was added in this round: with a single fixed-speed Pure Pursuit,
+the reference crashed on `6 / 12` real NEAT champion setups at `30 s`, so beating it
+said little.
 
 ## Limits
 
-- Five seeds per cell is small. No significance test was run, and these counts do not
-  establish a general ranking of the algorithms.
-- One budget was tested, so this does not describe Balanced or Thorough. Fixed GA may
-  need more generations than this budget allows.
-- The `16 × 10 × 30 s` budget was chosen earlier on Easy Oval with seeds that include
-  `42`, `19`, `73`, and `211`, so Easy Oval NEAT is not a held-out result.
-- Fitness rewards progress and finishing, so a higher score is not a claim about lap
-  quality or the fastest possible driver.
+- Five seeds per cell, no significance test; the counts do not rank the algorithms.
+- One budget. The `16 × 10 × 30 s` budget was chosen on Easy Oval with seeds including
+  `42`, `19`, `73` and `211`, so Easy Oval is not a held-out result.

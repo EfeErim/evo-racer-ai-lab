@@ -58,7 +58,7 @@ export interface RunLibraryNotice {
   message: string;
 }
 
-export interface AppStore {
+interface AppStore {
   applicationLifecycle: ApplicationLifecycle;
   reducedMotionOverride: boolean;
   state: AppState;

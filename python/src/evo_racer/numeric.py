@@ -5,17 +5,6 @@ from __future__ import annotations
 import math
 
 
-def finite_number(value: object, field: str) -> float:
-    """Return ``value`` as a float, rejecting bools, NaN and infinities from JSON input."""
-    if (
-        not isinstance(value, (int, float))
-        or isinstance(value, bool)
-        or not math.isfinite(float(value))
-    ):
-        raise ValueError(f"{field} must be a finite number.")
-    return float(value)
-
-
 def sigmoid(value: float) -> float:
     # Two branches so math.exp never overflows for large-magnitude inputs.
     if value >= 0.0:

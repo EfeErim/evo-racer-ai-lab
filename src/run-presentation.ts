@@ -1,12 +1,12 @@
 import type { GenerationTrailV1, ObservationSnapshotV1 } from "./contracts";
 
-export interface RunProgressPresentation {
+interface RunProgressPresentation {
   fraction: number;
   percent: string;
   label: string;
 }
 
-export interface RunControlPresentation {
+interface RunControlPresentation {
   pauseAction: "pause" | "resume";
   pauseDisabled: boolean;
   pauseLabel: string;
@@ -15,13 +15,13 @@ export interface RunControlPresentation {
   note: string;
 }
 
-export interface RunCompletionPresentation {
+interface RunCompletionPresentation {
   title: string;
   message: string;
 }
 
 export type RunCommand = "pause" | "resume" | "stop";
-export type ReplayNavigationAction = "previous" | "next" | "restart";
+type ReplayNavigationAction = "previous" | "next" | "restart";
 
 export function clampReplayFrameIndex(
   frameIndex: number,

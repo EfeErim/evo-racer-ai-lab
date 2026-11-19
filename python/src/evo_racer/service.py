@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import mimetypes
 import os
 import socket
@@ -25,14 +26,7 @@ LOOPBACK_HOST: Final = "127.0.0.1"
 DEFAULT_PORT: Final = 8765
 MAX_REQUEST_BYTES: Final = 16_384
 INVALID_REQUEST_BODY: Final[object] = object()
-ALLOWED_DEVELOPMENT_ORIGINS: Final = frozenset(
-    {
-        "http://127.0.0.1:4173",
-        "http://127.0.0.1:5173",
-        "http://localhost:4173",
-        "http://localhost:5173",
-    }
-)
+LOGGER: Final = logging.getLogger(__name__)
 POST_PATHS: Final = frozenset(
     {
         "/v1/setup/validate",
@@ -59,7 +53,6 @@ class EvoRacerServer(ThreadingHTTPServer):
     data_root: Path | None
     run_manager: RunManager
     static_root: Path | None
-    allowed_origins: frozenset[str]
 
     def server_bind(self) -> None:
         """Refuse to share the port with another process where the platform allows it."""
@@ -68,11 +61,23 @@ class EvoRacerServer(ThreadingHTTPServer):
             self.socket.setsockopt(socket.SOL_SOCKET, exclusive_option, 1)
         super().server_bind()
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        """Keep a handler failure in the log; the packaged app has no stderr."""
+        LOGGER.exception("Request handling failed")
+
 
 class HealthHandler(BaseHTTPRequestHandler):
     """Serve versioned loopback-only application contracts."""
 
-    server_version = "EvoRacerLocal/0.1"
+    def parse_request(self) -> bool:
+        """Refuse any Host other than this loopback port, which blocks DNS rebinding."""
+        if not super().parse_request():
+            return False
+        port = self._app_server.server_port
+        if self.headers.get("Host") not in (f"{LOOPBACK_HOST}:{port}", f"localhost:{port}"):
+            self.send_error(HTTPStatus.FORBIDDEN)
+            return False
+        return True
 
     def do_GET(self) -> None:
         """Return local service data without contacting any external resource."""
@@ -111,21 +116,6 @@ class HealthHandler(BaseHTTPRequestHandler):
         if self._serve_static(path):
             return
         self.send_error(HTTPStatus.NOT_FOUND)
-
-    def do_OPTIONS(self) -> None:
-        """Permit versioned JSON commands only from known loopback UI origins."""
-        path = urlsplit(self.path).path
-        library_record = path.startswith(("/v1/tracks/library/", "/v1/runs/library/"))
-        if (path not in POST_PATHS and not library_record) or not self._origin_allowed():
-            self.send_error(HTTPStatus.FORBIDDEN)
-            return
-
-        self.send_response(HTTPStatus.NO_CONTENT)
-        self._send_cors_headers()
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Content-Length", "0")
-        self.end_headers()
 
     def do_POST(self) -> None:
         """Handle local-only setup, simulation, and track commands."""
@@ -236,27 +226,15 @@ class HealthHandler(BaseHTTPRequestHandler):
         return cast(EvoRacerServer, self.server)
 
     def _forbidden(self) -> bool:
-        """Answer 403 and return True when the request comes from a foreign origin."""
-        if self._origin_allowed():
+        """Answer 403 and return True when the request comes from a foreign origin.
+
+        The UI is served from this origin, so a browser sends either no Origin or this one.
+        """
+        origin = self.headers.get("Origin")
+        if origin is None or origin == f"http://{LOOPBACK_HOST}:{self._app_server.server_port}":
             return False
         self.send_error(HTTPStatus.FORBIDDEN)
         return True
-
-    def _origin_allowed(self) -> bool:
-        origin = self.headers.get("Origin")
-        return origin is None or origin == self._origin() or origin in self._allowed_origins()
-
-    def _send_cors_headers(self) -> None:
-        origin = self.headers.get("Origin")
-        if origin == self._origin() or origin in self._allowed_origins():
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Vary", "Origin")
-
-    def _allowed_origins(self) -> frozenset[str]:
-        return self._app_server.allowed_origins
-
-    def _origin(self) -> str:
-        return f"http://{LOOPBACK_HOST}:{self._app_server.server_port}"
 
     def _serve_static(self, request_path: str) -> bool:
         server = self._app_server
@@ -300,39 +278,35 @@ class HealthHandler(BaseHTTPRequestHandler):
     def _send_json(self, status: HTTPStatus, payload: object) -> None:
         body = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
         self.send_response(status)
-        self._send_cors_headers()
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
 
+    def log_error(self, format: str, *args: object) -> None:
+        # requestline is unset when the request line itself is too long to read.
+        LOGGER.warning("%r: " + format, getattr(self, "requestline", ""), *args)
+
     def log_message(self, format: str, *args: object) -> None:
-        """Keep the local service quiet until structured logging is introduced."""
+        """Skip the per-request access log; the UI polls several times a second."""
 
 
 def create_server(
     port: int = DEFAULT_PORT,
     data_root: Path | None = None,
     static_root: Path | None = None,
-    allow_development_origins: bool = False,
 ) -> EvoRacerServer:
-    """Create a service that cannot bind beyond the IPv4 loopback interface.
-
-    Only the development service entrypoint enables the Vite origins; the launcher does not.
-    """
+    """Create a service that cannot bind beyond the IPv4 loopback interface."""
     server = EvoRacerServer((LOOPBACK_HOST, port), HealthHandler)
     server.data_root = data_root
     server.run_manager = RunManager(data_root)
     server.static_root = static_root.resolve() if static_root is not None else None
-    server.allowed_origins = (
-        ALLOWED_DEVELOPMENT_ORIGINS if allow_development_origins else frozenset()
-    )
     return server
 
 
 def run(port: int = DEFAULT_PORT) -> None:
-    """Run the development service until interrupted."""
-    server = create_server(port, allow_development_origins=True)
+    """Run the development service until interrupted; Vite proxies the UI's requests here."""
+    server = create_server(port)
     print(f"EvoRacer local service listening on http://{LOOPBACK_HOST}:{port}")
     try:
         server.serve_forever()

@@ -8,12 +8,12 @@ import {
 } from "../track-workbench";
 
 /** Whether a Track Builder response still belongs to the request on screen. */
-export type TrackCommandGuard = (
+type TrackCommandGuard = (
   isCurrentCommand: () => boolean,
   pending: Exclude<TrackBuilderPending, null>,
 ) => boolean;
 
-export function closureRepairMessage(response: TrackCommandResponse): string {
+function closureRepairMessage(response: TrackCommandResponse): string {
   const added = response.addedPieces?.length ?? 0;
   const removed = response.removedPieces ?? 0;
   if (removed > 0 && added > 0) {

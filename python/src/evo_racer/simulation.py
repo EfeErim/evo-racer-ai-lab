@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from typing import Any, Final, Protocol, cast
 
 from evo_racer.numeric import clamp, rounded, sigmoid, signed_heading_delta
-from evo_racer.tracks import PRESET_TRACKS, compile_track_payload
 
 # Physics revision recorded on saved results. Version 2 lowered drag and added the corner limit.
 SIMULATION_CONTRACT_VERSION: Final = 2
@@ -300,10 +299,9 @@ class TrackGeometry:
         ) in enumerate(self.centerline_segments):
             offset_x = point[0] - start_x
             offset_y = point[1] - start_y
-            along = clamp(
-                (offset_x * segment_x + offset_y * segment_y) / length_squared,
-                0.0,
-                1.0,
+            # Inlined clamp(..., 0.0, 1.0): this line runs for every segment of every projection.
+            along = max(
+                0.0, min(1.0, (offset_x * segment_x + offset_y * segment_y) / length_squared)
             )
             closest = (start_x + segment_x * along, start_y + segment_y * along)
             distance_x = point[0] - closest[0]
@@ -335,10 +333,6 @@ class TrackGeometry:
                     start[1] + (end[1] - start[1]) * amount,
                 )
         return self.centerline[0]
-
-    def on_road(self, point: Point) -> bool:
-        """Check the vehicle-disc center against the track corridor."""
-        return self.project(point).distance <= self.road_width / 2.0 - VEHICLE_RADIUS
 
     def _sweep_with_projection(
         self,
@@ -699,8 +693,6 @@ def evaluate_episode(
             sensor_distances=sensors,
         )
         controls = controller.control(observation, geometry).clamped()
-        if controller.parameters != fixed_parameters:
-            raise RuntimeError("Controller and vehicle parameters must remain fixed in an episode.")
 
         result = step_physics(
             state,
@@ -743,6 +735,10 @@ def evaluate_episode(
             termination = "lap_complete"
             break
 
+    # Checked once per episode rather than per step: building a NEAT network's parameter
+    # tuple every step cost several percent of training time, and any change persists.
+    if controller.parameters != fixed_parameters:
+        raise RuntimeError("Controller and vehicle parameters must remain fixed in an episode.")
     if not telemetry or telemetry[-1].simulated_seconds != steps * FIXED_TIME_STEP:
         record_telemetry()
 
@@ -759,14 +755,6 @@ def evaluate_episode(
         telemetry=tuple(telemetry),
         trace=tuple(trace),
     )
-
-
-def preset_geometry(track_id: str) -> TrackGeometry:
-    """Compile a bundled preset through the canonical public compiler."""
-    track = next((candidate for candidate in PRESET_TRACKS if candidate.track_id == track_id), None)
-    if track is None:
-        raise ValueError(f"Unknown preset: {track_id}")
-    return TrackGeometry.from_compiled(compile_track_payload(track.to_payload()))
 
 
 def _move_toward(value: float, target: float, maximum_delta: float) -> float:

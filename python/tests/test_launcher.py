@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import socket
 import webbrowser
 from pathlib import Path
@@ -112,10 +113,19 @@ def test_launcher_explains_a_port_held_by_another_program(
     assert opened_urls == []
 
 
-def test_launcher_accepts_portable_data_root_environment(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("EVORACER_DATA_ROOT", str(tmp_path))
+def test_failures_are_kept_in_a_log_file_under_the_data_root(tmp_path: Path) -> None:
+    handler = launcher.configure_logging(tmp_path)
+    assert handler is not None
+    try:
+        try:
+            raise RuntimeError("worker exploded")
+        except RuntimeError:
+            logging.getLogger("evo_racer.run_manager").exception("Training worker failed")
+        handler.flush()
+    finally:
+        logging.getLogger("evo_racer").removeHandler(handler)
+        handler.close()
 
-    assert launcher.parse_args([]).data_root == tmp_path
+    log_text = (tmp_path / "logs" / "evoracer.log").read_text(encoding="utf-8")
+    assert "ERROR evo_racer.run_manager: Training worker failed" in log_text
+    assert "RuntimeError: worker exploded" in log_text

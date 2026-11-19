@@ -5,16 +5,23 @@ from __future__ import annotations
 import argparse
 import http.client
 import json
-import os
+import logging
 import signal
 import sys
 import webbrowser
 from collections.abc import Sequence
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from threading import Thread
 from types import FrameType
+from typing import Final
 
 from evo_racer.service import DEFAULT_PORT, LOOPBACK_HOST, EvoRacerServer, create_server
+from evo_racer.track_library import default_data_root
+
+# Named explicitly: this module runs as __main__ in the packaged EXE.
+LOGGER: Final = logging.getLogger("evo_racer.launcher")
+LOG_FILE_BYTES: Final = 1_000_000
 
 
 def bundled_static_root() -> Path:
@@ -96,20 +103,38 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     """Parse package and acceptance-test launcher options."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
-    portable_data_root = os.environ.get("EVORACER_DATA_ROOT")
-    parser.add_argument(
-        "--data-root",
-        type=Path,
-        default=Path(portable_data_root) if portable_data_root else None,
-    )
+    parser.add_argument("--data-root", type=Path)
     parser.add_argument("--static-root", type=Path)
     parser.add_argument("--no-browser", action="store_true")
     return parser.parse_args(argv)
 
 
+def configure_logging(data_root: Path) -> logging.Handler | None:
+    """Write warnings and failures to ``logs/evoracer.log`` under the data root.
+
+    The windowed EXE has no console, so without this file a worker or request failure
+    leaves no trace. Two 1 MB backups bound the disk use. Returns None when the log
+    directory cannot be created; the app still runs without a log.
+    """
+    log_path = data_root / "logs" / "evoracer.log"
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        handler = RotatingFileHandler(
+            log_path, maxBytes=LOG_FILE_BYTES, backupCount=2, encoding="utf-8"
+        )
+    except OSError:
+        return None
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    package_logger = logging.getLogger("evo_racer")
+    package_logger.setLevel(logging.INFO)
+    package_logger.addHandler(handler)
+    return handler
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     """Run the packaged application entrypoint."""
     args = parse_args(argv)
+    configure_logging(args.data_root or default_data_root())
     try:
         run_launcher(
             port=args.port,
@@ -118,6 +143,7 @@ def main(argv: Sequence[str] | None = None) -> None:
             open_browser=not args.no_browser,
         )
     except Exception as error:
+        LOGGER.exception("EvoRacer could not start")
         # Last resort: the windowed EXE has no console to report an unexpected failure.
         _show_startup_error(str(error))
         raise

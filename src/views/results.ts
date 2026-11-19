@@ -11,7 +11,7 @@ import { pageHeader } from "./shared";
 import type { ReplayPresentation } from "./shell";
 import { renderFitnessChart } from "./training";
 
-export interface ResultVerdict {
+interface ResultVerdict {
   headline: string;
   evidence: string;
   tone: "success" | "warning" | "info";

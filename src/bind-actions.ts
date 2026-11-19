@@ -11,7 +11,7 @@ export type EditorDragPayload =
   | { source: "palette"; kind: SegmentKind }
   | { source: "sequence"; pieceIndex: number };
 
-export interface ActionHandlers {
+interface ActionHandlers {
   dispatch: (action: AppAction) => void;
   review: () => Promise<void>;
   startSession: () => Promise<void>;

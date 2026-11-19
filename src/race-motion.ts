@@ -15,7 +15,7 @@ export interface MotionPath {
   readonly count: number;
 }
 
-export interface MotionPose {
+interface MotionPose {
   x: number;
   y: number;
   heading: number;

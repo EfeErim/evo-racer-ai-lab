@@ -322,25 +322,34 @@ class RunSession:
                 "previousRuns": [],
             }
             if include_live:
-                replay_candidate_id = (
-                    self.current_episode.telemetry[0].selected_car_id
-                    if self.current_episode is not None
-                    else None
+                self._add_generation_playback(
+                    response, known_generation_replay_candidate_id, known_generation_race
                 )
-                if replay_candidate_id is None:
-                    response["generationReplay"] = None
-                elif replay_candidate_id != known_generation_replay_candidate_id:
-                    assert self.current_episode is not None
-                    response["generationReplay"] = {
-                        "candidateId": replay_candidate_id,
-                        "frames": [
-                            _replay_frame(frame) for frame in self.current_episode.telemetry
-                        ],
-                    }
-                race = self._generation_race
-                if race is not None and race["generation"] != known_generation_race:
-                    response["generationRace"] = race
             return response
+
+    def _add_generation_playback(
+        self,
+        response: dict[str, object],
+        known_replay_candidate_id: str | None,
+        known_race: int | None,
+    ) -> None:
+        """Add the replay and race the client does not hold yet; the caller holds the lock."""
+        replay_candidate_id = (
+            self.current_episode.telemetry[0].selected_car_id
+            if self.current_episode is not None
+            else None
+        )
+        if replay_candidate_id is None:
+            response["generationReplay"] = None
+        elif replay_candidate_id != known_replay_candidate_id:
+            assert self.current_episode is not None
+            response["generationReplay"] = {
+                "candidateId": replay_candidate_id,
+                "frames": [_replay_frame(frame) for frame in self.current_episode.telemetry],
+            }
+        race = self._generation_race
+        if race is not None and race["generation"] != known_race:
+            response["generationRace"] = race
 
     def to_run_document(self) -> dict[str, object]:
         """Serialize the current generation boundary into the version 1 run schema."""
@@ -507,8 +516,6 @@ class RunSession:
             candidate.setup,
             max_seconds=self.settings.episode_seconds,
         )
-        track = self.track
-        track_json = json.dumps(track, separators=(",", ":"), sort_keys=True)
         genome = (
             candidate.genome.to_payload()
             if isinstance(candidate, FixedCandidate)
@@ -523,29 +530,12 @@ class RunSession:
             champion_finished=replay_episode.finished,
         )
         self.result = {
-            "metadata": {
-                "contractVersion": OBSERVATION_CONTRACT_VERSION,
-                "runId": self.run_id,
-                "status": status,
-                "algorithm": self.settings.algorithm,
-                "seed": self.settings.seed,
-                "trackId": str(track["id"]),
-                "trackName": str(track["name"]),
-                "trackSha256": hashlib.sha256(track_json.encode("utf-8")).hexdigest(),
-                "populationSize": self.settings.population_size,
-                "generationsRequested": self.settings.generations,
-                "generationsCompleted": len(self.reports),
-                "episodeSeconds": self.settings.episode_seconds,
-                "fixedTimeStep": FIXED_TIME_STEP,
-                "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
-                "evolutionContractVersion": EVOLUTION_CONTRACT_VERSION,
-                "observationContractVersion": OBSERVATION_CONTRACT_VERSION,
-            },
+            "metadata": self._result_metadata(status),
             "fitnessHistory": _fitness_history(self.reports),
             "champion": {
                 "candidateId": candidate.candidate_id,
-                "fitness": _rounded(champion.evaluation.fitness),
-                "progress": _rounded(champion.evaluation.progress_fraction),
+                "fitness": _observation_rounded(champion.evaluation.fitness),
+                "progress": _observation_rounded(champion.evaluation.progress_fraction),
                 "genome": genome,
                 "vehicleSetup": candidate.setup.to_payload(),
             },
@@ -561,11 +551,33 @@ class RunSession:
                 "sampleEverySteps": REPLAY_INTERVAL_STEPS,
                 "vehicleSetup": candidate.setup.to_payload(),
                 "controllerParameters": [
-                    _rounded(value) for value in replay_episode.controller_parameters
+                    _observation_rounded(value) for value in replay_episode.controller_parameters
                 ],
                 "termination": replay_episode.termination,
                 "frames": [_replay_frame(snapshot) for snapshot in replay_episode.telemetry],
             },
+        }
+
+    def _result_metadata(self, status: Literal["stopped", "completed"]) -> dict[str, object]:
+        track = self.track
+        track_json = json.dumps(track, separators=(",", ":"), sort_keys=True)
+        return {
+            "contractVersion": OBSERVATION_CONTRACT_VERSION,
+            "runId": self.run_id,
+            "status": status,
+            "algorithm": self.settings.algorithm,
+            "seed": self.settings.seed,
+            "trackId": str(track["id"]),
+            "trackName": str(track["name"]),
+            "trackSha256": hashlib.sha256(track_json.encode("utf-8")).hexdigest(),
+            "populationSize": self.settings.population_size,
+            "generationsRequested": self.settings.generations,
+            "generationsCompleted": len(self.reports),
+            "episodeSeconds": self.settings.episode_seconds,
+            "fixedTimeStep": FIXED_TIME_STEP,
+            "simulationContractVersion": SIMULATION_CONTRACT_VERSION,
+            "evolutionContractVersion": EVOLUTION_CONTRACT_VERSION,
+            "observationContractVersion": OBSERVATION_CONTRACT_VERSION,
         }
 
 
@@ -622,8 +634,8 @@ def _comparison_payload(
     return {
         "label": label,
         "controller": episode.controller,
-        "fitness": _rounded(evaluation.fitness),
-        "progress": _rounded(episode.progress_fraction),
+        "fitness": _observation_rounded(evaluation.fitness),
+        "progress": _observation_rounded(episode.progress_fraction),
         "finished": episode.finished,
         "collisionCount": episode.collision_count,
         "steps": episode.steps,
@@ -632,16 +644,16 @@ def _comparison_payload(
 
 def _replay_frame(snapshot: Any) -> dict[str, object]:
     return {
-        "simulatedSeconds": _rounded(snapshot.simulated_seconds),
-        "x": _rounded(snapshot.state.x),
-        "y": _rounded(snapshot.state.y),
-        "heading": _rounded(snapshot.state.heading),
-        "speed": _rounded(snapshot.state.forward_speed),
-        "lateralSpeed": _rounded(snapshot.state.lateral_speed),
-        "steering": _rounded(snapshot.controls.steering),
-        "throttle": _rounded(snapshot.controls.throttle),
-        "brake": _rounded(snapshot.controls.brake),
-        "progress": _rounded(snapshot.progress_fraction),
+        "simulatedSeconds": _observation_rounded(snapshot.simulated_seconds),
+        "x": _observation_rounded(snapshot.state.x),
+        "y": _observation_rounded(snapshot.state.y),
+        "heading": _observation_rounded(snapshot.state.heading),
+        "speed": _observation_rounded(snapshot.state.forward_speed),
+        "lateralSpeed": _observation_rounded(snapshot.state.lateral_speed),
+        "steering": _observation_rounded(snapshot.controls.steering),
+        "throttle": _observation_rounded(snapshot.controls.throttle),
+        "brake": _observation_rounded(snapshot.controls.brake),
+        "progress": _observation_rounded(snapshot.progress_fraction),
     }
 
 
@@ -649,8 +661,8 @@ def _fitness_history(reports: Sequence[GenerationReportValue]) -> list[dict[str,
     return [
         {
             "generation": report.generation,
-            "bestFitness": _rounded(report.best_fitness),
-            "medianFitness": _rounded(report.median_fitness),
+            "bestFitness": _observation_rounded(report.best_fitness),
+            "medianFitness": _observation_rounded(report.median_fitness),
         }
         for report in reports
     ]
@@ -703,9 +715,9 @@ def _generation_race_payload(
             {
                 "candidateId": scored.candidate.candidate_id,
                 "rank": rank,
-                "fitness": _rounded(scored.evaluation.fitness),
+                "fitness": _observation_rounded(scored.evaluation.fitness),
                 "termination": episode.termination,
-                "progress": _rounded(episode.progress_fraction),
+                "progress": _observation_rounded(episode.progress_fraction),
                 "lapSeconds": lap_seconds(episode.steps, episode.finished),
                 "poses": poses,
             }
@@ -727,10 +739,13 @@ def _sample_generation_trail(telemetry: Sequence[TelemetrySnapshot]) -> list[lis
             telemetry[round(index * last_index / (GENERATION_TRAIL_POINT_LIMIT - 1))]
             for index in range(GENERATION_TRAIL_POINT_LIMIT)
         ]
-    return [[_rounded(frame.state.x), _rounded(frame.state.y)] for frame in selected]
+    return [
+        [_observation_rounded(frame.state.x), _observation_rounded(frame.state.y)]
+        for frame in selected
+    ]
 
 
-def _rounded(value: float) -> float:
+def _observation_rounded(value: float) -> float:
     if not math.isfinite(value):
         raise ValueError("Observation values must be finite.")
     return round(value, 8)

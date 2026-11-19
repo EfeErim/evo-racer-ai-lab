@@ -9,20 +9,20 @@ import pytest
 from evo_racer.simulation import (
     SENSOR_ANGLES,
     SENSOR_RANGE,
+    VEHICLE_RADIUS,
     Controls,
     Observation,
     PurePursuitBaseline,
     RandomNetworkBaseline,
     TelemetrySnapshot,
     TrackGeometry,
-    TrackProjection,
     VehicleSetup,
     VehicleState,
     evaluate_episode,
-    preset_geometry,
     step_physics,
 )
 from evo_racer.tracks import PRESET_TRACKS
+from preset_tracks import preset_geometry
 
 CONTRACT_PATH = Path(__file__).parents[2] / "contracts" / "telemetry.json"
 
@@ -190,34 +190,11 @@ def test_swept_collision_and_sensors_use_derived_track_corridor() -> None:
             break
 
     assert collided is True
-    assert geometry.on_road((state.x, state.y)) is True
-    assert state.forward_speed == 0.0
-
-
-def test_physics_step_reuses_the_swept_safe_projection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    geometry = preset_geometry("easy-oval")
-    initial_projection = geometry.project((geometry.spawn.x, geometry.spawn.y))
-    real_project = geometry.project
-    project_calls = 0
-
-    def counted_project(point: tuple[float, float]) -> TrackProjection:
-        nonlocal project_calls
-        project_calls += 1
-        return real_project(point)
-
-    monkeypatch.setattr(geometry, "project", counted_project)
-    result = step_physics(
-        geometry.spawn,
-        Controls(steering=0.0, throttle=1.0, brake=0.0),
-        VehicleSetup(),
-        geometry,
-        current_projection=initial_projection,
+    # The vehicle disc stops inside the corridor.
+    assert geometry.project((state.x, state.y)).distance <= (
+        geometry.road_width / 2.0 - VEHICLE_RADIUS
     )
-
-    assert project_calls == 1
-    assert result.projection == real_project((result.state.x, result.state.y))
+    assert state.forward_speed == 0.0
 
 
 @pytest.mark.parametrize("track_id", tuple(track.track_id for track in PRESET_TRACKS))

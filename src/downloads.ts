@@ -33,7 +33,7 @@ function downloadJson(contents: string, fileName: string): void {
   }, 0);
 }
 
-export function safeFileName(value: string): string {
+function safeFileName(value: string): string {
   const normalized = value
     .trim()
     .toLowerCase()

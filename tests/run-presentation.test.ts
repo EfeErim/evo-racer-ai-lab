@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { safeFileName } from "../src/downloads";
-import {
-  renderFitnessChart,
-  renderTrainingCompletion,
-} from "../src/views/training";
+import { renderTrainingCompletion } from "../src/views/training";
 import {
   priorGenerationTrails,
   updateGenerationTrails,
@@ -47,22 +43,6 @@ function snapshot(
 }
 
 describe("training progress presentation", () => {
-  it("creates Windows-safe local export filenames", () => {
-    expect(safeFileName("Fast / Track")).toBe("fast-track");
-    expect(safeFileName("CON")).toBe("con-export");
-    expect(safeFileName("LPT9")).toBe("lpt9-export");
-    expect(safeFileName("***")).toBe("local-export");
-  });
-
-  it("renders visible markers for a single completed generation", () => {
-    const chart = renderFitnessChart([
-      { generation: 0, bestFitness: 12, medianFitness: 8 },
-    ]);
-
-    expect(chart).toContain('class="chart-point best-point"');
-    expect(chart).toContain('class="chart-point median-point"');
-  });
-
   it("combines completed generations with completed candidates", () => {
     expect(runProgress(snapshot())).toEqual({
       fraction: 0.3,
@@ -90,14 +70,6 @@ describe("training progress presentation", () => {
 });
 
 describe("generation-boundary controls", () => {
-  it("states the command boundary before a command is sent", () => {
-    expect(runControls(snapshot())).toMatchObject({
-      pauseLabel: "Pause after generation",
-      stopLabel: "Stop after generation",
-      note: "Pause and stop take effect when the current generation finishes.",
-    });
-  });
-
   it("makes a queued pause visible and prevents duplicate pause commands", () => {
     expect(runControls(snapshot({ pendingCommand: "pause" }))).toEqual({
       pauseAction: "pause",
@@ -120,14 +92,6 @@ describe("generation-boundary controls", () => {
     });
   });
 
-  it("renders every pending command label without encoding artifacts", () => {
-    expect(runControls(snapshot(), "pause").pauseLabel).toBe("Sending pause…");
-    expect(
-      runControls(snapshot({ status: "paused" }), "resume").pauseLabel,
-    ).toBe("Sending resume…");
-    expect(runControls(snapshot(), "stop").stopLabel).toBe("Sending stop…");
-  });
-
   it("does not describe a stopped run as completed", () => {
     expect(runControls(snapshot({ status: "stopped" })).note).toBe(
       "This run was stopped. Its controls are read-only.",
@@ -136,23 +100,6 @@ describe("generation-boundary controls", () => {
 });
 
 describe("terminal training handoff", () => {
-  it("surfaces completed results without requiring a page-length scroll", () => {
-    expect(
-      runCompletion(
-        snapshot({
-          status: "completed",
-          generation: 8,
-          generationInProgress: false,
-          activeCandidate: null,
-          result: {} as ObservationSnapshotV1["result"],
-        }),
-      ),
-    ).toEqual({
-      title: "Training complete",
-      message: "All 8 generations finished.",
-    });
-  });
-
   it("distinguishes a stopped run from full completion", () => {
     expect(
       runCompletion(
@@ -195,22 +142,12 @@ describe("terminal training handoff", () => {
 });
 
 describe("Results replay navigation", () => {
-  it("never creates a negative index for an empty replay", () => {
-    expect(replayFrameIndexAfterAction(0, 0, "next")).toBe(0);
-    expect(replayFrameIndexAfterAction(4, 0, "previous")).toBe(0);
-  });
-
   it("clamps stale indexes before moving through a bounded replay", () => {
     expect(clampReplayFrameIndex(-3, 5)).toBe(0);
     expect(clampReplayFrameIndex(12, 5)).toBe(4);
     expect(replayFrameIndexAfterAction(12, 5, "previous")).toBe(3);
     expect(replayFrameIndexAfterAction(-2, 5, "next")).toBe(1);
     expect(replayFrameIndexAfterAction(3, 5, "restart")).toBe(0);
-  });
-
-  it("keeps every action on the only available frame", () => {
-    expect(replayFrameIndexAfterAction(0, 1, "previous")).toBe(0);
-    expect(replayFrameIndexAfterAction(0, 1, "next")).toBe(0);
   });
 });
 

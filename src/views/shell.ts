@@ -41,17 +41,21 @@ function coreStatus(
     : { tone: "info", glyph: "…", label: "Local core: connecting" };
 }
 
-export function renderShell(
-  state: AppState,
-  presetGeometry: PresetGeometryState,
-  trackWorkspace: TrackWorkspaceState,
-  simulation: SimulationState,
-  runLibrary: RunLibraryState,
-  replay: ReplayPresentation,
-  reducedMotion: boolean,
-  stageInfo: TrainingStageInfo,
-  raceSpeed: number,
-): string {
+/** Everything one render reads; the app store builds it once per render. */
+interface ShellView {
+  state: AppState;
+  presetGeometry: PresetGeometryState;
+  trackWorkspace: TrackWorkspaceState;
+  simulation: SimulationState;
+  runLibrary: RunLibraryState;
+  replay: ReplayPresentation;
+  reducedMotion: boolean;
+  stageInfo: TrainingStageInfo;
+  raceSpeed: number;
+}
+
+export function renderShell(view: ShellView): string {
+  const { state, presetGeometry, simulation, reducedMotion } = view;
   const activeStep = JOURNEY_STEPS.findIndex((step) =>
     (step.covers as readonly RouteId[]).includes(state.route),
   );
@@ -130,33 +134,23 @@ export function renderShell(
       </header>
 
       <main id="workspace" class="workspace">
-        ${renderRoute(
-          state,
-          presetGeometry,
-          trackWorkspace,
-          simulation,
-          runLibrary,
-          replay,
-          reducedMotion,
-          stageInfo,
-          raceSpeed,
-        )}
+        ${renderRoute(view)}
       </main>
     </div>
   `;
 }
 
-function renderRoute(
-  state: AppState,
-  presetGeometry: PresetGeometryState,
-  trackWorkspace: TrackWorkspaceState,
-  simulation: SimulationState,
-  runLibrary: RunLibraryState,
-  replay: ReplayPresentation,
-  reducedMotion: boolean,
-  stageInfo: TrainingStageInfo,
-  raceSpeed: number,
-): string {
+function renderRoute({
+  state,
+  presetGeometry,
+  trackWorkspace,
+  simulation,
+  runLibrary,
+  replay,
+  reducedMotion,
+  stageInfo,
+  raceSpeed,
+}: ShellView): string {
   const activeTrack =
     state.draft.track === null
       ? presetGeometry.status === "ready"

@@ -127,72 +127,8 @@ def parse_track(payload: object) -> TrackV1:
             TrackIssue("INVALID_TRACK_NAME", "name", "Track name must be a non-empty string.")
         )
 
-    road_width_value = payload.get("roadWidth")
-    if (
-        not isinstance(road_width_value, (int, float))
-        or isinstance(road_width_value, bool)
-        or not math.isfinite(float(road_width_value))
-    ):
-        issues.append(
-            TrackIssue(
-                "INVALID_ROAD_WIDTH",
-                "roadWidth",
-                "roadWidth must be a finite number.",
-            )
-        )
-        road_width = 0.0
-    else:
-        road_width = float(road_width_value)
-        if road_width < MINIMUM_ROAD_WIDTH:
-            issues.append(
-                TrackIssue(
-                    "CORRIDOR_TOO_NARROW",
-                    "roadWidth",
-                    f"roadWidth must be at least {MINIMUM_ROAD_WIDTH:.1f}.",
-                )
-            )
-        elif road_width > MAXIMUM_ROAD_WIDTH:
-            issues.append(
-                TrackIssue(
-                    "CORRIDOR_TOO_WIDE",
-                    "roadWidth",
-                    f"roadWidth must be at most {MAXIMUM_ROAD_WIDTH:.1f}.",
-                )
-            )
-
-    pieces_value = payload.get("pieces")
-    pieces: list[TrackPieceV1] = []
-    if not isinstance(pieces_value, list) or not pieces_value:
-        issues.append(
-            TrackIssue(
-                "TRACK_PIECES_REQUIRED",
-                "pieces",
-                "Track pieces must be a non-empty array.",
-            )
-        )
-    else:
-        for index, piece_value in enumerate(pieces_value):
-            field = f"pieces[{index}].kind"
-            if not isinstance(piece_value, dict):
-                issues.append(
-                    TrackIssue(
-                        "INVALID_TRACK_PIECE",
-                        f"pieces[{index}]",
-                        "Each track piece must be an object.",
-                    )
-                )
-                continue
-            kind = piece_value.get("kind")
-            if not isinstance(kind, str) or kind not in _SEGMENT_KINDS:
-                issues.append(
-                    TrackIssue(
-                        "UNKNOWN_SEGMENT_KIND",
-                        field,
-                        "Track piece kind is not in the version 1 segment catalogue.",
-                    )
-                )
-                continue
-            pieces.append(TrackPieceV1(cast(SegmentKind, kind)))
+    road_width = _parse_road_width(payload.get("roadWidth"), issues)
+    pieces = _parse_pieces(payload.get("pieces"), issues)
 
     if sum(piece.kind == "start-finish" for piece in pieces) != 1:
         issues.append(
@@ -216,6 +152,77 @@ def parse_track(payload: object) -> TrackV1:
         road_width=road_width,
         pieces=tuple(pieces),
     )
+
+
+def _parse_road_width(road_width_value: object, issues: list[TrackIssue]) -> float:
+    """Return the road width, adding an issue and returning 0.0 when it is unusable."""
+    if (
+        not isinstance(road_width_value, (int, float))
+        or isinstance(road_width_value, bool)
+        or not math.isfinite(float(road_width_value))
+    ):
+        issues.append(
+            TrackIssue(
+                "INVALID_ROAD_WIDTH",
+                "roadWidth",
+                "roadWidth must be a finite number.",
+            )
+        )
+        return 0.0
+    road_width = float(road_width_value)
+    if road_width < MINIMUM_ROAD_WIDTH:
+        issues.append(
+            TrackIssue(
+                "CORRIDOR_TOO_NARROW",
+                "roadWidth",
+                f"roadWidth must be at least {MINIMUM_ROAD_WIDTH:.1f}.",
+            )
+        )
+    elif road_width > MAXIMUM_ROAD_WIDTH:
+        issues.append(
+            TrackIssue(
+                "CORRIDOR_TOO_WIDE",
+                "roadWidth",
+                f"roadWidth must be at most {MAXIMUM_ROAD_WIDTH:.1f}.",
+            )
+        )
+    return road_width
+
+
+def _parse_pieces(pieces_value: object, issues: list[TrackIssue]) -> list[TrackPieceV1]:
+    """Return the valid pieces, adding one issue per invalid piece."""
+    if not isinstance(pieces_value, list) or not pieces_value:
+        issues.append(
+            TrackIssue(
+                "TRACK_PIECES_REQUIRED",
+                "pieces",
+                "Track pieces must be a non-empty array.",
+            )
+        )
+        return []
+    pieces: list[TrackPieceV1] = []
+    for index, piece_value in enumerate(pieces_value):
+        if not isinstance(piece_value, dict):
+            issues.append(
+                TrackIssue(
+                    "INVALID_TRACK_PIECE",
+                    f"pieces[{index}]",
+                    "Each track piece must be an object.",
+                )
+            )
+            continue
+        kind = piece_value.get("kind")
+        if not isinstance(kind, str) or kind not in _SEGMENT_KINDS:
+            issues.append(
+                TrackIssue(
+                    "UNKNOWN_SEGMENT_KIND",
+                    f"pieces[{index}].kind",
+                    "Track piece kind is not in the version 1 segment catalogue.",
+                )
+            )
+            continue
+        pieces.append(TrackPieceV1(cast(SegmentKind, kind)))
+    return pieces
 
 
 def compile_track_payload(payload: object) -> dict[str, object]:

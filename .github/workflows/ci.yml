@@ -18,17 +18,21 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24.13.0"
+          cache: npm
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      # setup.ps1 keeps an existing venv, so it uses the interpreter selected above.
+          cache: pip
+          cache-dependency-path: requirements-dev.lock
+      # npm run setup keeps an existing .venv, so it uses the interpreter selected above.
       - name: Create Python environment
         run: python -m venv .venv
-      - name: Install locked dependencies with npm ci and pip
-        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup.ps1
+      - name: Install locked dependencies
+        run: npm run setup
       - name: Install Playwright Chromium
         run: npx playwright install chromium
       - name: Run source checks
         run: npm run check
+      # npm run check already built dist/, which the browser flows serve.
       - name: Run browser flows
-        run: npm run test:e2e
+        run: npx playwright test

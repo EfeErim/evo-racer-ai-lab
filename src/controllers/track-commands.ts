@@ -15,6 +15,7 @@ import {
   type TrackWorkspaceState,
 } from "../track-builder";
 import type { CompiledTrackV1 } from "../track-renderer";
+import type { TrackCommandResponse } from "../track-workbench";
 import { createTrackEditing } from "./track-editing";
 import { createTrackValidation } from "./track-validation";
 
@@ -89,6 +90,40 @@ export function syncGeneratorDraftPresentation(
   noticeMessage.textContent = inputsChanged
     ? "Generator inputs changed. Generate again to apply them. The preview still shows the last checked candidate."
     : workspace.notice.message;
+}
+
+type TrackActionHandler = (
+  element: HTMLElement,
+  isCurrentRequest: () => boolean,
+) => Promise<void> | void;
+
+const BUILDER_TAB_MESSAGES: Record<TrackBuilderTab, string> = {
+  build: "Edit the pieces. Every change is previewed and checked.",
+  generate:
+    "Choose a seed, length, and difficulty to create a verified layout.",
+  library: "Saved and imported tracks stay on this computer.",
+};
+
+/** Actions that may have written the library before they failed or were dropped. */
+const LIBRARY_WRITE_ACTIONS: ReadonlySet<string> = new Set([
+  "save-editor",
+  "save-generated",
+  "delete-library",
+]);
+
+function generatedNotice(
+  response: TrackCommandResponse,
+  compiled: CompiledTrackV1,
+  seed: number,
+  previousCandidate: CompiledTrackV1 | undefined,
+): string {
+  if (previousCandidate === undefined) {
+    return `Candidate ready: ${String(compiled.track.pieces.length)} pieces from seed ${String(seed)} (generator v${String(response.generatorVersion ?? "?")}, ${String(response.candidateCount ?? 1)} layout(s) checked). It is not active until you choose Use this track.`;
+  }
+  return JSON.stringify(previousCandidate.track) ===
+    JSON.stringify(compiled.track)
+    ? `Same seed ${String(seed)} returned the identical track.`
+    : `Same seed ${String(seed)} returned a different track. Treat earlier results from this seed as not comparable.`;
 }
 
 export function createTrackCommands(context: AppContext) {
@@ -233,6 +268,364 @@ export function createTrackCommands(context: AppContext) {
       ?.focus({ preventScroll: true });
   };
 
+  const focusBuilderTitle = (): void => {
+    root
+      .querySelector<HTMLElement>("#track-builder-title")
+      ?.focus({ preventScroll: true });
+  };
+
+  /** The editor draft once it passed validation, or undefined. */
+  const validEditorPreview = (): CompiledTrackV1 | undefined =>
+    store.trackWorkspace.editorValidation.status === "valid"
+      ? store.trackWorkspace.editorPreview
+      : undefined;
+
+  const generatedPreview = (): CompiledTrackV1 | undefined =>
+    store.trackWorkspace.generatedPreview;
+
+  const refreshLibraryAction = async (): Promise<void> => {
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      libraryStatus: "loading",
+      libraryMessage: undefined,
+      notice: {
+        tone: "info",
+        message: "Refreshing the local track library.",
+      },
+    };
+    render();
+    await refreshLibrary(TRACK_LIBRARY_REFRESHED_NOTICE);
+  };
+
+  const openBuilder = (): void => {
+    const shouldValidate =
+      store.trackWorkspace.editorValidation.status === "unchecked";
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      notice: shouldValidate
+        ? {
+            tone: "info",
+            message: "Checking the starter draft.",
+          }
+        : store.trackWorkspace.notice,
+    };
+    dispatch({ type: "navigate", route: "track" });
+    focusBuilderTitle();
+    if (shouldValidate) {
+      void validateEditorDraft();
+    }
+  };
+
+  const openSelectedBuilder = (): void => {
+    if (store.trackWorkspace.selected === undefined) {
+      return;
+    }
+    store.trackWorkspace = {
+      ...withEditorTrack(
+        store.trackWorkspace,
+        store.trackWorkspace.selected,
+        "Selected track loaded into the piece editor.",
+      ),
+      toolsOpen: true,
+    };
+    dispatch({ type: "navigate", route: "track" });
+    focusBuilderTitle();
+  };
+
+  const closeBuilder = (): void => {
+    const canceledTrackCommand = store.trackWorkspace.pending;
+    cancelTrackRequests(store.requests, canceledTrackCommand);
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      toolsOpen: false,
+      pending: null,
+      notice:
+        canceledTrackCommand === null
+          ? store.trackWorkspace.notice
+          : {
+              tone: "neutral",
+              message: dismissedTrackResponseMessage(
+                canceledTrackCommand,
+                "Track Builder closed",
+              ),
+            },
+    };
+    dispatch({ type: "navigate", route: "setup" });
+    root
+      .querySelector<HTMLElement>('[data-track-action="open-builder"]')
+      ?.focus({ preventScroll: true });
+  };
+
+  const switchBuilderTab = (element: HTMLElement): void => {
+    const tab = element.dataset.builderTab as TrackBuilderTab | undefined;
+    if (tab !== "build" && tab !== "generate" && tab !== "library") {
+      return;
+    }
+    const canceledTrackCommand =
+      tab === store.trackWorkspace.tab ? null : store.trackWorkspace.pending;
+    cancelTrackRequests(store.requests, canceledTrackCommand);
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      tab,
+      pending:
+        canceledTrackCommand === null ? store.trackWorkspace.pending : null,
+      editorValidation:
+        canceledTrackCommand === "validate"
+          ? { status: "unchecked", errors: [] }
+          : store.trackWorkspace.editorValidation,
+      notice: {
+        tone: "neutral",
+        message:
+          canceledTrackCommand === null
+            ? BUILDER_TAB_MESSAGES[tab]
+            : `${dismissedTrackResponseMessage(canceledTrackCommand, "switching tools")} ${BUILDER_TAB_MESSAGES[tab]}`,
+      },
+    };
+    render();
+    if (
+      tab === "build" &&
+      store.trackWorkspace.editorValidation.status === "unchecked"
+    ) {
+      void validateEditorDraft();
+    }
+  };
+
+  /** Generator inputs from the form, or the last generated inputs for a same-seed rerun. */
+  const generatorRequest = (
+    sameSeedInputs: TrackWorkspaceState["generatedInputs"],
+  ): TrackWorkspaceState["generator"] => {
+    const seed =
+      sameSeedInputs?.seed ??
+      root.querySelector<HTMLInputElement>("[data-generator-seed]")
+        ?.valueAsNumber ??
+      0;
+    const length =
+      sameSeedInputs?.length ??
+      (root.querySelector<HTMLInputElement>(
+        'input[name="generator-length"]:checked',
+      )?.value as "short" | "medium" | "long" | undefined);
+    const difficulty =
+      sameSeedInputs?.difficulty ??
+      (root.querySelector<HTMLInputElement>(
+        'input[name="generator-difficulty"]:checked',
+      )?.value as "easy" | "technical" | "hard" | undefined);
+    return {
+      seed,
+      length: length ?? store.trackWorkspace.generator.length,
+      difficulty: difficulty ?? store.trackWorkspace.generator.difficulty,
+    };
+  };
+
+  const generateCandidate = async (
+    sameSeed: boolean,
+    isCurrentRequest: () => boolean,
+  ): Promise<void> => {
+    const sameSeedInputs = sameSeed
+      ? store.trackWorkspace.generatedInputs
+      : undefined;
+    const previousCandidate = sameSeedInputs
+      ? store.trackWorkspace.generatedPreview
+      : undefined;
+    const generator = generatorRequest(sameSeedInputs);
+    const { seed } = generator;
+    if (!Number.isInteger(seed) || seed < 0 || seed > 2_147_483_647) {
+      store.trackWorkspace = {
+        ...store.trackWorkspace,
+        notice: {
+          tone: "error",
+          message: "Seed must be a whole number from 0 to 2147483647.",
+        },
+      };
+      render();
+      return;
+    }
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      generator,
+      pending: "generate",
+      notice: {
+        tone: "info",
+        message: "Searching for a valid layout from this seed.",
+      },
+    };
+    render();
+    const response = await generateTrack(generator);
+    if (!isCurrentTrackCommand(isCurrentRequest, "generate")) {
+      return;
+    }
+    if (response.valid && response.compiled !== undefined) {
+      store.trackWorkspace = {
+        ...store.trackWorkspace,
+        pending: null,
+        generatedInputs: generator,
+        generatedFeatures: response.features,
+        generatedPreview: response.compiled,
+        notice: {
+          tone: "success",
+          message: generatedNotice(
+            response,
+            response.compiled,
+            seed,
+            previousCandidate,
+          ),
+        },
+      };
+    } else {
+      store.trackWorkspace = {
+        ...store.trackWorkspace,
+        pending: null,
+        generatedInputs: undefined,
+        generatedFeatures: undefined,
+        generatedPreview: undefined,
+        notice: {
+          tone: "error",
+          message: response.errors[0]?.message ?? "Track generation failed.",
+        },
+      };
+    }
+    render();
+  };
+
+  const deleteLibraryTrack = async (
+    element: HTMLElement,
+    isCurrentRequest: () => boolean,
+  ): Promise<void> => {
+    const trackId = element.dataset.trackId;
+    const compiled = libraryTrack(trackId);
+    if (
+      trackId === undefined ||
+      compiled === undefined ||
+      !window.confirm(
+        `Delete “${compiled.track.name}” from the local track library?`,
+      )
+    ) {
+      return;
+    }
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      pending: "delete",
+      notice: {
+        tone: "info",
+        message: `Deleting ${compiled.track.name} from the local track library.`,
+      },
+    };
+    render();
+    await deleteRecord("track", trackId);
+    if (!isCurrentTrackCommand(isCurrentRequest, "delete")) {
+      await refreshLibrary();
+      return;
+    }
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      pending: null,
+      notice: {
+        tone: "success",
+        message: "Track deleted from the local library.",
+      },
+    };
+    await refreshLibrary();
+  };
+
+  /** Runs `use` with the track `track()` returns, when there is one. */
+  const withTrack =
+    (
+      track: () => CompiledTrackV1 | undefined,
+      use: (compiled: CompiledTrackV1) => void,
+    ) =>
+    (): void => {
+      const compiled = track();
+      if (compiled !== undefined) {
+        use(compiled);
+      }
+    };
+
+  /** Runs `use` with the library track the clicked element names, if it still exists. */
+  const withLibraryTrack =
+    (use: (compiled: CompiledTrackV1) => void) =>
+    (element: HTMLElement): void => {
+      const compiled = libraryTrack(element.dataset.trackId);
+      if (compiled !== undefined) {
+        use(compiled);
+      }
+    };
+
+  const saveTrackFrom =
+    (track: () => CompiledTrackV1 | undefined): TrackActionHandler =>
+    async (_element, isCurrentRequest) => {
+      const compiled = track();
+      if (compiled !== undefined) {
+        await saveCompiledTrack(compiled, isCurrentRequest);
+      }
+    };
+
+  const trackActionHandlers: Record<string, TrackActionHandler> = {
+    "refresh-library": refreshLibraryAction,
+    "open-builder": openBuilder,
+    "open-selected-builder": openSelectedBuilder,
+    "close-builder": closeBuilder,
+    "builder-tab": switchBuilderTab,
+    "editor-assist": (_element, isCurrentRequest) =>
+      assistEditorClosure(isCurrentRequest),
+    "use-editor": withTrack(validEditorPreview, (compiled) => {
+      useCompiled(compiled, "This draft is now the active track.");
+    }),
+    generate: (_element, isCurrentRequest) =>
+      generateCandidate(false, isCurrentRequest),
+    regenerate: (_element, isCurrentRequest) =>
+      generateCandidate(true, isCurrentRequest),
+    "use-generated": withTrack(generatedPreview, (compiled) => {
+      useCompiled(
+        compiled,
+        "This candidate is now the active track.",
+        store.trackWorkspace.generatedInputs?.seed,
+      );
+    }),
+    "edit-generated": withTrack(generatedPreview, (compiled) => {
+      editInBuilder(compiled, "Generated track loaded into the piece editor.");
+    }),
+    "save-editor": saveTrackFrom(validEditorPreview),
+    "save-generated": saveTrackFrom(generatedPreview),
+    "export-editor": withTrack(validEditorPreview, downloadTrack),
+    "export-generated": withTrack(generatedPreview, downloadTrack),
+    "use-library": withLibraryTrack((compiled) => {
+      useCompiled(compiled, "Saved track selected for this experiment.");
+    }),
+    "edit-library": withLibraryTrack((compiled) => {
+      editInBuilder(compiled, "Saved track loaded into the piece editor.");
+    }),
+    "export-library": withLibraryTrack(downloadTrack),
+    "delete-library": deleteLibraryTrack,
+  };
+
+  const showTrackCommandError = async (
+    action: string,
+    error: unknown,
+    isCurrentRequest: () => boolean,
+  ): Promise<void> => {
+    if (
+      !isCurrentRequest() ||
+      store.state.route !== "track" ||
+      !store.trackWorkspace.toolsOpen
+    ) {
+      if (LIBRARY_WRITE_ACTIONS.has(action)) {
+        await refreshLibrary();
+      }
+      return;
+    }
+    store.trackWorkspace = {
+      ...store.trackWorkspace,
+      pending: null,
+      notice: {
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "No response yet from the local core. Try again.",
+      },
+    };
+    render();
+  };
+
   const handleTrackAction = async (
     action: string,
     element: HTMLElement,
@@ -248,364 +641,11 @@ export function createTrackCommands(context: AppContext) {
       if (handleEditorAction(action, element)) {
         return;
       }
-      switch (action) {
-        case "refresh-library":
-          store.trackWorkspace = {
-            ...store.trackWorkspace,
-            libraryStatus: "loading",
-            libraryMessage: undefined,
-            notice: {
-              tone: "info",
-              message: "Refreshing the local track library.",
-            },
-          };
-          render();
-          await refreshLibrary(TRACK_LIBRARY_REFRESHED_NOTICE);
-          return;
-        case "open-builder": {
-          const shouldValidate =
-            store.trackWorkspace.editorValidation.status === "unchecked";
-          store.trackWorkspace = {
-            ...store.trackWorkspace,
-            notice: shouldValidate
-              ? {
-                  tone: "info",
-                  message: "Checking the starter draft.",
-                }
-              : store.trackWorkspace.notice,
-          };
-          dispatch({ type: "navigate", route: "track" });
-          root
-            .querySelector<HTMLElement>("#track-builder-title")
-            ?.focus({ preventScroll: true });
-          if (shouldValidate) {
-            void validateEditorDraft();
-          }
-          return;
-        }
-        case "open-selected-builder":
-          if (store.trackWorkspace.selected !== undefined) {
-            store.trackWorkspace = {
-              ...withEditorTrack(
-                store.trackWorkspace,
-                store.trackWorkspace.selected,
-                "Selected track loaded into the piece editor.",
-              ),
-              toolsOpen: true,
-            };
-            dispatch({ type: "navigate", route: "track" });
-            root
-              .querySelector<HTMLElement>("#track-builder-title")
-              ?.focus({ preventScroll: true });
-          }
-          return;
-        case "close-builder": {
-          const canceledTrackCommand = store.trackWorkspace.pending;
-          cancelTrackRequests(store.requests, canceledTrackCommand);
-          store.trackWorkspace = {
-            ...store.trackWorkspace,
-            toolsOpen: false,
-            pending: null,
-            notice:
-              canceledTrackCommand === null
-                ? store.trackWorkspace.notice
-                : {
-                    tone: "neutral",
-                    message: dismissedTrackResponseMessage(
-                      canceledTrackCommand,
-                      "Track Builder closed",
-                    ),
-                  },
-          };
-          dispatch({ type: "navigate", route: "setup" });
-          root
-            .querySelector<HTMLElement>('[data-track-action="open-builder"]')
-            ?.focus({ preventScroll: true });
-          return;
-        }
-        case "builder-tab": {
-          const tab = element.dataset.builderTab as TrackBuilderTab | undefined;
-          if (tab === "build" || tab === "generate" || tab === "library") {
-            const canceledTrackCommand =
-              tab === store.trackWorkspace.tab
-                ? null
-                : store.trackWorkspace.pending;
-            cancelTrackRequests(store.requests, canceledTrackCommand);
-            const messages: Record<TrackBuilderTab, string> = {
-              build: "Edit the pieces. Every change is previewed and checked.",
-              generate:
-                "Choose a seed, length, and difficulty to create a verified layout.",
-              library: "Saved and imported tracks stay on this computer.",
-            };
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              tab,
-              pending:
-                canceledTrackCommand === null
-                  ? store.trackWorkspace.pending
-                  : null,
-              editorValidation:
-                canceledTrackCommand === "validate"
-                  ? { status: "unchecked", errors: [] }
-                  : store.trackWorkspace.editorValidation,
-              notice: {
-                tone: "neutral",
-                message:
-                  canceledTrackCommand === null
-                    ? messages[tab]
-                    : `${dismissedTrackResponseMessage(canceledTrackCommand, "switching tools")} ${messages[tab]}`,
-              },
-            };
-            render();
-            if (
-              tab === "build" &&
-              store.trackWorkspace.editorValidation.status === "unchecked"
-            ) {
-              void validateEditorDraft();
-            }
-          }
-          return;
-        }
-        case "editor-assist":
-          await assistEditorClosure(isCurrentRequest);
-          return;
-        case "use-editor":
-          if (
-            store.trackWorkspace.editorValidation.status === "valid" &&
-            store.trackWorkspace.editorPreview !== undefined
-          ) {
-            useCompiled(
-              store.trackWorkspace.editorPreview,
-              "This draft is now the active track.",
-            );
-          }
-          return;
-        case "regenerate":
-        case "generate": {
-          const sameSeedInputs =
-            action === "regenerate"
-              ? store.trackWorkspace.generatedInputs
-              : undefined;
-          const previousCandidate = sameSeedInputs
-            ? store.trackWorkspace.generatedPreview
-            : undefined;
-          const seed =
-            sameSeedInputs?.seed ??
-            root.querySelector<HTMLInputElement>("[data-generator-seed]")
-              ?.valueAsNumber ??
-            0;
-          const length =
-            sameSeedInputs?.length ??
-            (root.querySelector<HTMLInputElement>(
-              'input[name="generator-length"]:checked',
-            )?.value as "short" | "medium" | "long" | undefined);
-          const difficulty =
-            sameSeedInputs?.difficulty ??
-            (root.querySelector<HTMLInputElement>(
-              'input[name="generator-difficulty"]:checked',
-            )?.value as "easy" | "technical" | "hard" | undefined);
-          const generator = {
-            seed,
-            length: length ?? store.trackWorkspace.generator.length,
-            difficulty: difficulty ?? store.trackWorkspace.generator.difficulty,
-          };
-          if (!Number.isInteger(seed) || seed < 0 || seed > 2_147_483_647) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              notice: {
-                tone: "error",
-                message: "Seed must be a whole number from 0 to 2147483647.",
-              },
-            };
-            render();
-            return;
-          }
-          store.trackWorkspace = {
-            ...store.trackWorkspace,
-            generator,
-            pending: "generate",
-            notice: {
-              tone: "info",
-              message: "Searching for a valid layout from this seed.",
-            },
-          };
-          render();
-          const response = await generateTrack(generator);
-          if (!isCurrentTrackCommand(isCurrentRequest, "generate")) {
-            return;
-          }
-          if (response.valid && response.compiled !== undefined) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: null,
-              generatedInputs: generator,
-              generatedFeatures: response.features,
-              generatedPreview: response.compiled,
-              notice: {
-                tone: "success",
-                message:
-                  previousCandidate === undefined
-                    ? `Candidate ready: ${String(response.compiled.track.pieces.length)} pieces from seed ${String(generator.seed)} (generator v${String(response.generatorVersion ?? "?")}, ${String(response.candidateCount ?? 1)} layout(s) checked). It is not active until you choose Use this track.`
-                    : JSON.stringify(previousCandidate.track) ===
-                        JSON.stringify(response.compiled.track)
-                      ? `Same seed ${String(generator.seed)} returned the identical track.`
-                      : `Same seed ${String(generator.seed)} returned a different track. Treat earlier results from this seed as not comparable.`,
-              },
-            };
-          } else {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: null,
-              generatedInputs: undefined,
-              generatedFeatures: undefined,
-              generatedPreview: undefined,
-              notice: {
-                tone: "error",
-                message:
-                  response.errors[0]?.message ?? "Track generation failed.",
-              },
-            };
-          }
-          render();
-          return;
-        }
-        case "use-generated":
-          if (store.trackWorkspace.generatedPreview !== undefined) {
-            useCompiled(
-              store.trackWorkspace.generatedPreview,
-              "This candidate is now the active track.",
-              store.trackWorkspace.generatedInputs?.seed,
-            );
-          }
-          return;
-        case "edit-generated":
-          if (store.trackWorkspace.generatedPreview !== undefined) {
-            editInBuilder(
-              store.trackWorkspace.generatedPreview,
-              "Generated track loaded into the piece editor.",
-            );
-          }
-          return;
-        case "save-editor":
-          if (
-            store.trackWorkspace.editorValidation.status === "valid" &&
-            store.trackWorkspace.editorPreview !== undefined
-          ) {
-            await saveCompiledTrack(
-              store.trackWorkspace.editorPreview,
-              isCurrentRequest,
-            );
-          }
-          return;
-        case "save-generated":
-          if (store.trackWorkspace.generatedPreview !== undefined) {
-            await saveCompiledTrack(
-              store.trackWorkspace.generatedPreview,
-              isCurrentRequest,
-            );
-          }
-          return;
-        case "export-editor":
-          if (
-            store.trackWorkspace.editorValidation.status === "valid" &&
-            store.trackWorkspace.editorPreview !== undefined
-          ) {
-            downloadTrack(store.trackWorkspace.editorPreview);
-          }
-          return;
-        case "export-generated":
-          if (store.trackWorkspace.generatedPreview !== undefined) {
-            downloadTrack(store.trackWorkspace.generatedPreview);
-          }
-          return;
-        case "use-library": {
-          const compiled = libraryTrack(element.dataset.trackId);
-          if (compiled !== undefined) {
-            useCompiled(compiled, "Saved track selected for this experiment.");
-          }
-          return;
-        }
-        case "edit-library": {
-          const compiled = libraryTrack(element.dataset.trackId);
-          if (compiled !== undefined) {
-            editInBuilder(
-              compiled,
-              "Saved track loaded into the piece editor.",
-            );
-          }
-          return;
-        }
-        case "export-library": {
-          const compiled = libraryTrack(element.dataset.trackId);
-          if (compiled !== undefined) {
-            downloadTrack(compiled);
-          }
-          return;
-        }
-        case "delete-library": {
-          const trackId = element.dataset.trackId;
-          const compiled = libraryTrack(trackId);
-          if (
-            trackId !== undefined &&
-            compiled !== undefined &&
-            window.confirm(
-              `Delete “${compiled.track.name}” from the local track library?`,
-            )
-          ) {
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: "delete",
-              notice: {
-                tone: "info",
-                message: `Deleting ${compiled.track.name} from the local track library.`,
-              },
-            };
-            render();
-            await deleteRecord("track", trackId);
-            if (!isCurrentTrackCommand(isCurrentRequest, "delete")) {
-              await refreshLibrary();
-              return;
-            }
-            store.trackWorkspace = {
-              ...store.trackWorkspace,
-              pending: null,
-              notice: {
-                tone: "success",
-                message: "Track deleted from the local library.",
-              },
-            };
-            await refreshLibrary();
-          }
-          return;
-        }
+      if (Object.hasOwn(trackActionHandlers, action)) {
+        await trackActionHandlers[action]?.(element, isCurrentRequest);
       }
     } catch (error) {
-      if (
-        !isCurrentRequest() ||
-        store.state.route !== "track" ||
-        !store.trackWorkspace.toolsOpen
-      ) {
-        if (
-          action === "save-editor" ||
-          action === "save-generated" ||
-          action === "delete-library"
-        ) {
-          await refreshLibrary();
-        }
-        return;
-      }
-      store.trackWorkspace = {
-        ...store.trackWorkspace,
-        pending: null,
-        notice: {
-          tone: "error",
-          message:
-            error instanceof Error
-              ? error.message
-              : "No response yet from the local core. Try again.",
-        },
-      };
-      render();
+      await showTrackCommandError(action, error, isCurrentRequest);
     }
   };
 

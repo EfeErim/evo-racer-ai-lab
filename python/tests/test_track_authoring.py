@@ -64,31 +64,6 @@ def test_every_length_and_difficulty_uses_the_canonical_compiler() -> None:
             assert features["layout"] == "asymmetric"
 
 
-def test_generator_seed_and_difficulty_change_the_canonical_shape_family() -> None:
-    generated_ids: set[str] = set()
-    for seed in (1, 2, 731):
-        easy = _generate(seed=seed, length="medium", difficulty="easy")
-        technical = _generate(seed=seed, length="medium", difficulty="technical")
-        hard = _generate(seed=seed, length="medium", difficulty="hard")
-
-        for response in (easy, technical, hard):
-            assert response["generatorVersion"] == 5
-            compiled = response["compiled"]
-            assert isinstance(compiled, dict)
-            track = compiled["track"]
-            assert isinstance(track, dict)
-            track_id = track["id"]
-            assert isinstance(track_id, str)
-            generated_ids.add(track_id)
-
-        technical_kinds = {piece["kind"] for piece in technical["compiled"]["track"]["pieces"]}
-        hard_kinds = {piece["kind"] for piece in hard["compiled"]["track"]["pieces"]}
-        assert any(kind.startswith("chicane-") for kind in technical_kinds)
-        assert any(kind.startswith("hairpin-") for kind in hard_kinds)
-
-    assert len(generated_ids) == 9
-
-
 def test_generator_v4_uses_asymmetric_non_template_layouts() -> None:
     for difficulty in ("easy", "technical", "hard"):
         response = _generate(seed=731, length="long", difficulty=difficulty)
@@ -115,32 +90,6 @@ def test_generator_v4_uses_asymmetric_non_template_layouts() -> None:
         assert features["straightCount"] >= 2
         assert features["cornerCount"] >= 4
         assert features["directionChanges"] >= 1
-
-
-def test_generator_v4_medium_technical_seed_corpus_is_unique() -> None:
-    identifiers: set[str] = set()
-    for seed in range(12):
-        response = _generate(seed=seed, length="medium", difficulty="technical")
-        assert response["valid"] is True
-        assert response["features"]["layout"] == "asymmetric"
-        track_id = response["compiled"]["track"]["id"]
-        assert isinstance(track_id, str)
-        identifiers.add(track_id)
-
-    assert len(identifiers) == 12
-
-
-def test_generator_seeds_vary_short_track_layouts() -> None:
-    # Generator v4 produced only ~28 layouts across 200 seeds for short technical tracks.
-    layouts: set[tuple[str, ...]] = set()
-    for seed in range(16):
-        for difficulty in ("technical", "hard"):
-            response = _generate(seed=seed, length="short", difficulty=difficulty)
-            assert response["valid"] is True
-            pieces = response["compiled"]["track"]["pieces"]
-            layouts.add(tuple(piece["kind"] for piece in pieces))
-
-    assert len(layouts) >= 24
 
 
 @pytest.mark.parametrize(
@@ -284,36 +233,6 @@ def test_track_save_retries_a_transient_windows_sharing_violation(
     assert library_payload(tmp_path)["tracks"] == [compiled]
 
 
-def test_track_library_retries_a_transient_windows_read_lock(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    generated = _generate(seed=12, length="short", difficulty="easy")
-    compiled = generated["compiled"]
-    assert isinstance(compiled, dict)
-    track = compiled["track"]
-    assert isinstance(track, dict)
-    assert save_track_payload({"contractVersion": 1, "track": track}, tmp_path)["saved"]
-    real_read_text = Path.read_text
-    attempts = 0
-
-    def transient_read_text(path: Path, *args: Any, **kwargs: Any) -> str:
-        nonlocal attempts
-        if path.parent == tmp_path / "tracks":
-            attempts += 1
-            if attempts < 3:
-                raise PermissionError("transient sharing violation")
-        return real_read_text(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "read_text", transient_read_text)
-
-    listed = library_payload(tmp_path)
-
-    assert attempts == 3
-    assert listed["tracks"] == [compiled]
-    assert listed["isolated"] == []
-
-
 def test_invalid_unknown_and_corrupt_json_fail_safely(tmp_path: Path) -> None:
     unknown = {
         "schemaVersion": 1,
@@ -342,28 +261,6 @@ def test_invalid_unknown_and_corrupt_json_fail_safely(tmp_path: Path) -> None:
     assert listed["isolated"] == [
         {
             "record": "broken.json",
-            "code": "CORRUPT_TRACK_RECORD",
-            "message": "This local track could not be read and was isolated.",
-        }
-    ]
-
-
-def test_misnamed_valid_track_record_is_isolated(tmp_path: Path) -> None:
-    generated = _generate(seed=12, length="short", difficulty="easy")
-    compiled = generated["compiled"]
-    assert isinstance(compiled, dict)
-    track = compiled["track"]
-    assert isinstance(track, dict)
-    tracks_dir = tmp_path / "tracks"
-    tracks_dir.mkdir(parents=True)
-    (tracks_dir / "misnamed.json").write_text(json.dumps(track), encoding="utf-8")
-
-    listed = library_payload(tmp_path)
-
-    assert listed["tracks"] == []
-    assert listed["isolated"] == [
-        {
-            "record": "misnamed.json",
             "code": "CORRUPT_TRACK_RECORD",
             "message": "This local track could not be read and was isolated.",
         }

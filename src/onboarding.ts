@@ -53,7 +53,7 @@ export interface SetupDraft {
   settings: TrainingSettings;
 }
 
-export interface ValidationIssue {
+interface ValidationIssue {
   code: string;
   field: string;
   message: string;
@@ -65,7 +65,7 @@ export interface SetupValidationResponse {
   errors: ValidationIssue[];
 }
 
-export type ValidationState =
+type ValidationState =
   | { status: "not-checked" }
   | { status: "checking"; draft: SetupDraft }
   | { status: "checked"; response: SetupValidationResponse };
@@ -78,7 +78,7 @@ export interface AppState {
   startFailure: StartFailure | null;
 }
 
-export interface StartFailure {
+interface StartFailure {
   kind: "rejected" | "unconfirmed";
   message: string;
 }

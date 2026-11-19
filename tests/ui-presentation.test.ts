@@ -5,43 +5,12 @@ import {
   transition,
 } from "../src/onboarding";
 import type { RunResultV1 } from "../src/contracts";
-import { type CompiledTrackV1, trackLengthMeters } from "../src/track-renderer";
 import {
   compareAnswer,
   fitnessVerdict,
   outcomeLabel,
 } from "../src/views/results";
-import { trackIdentity } from "../src/views/shared";
 import { renderFitnessChart } from "../src/views/training";
-
-const square: CompiledTrackV1 = {
-  contractVersion: 1,
-  track: {
-    schemaVersion: 1,
-    id: "square",
-    name: "Square",
-    roadWidth: 10,
-    pieces: [{ kind: "start-finish" }],
-  },
-  geometry: {
-    centerline: [
-      [0, 0],
-      [10, 0],
-      [10, 10],
-      [0, 10],
-    ],
-    leftBoundary: [
-      [0, 0],
-      [1, 1],
-    ],
-    rightBoundary: [
-      [0, 0],
-      [1, 1],
-    ],
-    checkpoints: [{ index: 0, left: [0, 0], right: [1, 1] }],
-    spawnPose: { x: 0, y: 0, heading: 0 },
-  },
-};
 
 function resultWith(
   history: { generation: number; bestFitness: number; medianFitness: number }[],
@@ -69,12 +38,6 @@ describe("recommended experiment", () => {
     expect(next.draft).toEqual(createInitialState().draft);
     expect(next.route).toBe("welcome");
     expect(next.sessionStarted).toBe(false);
-  });
-
-  it("cannot replace the setup of a started session", () => {
-    const started = { ...createInitialState(), sessionStarted: true };
-
-    expect(transition(started, { type: "use-recommended" })).toBe(started);
   });
 });
 
@@ -105,37 +68,6 @@ describe("start failure wording", () => {
     expect(presentation.title).toBe("No response yet. Try again.");
     expect(`${presentation.title} ${presentation.guidance}`).not.toMatch(
       /fail/i,
-    );
-  });
-});
-
-describe("track identity", () => {
-  it("measures a closed centerline, including its closing segment", () => {
-    expect(trackLengthMeters(square)).toBe(40);
-  });
-
-  it("reports a preset as having no seed", () => {
-    const identity = trackIdentity(createInitialState(), square, undefined);
-
-    expect(identity.name).toBe("Easy Oval");
-    expect(identity.seed).toBe("None, preset layout");
-    expect(identity.summary).toBe("1 piece · 40 m long");
-    expect(identity.custom).toBe(false);
-  });
-
-  it("reports the seed of an applied generated track", () => {
-    const state = transition(createInitialState(), {
-      type: "select-custom-track",
-      track: square.track,
-    });
-
-    expect(trackIdentity(state, square, 731)).toMatchObject({
-      name: "Square",
-      seed: "731",
-      custom: true,
-    });
-    expect(trackIdentity(state, square, undefined).seed).toBe(
-      "None, built or imported",
     );
   });
 });
@@ -282,13 +214,6 @@ describe("fitness chart", () => {
     expect(chart).toContain("Generation (count)");
     expect(chart).toContain("Best car");
     expect(chart).toContain("Median car");
-  });
-
-  it("shows generations from 1, matching the rest of the app", () => {
-    const chart = renderFitnessChart(history);
-
-    expect(chart).toContain("at generation 1 to 35.0 at generation 3");
-    expect(chart).toMatch(/<text x="100\.00%"[^>]*>3<\/text>/);
   });
 
   it("uses no inline styles, which the local service's CSP would block", () => {

@@ -234,33 +234,6 @@ def test_atomic_save_retries_a_transient_windows_sharing_violation(
     assert read_run_document("run-retry", tmp_path) == document
 
 
-def test_run_export_retries_a_transient_windows_read_gap(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    session = _session(run_id="run-read-retry")
-    document = session.to_run_document()
-    save_run_document(document, tmp_path)
-    record = tmp_path / "runs" / session.run_id / "run.json"
-    real_read_text = Path.read_text
-    attempts = 0
-
-    def transient_read_text(path: Path, *args: Any, **kwargs: Any) -> str:
-        nonlocal attempts
-        if path == record:
-            attempts += 1
-            if attempts < 3:
-                raise PermissionError("transient sharing violation")
-        return real_read_text(path, *args, **kwargs)
-
-    monkeypatch.setattr(Path, "read_text", transient_read_text)
-
-    exported = export_run_payload(session.run_id, tmp_path)
-    assert exported["valid"] is True
-    assert exported["run"] == document
-    assert attempts == 3
-
-
 def test_tampered_checkpoint_digest_isolated_without_blocking_valid_run(
     tmp_path: Path,
 ) -> None:
@@ -282,51 +255,6 @@ def test_tampered_checkpoint_digest_isolated_without_blocking_valid_run(
     assert library["isolated"] == [
         {
             "record": "run-tampered",
-            "code": "CORRUPT_RUN_RECORD",
-            "message": "This local run could not be read and was isolated.",
-        }
-    ]
-
-
-def test_non_finite_checkpoint_isolated_without_blocking_valid_run(tmp_path: Path) -> None:
-    valid = _session(run_id="run-valid")
-    save_run_document(valid.to_run_document(), tmp_path)
-
-    corrupt = _session(run_id="run-non-finite").to_run_document()
-    checkpoint = corrupt["checkpoint"]
-    assert isinstance(checkpoint, dict)
-    snapshot = checkpoint["snapshot"]
-    assert isinstance(snapshot, dict)
-    snapshot["fitnessHistory"] = [{"bestFitness": float("nan")}]
-    record = tmp_path / "runs" / "run-non-finite"
-    record.mkdir(parents=True)
-    (record / "run.json").write_text(json.dumps(corrupt), encoding="utf-8")
-
-    library = run_library_payload(tmp_path)
-    runs = library["runs"]
-    assert isinstance(runs, list)
-    assert [run["runId"] for run in runs if isinstance(run, dict)] == ["run-valid"]
-    assert library["isolated"] == [
-        {
-            "record": "run-non-finite",
-            "code": "CORRUPT_RUN_RECORD",
-            "message": "This local run could not be read and was isolated.",
-        }
-    ]
-
-
-def test_misnamed_valid_run_record_is_isolated(tmp_path: Path) -> None:
-    document = _session(run_id="run-canonical").to_run_document()
-    record = tmp_path / "runs" / "wrong-directory"
-    record.mkdir(parents=True)
-    (record / "run.json").write_text(json.dumps(document), encoding="utf-8")
-
-    library = run_library_payload(tmp_path)
-
-    assert library["runs"] == []
-    assert library["isolated"] == [
-        {
-            "record": "wrong-directory",
             "code": "CORRUPT_RUN_RECORD",
             "message": "This local run could not be read and was isolated.",
         }

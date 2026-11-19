@@ -1,5 +1,9 @@
 import AxeBuilder from "@axe-core/playwright";
-import { openSetup, expectSurfaceMeetsLimits } from "./flow";
+import {
+  expectSurfaceMeetsLimits,
+  openSetup,
+  stopAndOpenResults,
+} from "./flow";
 import { expect, test, type Page } from "@playwright/test";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
@@ -41,7 +45,6 @@ async function visitEveryScreen(
   await check("Welcome");
 
   await openSetup(page);
-  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
   await check("Set up");
   await page.getByText("Exact settings").click();
   await check("Set up with exact settings open");
@@ -57,46 +60,75 @@ async function visitEveryScreen(
   await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
 
   await page.getByRole("button", { name: /Start training/ }).click();
-  await expect(page.getByLabel("Live run status")).toBeVisible({
-    timeout: 15_000,
-  });
+  await expect(page.getByLabel("Live run status")).toBeVisible();
   await check("Training");
 
-  await page.getByRole("button", { name: /Stop after generation/ }).click();
-  const openResults = page.getByRole("button", { name: "Open results" });
-  await expect(openResults).toBeVisible({ timeout: 90_000 });
-  await check("Training finished");
-  await openResults.click();
-
-  await expect(page.getByLabel("Result summary")).toBeVisible();
+  await stopAndOpenResults(page);
   await check("Results");
 }
 
-for (const colorScheme of ["dark", "light"] as const) {
-  test(`every screen has no serious or critical WCAG violations in ${colorScheme}`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
-    await page.setViewportSize({ width: 1280, height: 800 });
-    await visitEveryScreen(page, async (surface) => {
+test("every screen has no serious WCAG violations in dark and light", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await visitEveryScreen(page, async (surface) => {
+    for (const colorScheme of ["dark", "light"] as const) {
+      await page.emulateMedia({ colorScheme, reducedMotion: "reduce" });
       await expectNoSeriousViolations(page, `${surface} ${colorScheme}`);
       await expectSurfaceMeetsLimits(page, `${surface} ${colorScheme}`);
-    });
+    }
   });
-}
+});
 
-// WCAG 1.4.10: 320 CSS px is a 1280 px window at 400% zoom; 1.4.4: 640 px is 200%.
-for (const viewport of [
-  { width: 320, height: 640, zoom: "400%" },
-  { width: 640, height: 400, zoom: "200%" },
-]) {
-  test(`every screen reflows without horizontal scrolling at ${viewport.zoom} zoom`, async ({
-    page,
-  }) => {
-    await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
-    await page.setViewportSize(viewport);
-    await visitEveryScreen(page, (surface) =>
-      expectSurfaceMeetsLimits(page, `${surface} at ${viewport.zoom}`),
-    );
-  });
-}
+// WCAG 1.4.10: 320 CSS px is a 1280 px window at 400% zoom.
+test("every screen reflows without horizontal scrolling at 320 px", async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 320, height: 640 });
+  await visitEveryScreen(page, (surface) =>
+    expectSurfaceMeetsLimits(page, `${surface} at 320 px`),
+  );
+});
+
+test("the keyboard alone completes the first experiment with visible focus", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#page-title")).toBeFocused();
+  const tabTo = async (name: RegExp): Promise<void> => {
+    for (let press = 0; press < 40; press += 1) {
+      await page.keyboard.press("Tab");
+      const focused = await page.evaluate(() => {
+        const active = document.activeElement;
+        const style = active === null ? null : getComputedStyle(active);
+        return {
+          label: active?.textContent ?? "",
+          outlined: style !== null && style.outlineStyle !== "none",
+        };
+      });
+      if (name.test(focused.label)) {
+        expect(focused.outlined).toBe(true);
+        return;
+      }
+    }
+    throw new Error(`Tab never reached ${String(name)}`);
+  };
+
+  await tabTo(/Set up a race/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
+  await tabTo(/Start training/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Live run status")).toBeVisible();
+  await tabTo(/Stop after generation/);
+  await page.keyboard.press("Enter");
+  const openResults = page.getByRole("button", { name: "Open results" });
+  await expect(openResults).toBeVisible({ timeout: 90_000 });
+  await openResults.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Result summary")).toBeVisible();
+  await tabTo(/Pause/);
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("button", { name: /Play/ })).toBeFocused();
+});

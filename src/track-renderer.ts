@@ -44,13 +44,13 @@ export interface PresetTracksResponse {
   presets: CompiledTrackV1[];
 }
 
-export interface TrackMarker {
+interface TrackMarker {
   x: number;
   y: number;
   heading: number;
 }
 
-export interface TrackTrail {
+interface TrackTrail {
   candidateId: string;
   points: readonly TrackPoint[];
 }

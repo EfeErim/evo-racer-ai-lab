@@ -1,17 +1,25 @@
 import { expect, type Page } from "@playwright/test";
 
-/** Opens Set up from Home. The recommended track and plan are preselected. */
+/** Opens Set up from Home and waits until Python has accepted the preselected setup. */
 export async function openSetup(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Set up a race" }).click();
-  await expect(
-    page.getByRole("heading", { name: "Set up a race", level: 1 }),
-  ).toBeVisible();
+  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
 }
 
-/** Opens Set up and waits until the local core has accepted the setup. */
-export async function openValidSetup(page: Page): Promise<void> {
+/** Opens Set up and presses Start on the recommended setup. */
+export async function startRecommendedRun(page: Page): Promise<void> {
   await openSetup(page);
-  await expect(page.getByText("Setup is valid", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /Start training/ }).click();
+  await expect(page.getByLabel("Live run status")).toBeVisible();
+}
+
+/** Stops a run at the next generation boundary and opens Results. */
+export async function stopAndOpenResults(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Stop after generation/ }).click();
+  await page
+    .getByRole("button", { name: "Open results" })
+    .click({ timeout: 90_000 });
+  await expect(page.getByLabel("Result summary")).toBeVisible();
 }
 
 /** Opens the top-bar menu that holds motion and Exit. */
@@ -21,11 +29,6 @@ export async function openMenu(page: Page): Promise<void> {
     await menu.locator(":scope > summary").click();
   }
   await expect(menu).toHaveAttribute("open", "");
-}
-
-/** The race canvas host on Training. */
-export function raceStage(page: Page) {
-  return page.locator('[data-race-host="training"]');
 }
 
 /** Distinct canvas images seen over `ms`, sampled once per animation frame. */
@@ -70,7 +73,7 @@ export async function distinctCanvasFrames(
 }
 
 /** Measures what actually rendered, not what the stylesheet intended. */
-export async function measureSurface(page: Page) {
+async function measureSurface(page: Page) {
   return page.evaluate(() => {
     const parse = (color: string) => {
       const parts = (/rgba?\(([^)]+)\)/.exec(color)?.[1] ?? "0 0 0")

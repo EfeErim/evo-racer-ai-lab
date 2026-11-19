@@ -76,42 +76,42 @@ export function renderPlanSection(state: AppState): string {
             "How each new generation is built. Fixed keeps one network shape. Growing can add connections (NEAT).",
             settings.algorithm,
           )}
-          ${renderNumberField(
-            "populationSize",
-            "Cars per generation",
-            "Also called the population.",
-            settings.populationSize,
-            10,
-            500,
-            invalidFields.has("populationSize"),
-          )}
-          ${renderNumberField(
-            "generations",
-            "Generations",
-            "The most evolution cycles this run can use.",
-            settings.generations,
-            1,
-            1000,
-            invalidFields.has("generations"),
-          )}
-          ${renderNumberField(
-            "episodeSeconds",
-            "Seconds per attempt",
-            "Simulated time each car gets.",
-            settings.episodeSeconds,
-            15,
-            300,
-            invalidFields.has("episodeSeconds"),
-          )}
-          ${renderNumberField(
-            "seed",
-            "Random seed",
-            "The same seed and settings repeat the same result.",
-            settings.seed,
-            0,
-            2_147_483_647,
-            invalidFields.has("seed"),
-          )}
+          ${renderNumberField({
+            id: "populationSize",
+            label: "Cars per generation",
+            help: "Also called the population.",
+            value: settings.populationSize,
+            minimum: 10,
+            maximum: 500,
+            invalid: invalidFields.has("populationSize"),
+          })}
+          ${renderNumberField({
+            id: "generations",
+            label: "Generations",
+            help: "The most evolution cycles this run can use.",
+            value: settings.generations,
+            minimum: 1,
+            maximum: 1000,
+            invalid: invalidFields.has("generations"),
+          })}
+          ${renderNumberField({
+            id: "episodeSeconds",
+            label: "Seconds per attempt",
+            help: "Simulated time each car gets.",
+            value: settings.episodeSeconds,
+            minimum: 15,
+            maximum: 300,
+            invalid: invalidFields.has("episodeSeconds"),
+          })}
+          ${renderNumberField({
+            id: "seed",
+            label: "Random seed",
+            help: "The same seed and settings repeat the same result.",
+            value: settings.seed,
+            minimum: 0,
+            maximum: 2_147_483_647,
+            invalid: invalidFields.has("seed"),
+          })}
         </div>
       </details>
 
@@ -137,15 +137,25 @@ function renderSelectField(
   `;
 }
 
-function renderNumberField(
-  id: NumericSetting,
-  label: string,
-  help: string,
-  value: number,
-  minimum: number,
-  maximum: number,
-  invalid: boolean,
-): string {
+interface NumberField {
+  id: NumericSetting;
+  label: string;
+  help: string;
+  value: number;
+  minimum: number;
+  maximum: number;
+  invalid: boolean;
+}
+
+function renderNumberField({
+  id,
+  label,
+  help,
+  value,
+  minimum,
+  maximum,
+  invalid,
+}: NumberField): string {
   const range = `${String(minimum)} to ${String(maximum)}`;
   return `
     <div class="field">
