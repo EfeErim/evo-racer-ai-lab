@@ -15,7 +15,6 @@ import { createRunSession } from "./controllers/run-session";
 import {
   createTrackCommands,
   cancelTrackRequests,
-  dismissedTrackResponseMessage,
   syncGeneratorDraftPresentation,
   TRACK_LIBRARY_REFRESHED_NOTICE,
 } from "./controllers/track-commands";
@@ -147,13 +146,6 @@ export function mountApp(root: HTMLElement): AppController {
       store.trackWorkspace = {
         ...store.trackWorkspace,
         pending: null,
-        notice: {
-          tone: "neutral",
-          message: dismissedTrackResponseMessage(
-            canceledTrackCommand,
-            "leaving Track",
-          ),
-        },
       };
     }
     if (
@@ -166,10 +158,6 @@ export function mountApp(root: HTMLElement): AppController {
       store.runLibrary = {
         ...store.runLibrary,
         pending: undefined,
-        notice: {
-          tone: "neutral",
-          message: "Saved run response ignored after leaving Home.",
-        },
       };
       if (
         (canceledAction === "open" || canceledAction === "resume") &&

@@ -24,21 +24,6 @@ export const TRACK_LIBRARY_REFRESHED_NOTICE: TrackWorkspaceState["notice"] = {
   message: "Local track library refreshed.",
 };
 
-export function dismissedTrackResponseMessage(
-  pending: Exclude<TrackBuilderPending, null>,
-  context: "leaving Track" | "Track Builder closed" | "switching tools",
-): string {
-  const operations: Record<Exclude<TrackBuilderPending, null>, string> = {
-    validate: "validation",
-    assist: "closure assistance",
-    generate: "generation",
-    save: "save",
-    delete: "deletion",
-    import: "import",
-  };
-  return `Track ${operations[pending]} response ignored after ${context}.`;
-}
-
 /** Drops the response of a validation, assist or import still in flight. */
 export function cancelTrackRequests(
   requests: AppContext["store"]["requests"],
@@ -339,16 +324,6 @@ export function createTrackCommands(context: AppContext) {
       ...store.trackWorkspace,
       toolsOpen: false,
       pending: null,
-      notice:
-        canceledTrackCommand === null
-          ? store.trackWorkspace.notice
-          : {
-              tone: "neutral",
-              message: dismissedTrackResponseMessage(
-                canceledTrackCommand,
-                "Track Builder closed",
-              ),
-            },
     };
     dispatch({ type: "navigate", route: "setup" });
     root
@@ -375,10 +350,7 @@ export function createTrackCommands(context: AppContext) {
           : store.trackWorkspace.editorValidation,
       notice: {
         tone: "neutral",
-        message:
-          canceledTrackCommand === null
-            ? BUILDER_TAB_MESSAGES[tab]
-            : `${dismissedTrackResponseMessage(canceledTrackCommand, "switching tools")} ${BUILDER_TAB_MESSAGES[tab]}`,
+        message: BUILDER_TAB_MESSAGES[tab],
       },
     };
     render();
